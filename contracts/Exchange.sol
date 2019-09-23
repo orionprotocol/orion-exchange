@@ -99,7 +99,7 @@ contract Exchange is Ownable{
     /**
      * @dev Deposit ETH to the exchange contract
      */
-    function depositEth(address assetAddress) public payable onlyActive{
+    function depositEth() public payable onlyActive{
         require(msg.value > 0, "deposited value has to be greater than zeo");
         ethBalances[msg.sender] = ethBalances[msg.sender].add(msg.value);
 
@@ -134,15 +134,15 @@ contract Exchange is Ownable{
     /**
      * @dev Receiving balance at a specific address
      */
-    function getAssetBalance(address assetAddress) public view returns(uint assetBalance){
-        return assetBalances[msg.sender][assetAddress];
+    function getAssetBalance(address assetAddress, address user) public view returns(uint assetBalance){
+        return assetBalances[user][assetAddress];
     }
 
     /**
      * @dev Receiving balance at a specific address
      */
-    function getEthBalance() public view returns(uint ethBalance){
-        return ethBalances[msg.sender];
+    function getEthBalance(address user) public view returns(uint ethBalance){
+        return ethBalances[user];
     }
 
     /**
