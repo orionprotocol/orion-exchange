@@ -1,0 +1,25 @@
+{
+  "name": "orion-exchange",
+  "version": "1.0.0",
+  "description": "Exchange contracts for the Orion Protocol",
+  "main": "truffle-config.js",
+  "scripts": {
+    "chain": "ganache-cli --networkId 999"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/orionprotocol/orion-exchange.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/orionprotocol/orion-exchange/issues"
+  },
+  "homepage": "https://github.com/orionprotocol/orion-exchange#readme",
+  "dependencies": {
+    "@openzeppelin/contracts": "^2.3.0",
+    "dotenv": "^8.1.0",
+    "truffle-hdwallet-provider": "^1.0.17"
+  }
+}
