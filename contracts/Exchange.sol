@@ -1,4 +1,5 @@
 pragma solidity ^0.5.10;
+pragma experimental ABIEncoderV2;
 
 import 'openzeppelin-solidity/contracts/math/SafeMath.sol';
 import 'openzeppelin-solidity/contracts/ownership/Ownable.sol';
@@ -150,14 +151,14 @@ contract Exchange is Ownable{
         check conditions in orders for compliance filledPrice, filledAmount
         change balances on the contract respectively with buyer, seller, matcher
      */
-    function fillOrders(uint buyOrder, uint sellOrder, uint64 filledPrice, uint64 filledAmount) public{
+    function fillOrders(Order memory buyOrder, Order memory sellOrder, uint64 filledPrice, uint64 filledAmount) public{
         
     }
 
     /**
      * @dev write an orderHash in the contract so that such an order cannot be filed (executed)
      */
-    function cancelOrder() public{
+    function cancelOrder(Order memory order) public{
         
     }
 
