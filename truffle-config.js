@@ -38,5 +38,14 @@ module.exports = {
       gas: 6900000,
       gasPrice: 10000000000 // 10 Gwei
     }
+  },
+  mocha: {
+    enableTimeouts: false,
+    useColors: true,
+    reporter: "eth-gas-reporter",
+    reporterOptions: {
+      currency: "USD",
+      gasPrice: 10
+    }
   }
 };
