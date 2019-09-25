@@ -26,6 +26,8 @@ contract Exchange is Ownable{
 
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
 
+    event NewOrder(uint orderId, address indexed sender, address indexed matcher, uint amount);
+
 
     // GLOBAL VARIABLES
 
@@ -64,8 +66,8 @@ contract Exchange is Ownable{
     // Get user eth balance by address 
     mapping(address => uint256) public ethBalances;
 
-    uint totalOrders;
-    uint totalTrades;
+    uint public totalOrders;
+    uint public totalTrades;
 
     // Pause or unpause exchange
     bool isActive = true;
@@ -123,7 +125,7 @@ contract Exchange is Ownable{
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
      */
-    function withdrawEth(uint amount) public{
+    function withdrawEth(uint amount) external{
         require(ethBalances[msg.sender] >= amount, "not enough funds to withdraw");
         msg.sender.transfer(amount);
         ethBalances[msg.sender] = ethBalances[msg.sender].sub(amount);
@@ -146,12 +148,19 @@ contract Exchange is Ownable{
         return ethBalances[user];
     }
 
+    function makeOrder(Order memory newOrder) public onlyActive{
+        totalOrders = totalOrders.add(1);
+        orders[totalOrders] = newOrder;   
+
+        emit NewOrder(totalOrders, newOrder.senderAddress, newOrder.matcherAddress, newOrder.amount);     
+    }
+
     /**
      * @dev 2 orders are submitted, it is necessary to match them:
         check conditions in orders for compliance filledPrice, filledAmount
         change balances on the contract respectively with buyer, seller, matcher
      */
-    function fillOrders(Order memory buyOrder, Order memory sellOrder, uint64 filledPrice, uint64 filledAmount) public{
+    function fillOrders(Order memory buyOrder, Order memory sellOrder, uint64 filledPrice, uint64 filledAmount) public onlyActive{
         
     }
 

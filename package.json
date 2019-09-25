@@ -4,7 +4,10 @@
   "description": "Exchange contracts for the Orion Protocol",
   "main": "truffle-config.js",
   "scripts": {
-    "chain": "ganache-cli --networkId 999"
+    "compile": "truffle compile --all",
+    "deploy": "truffle migrate --reset --network gwan",
+    "test": "truffle test test/2_exchange.test.js --network gwan",
+    "ganache": "ganache-cli --port 8544 --networkId 999"
   },
   "repository": {
     "type": "git",
@@ -27,6 +30,7 @@
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
     "chai-shallow-deep-equal": "^1.4.6",
-    "eth-gas-reporter": "^0.2.11"
+    "eth-gas-reporter": "^0.2.11",
+    "truffle": "^5.0.5"
   }
 }

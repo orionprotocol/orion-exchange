@@ -20,9 +20,17 @@ module.exports = {
     }
   },
   networks: {
+    gwan: {
+      host: "localhost",
+      port: 8545,
+      network_id: "*",
+      gas: 4000000,
+      gasPrice: 180e9,
+      from: "0xb35d39bb41c69e4377a16c08eda54999175c1cdd"
+    },
     development: {
       host: "127.0.0.1",
-      port: 18545,
+      port: 8544,
       network_id: "*",
       gas: 6000000
     },
