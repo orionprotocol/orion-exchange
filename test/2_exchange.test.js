@@ -7,6 +7,8 @@ require("chai")
 let Exchange = artifacts.require("Exchange");
 let ORN = artifacts.require("ORN");
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
 let exchange, orionToken;
 
 contract("Exchange", ([owner, user1, user2, otherAsset]) => {
@@ -24,10 +26,10 @@ contract("Exchange", ([owner, user1, user2, otherAsset]) => {
 
   describe("Exchange::deposit", () => {
     it("user can deposit wan to exchange", async () => {
-      await exchange.depositEth({ from: user1, value: web3.utils.toWei("0.1") })
+      await exchange.depositWan({ from: user1, value: web3.utils.toWei("0.1") })
         .should.be.fulfilled;
-      let balanceEth = await exchange.getEthBalance(user1);
-      balanceEth.toString().should.be.equal(String(web3.utils.toWei("0.1")));
+      let balanceWan = await exchange.getBalance(ZERO_ADDRESS, user1);
+      balanceWan.toString().should.be.equal(String(web3.utils.toWei("0.1")));
     });
 
     it("user can deposit asset to exchange", async () => {
@@ -40,37 +42,8 @@ contract("Exchange", ([owner, user1, user2, otherAsset]) => {
         from: user1
       }).should.be.fulfilled;
 
-      let balanceAsset = await exchange.getAssetBalance(
-        orionToken.address,
-        user1
-      );
+      let balanceAsset = await exchange.getBalance(orionToken.address, user1);
       balanceAsset.toString().should.be.equal(String(web3.utils.toWei("1")));
-    });
-  });
-
-  describe("Exchange::make order", () => {
-    it("user can create an order", async () => {
-      let order = [
-        user1,
-        user2,
-        orionToken.address,
-        otherAsset,
-        orionToken.address,
-        1,
-        100,
-        2,
-        165,
-        1569377300,
-        true
-      ];
-
-      await exchange.makeOrder(order, { from: user1 }).should.be.fulfilled;
-      let totalOrders = await exchange.totalOrders();
-
-      let orderInfo = await exchange.orders(totalOrders.toNumber());
-      orderInfo.senderAddress.should.be.equal(user1);
-      orderInfo.matcherAddress.should.be.equal(user2);
-      orderInfo.baseAsset.should.be.equal(orionToken.address);
     });
   });
 });

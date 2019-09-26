@@ -26,7 +26,7 @@ module.exports = {
       network_id: "*",
       gas: 4000000,
       gasPrice: 180e9,
-      from: "0xb35d39bb41c69e4377a16c08eda54999175c1cdd"
+      from: "0xb35d39bb41c69e4377a16c08eda54999175c1cdd" // change this to the unlocked account in your gwan node
     },
     development: {
       host: "127.0.0.1",
