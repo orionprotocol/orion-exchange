@@ -14,19 +14,18 @@ import 'openzeppelin-solidity/contracts/token/ERC20/IERC20.sol';
 contract Exchange is Ownable{
 
     using SafeMath for uint256;
-    using SafeMath for uint64;
 
     // EVENTS
     
-    event NewEthDeposit(address indexed user, uint amount);
+    event NewWanDeposit(address indexed user, uint amount);
 
     event NewAssetDeposit(address indexed user, address indexed assetAddress, uint amount);
 
-    event NewEthWithdrawl(address indexed user, uint amount);
+    event NewWanWithdrawl(address indexed user, uint amount);
 
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
 
-    event NewOrder(uint orderId, address indexed sender, address indexed matcher, uint amount);
+    event NewTrade(uint tradeId, bytes32 orderHash, uint price, uint amount);
 
 
     // GLOBAL VARIABLES
@@ -39,32 +38,25 @@ contract Exchange is Ownable{
         address baseAsset;
         address quotetAsset;
         address matcherFeeAsset;        
-        uint64 amount;
-        uint64 price;
-        uint64 matcherFee;
-        uint64 nonce;
-        uint64 expirationTimestamp;
-        bool side; // true = buy false = sell , or string preferred?
-
+        uint256 amount;
+        uint256 price;
+        uint256 matcherFee;
+        uint256 nonce;
+        uint256 expirationTimestamp;
+        bool side; // true = buy false = sell
     }
 
     struct Trade{
         bytes32 orderHash;
         uint8 orderStatus;
-        uint64 filledAmount;
+        uint256 filledAmount;
     }
-
-    // Get orders by id
-    mapping(uint => Order) public orders;
 
     // Get trades by id
     mapping(uint => Trade) public trades;
 
     // Get user balance by address and asset address
     mapping(address => mapping(address => uint256)) public assetBalances;
-
-    // Get user eth balance by address 
-    mapping(address => uint256) public ethBalances;
 
     uint public totalOrders;
     uint public totalTrades;
@@ -87,32 +79,33 @@ contract Exchange is Ownable{
     // MAIN FUNCTIONS
 
     /**
-     * @dev Deposit ERC20 tokens to the exchange contract
+     * @dev Deposit WAN or ERC20 tokens to the exchange contract
      * @dev User needs to approve token contract first
      */
     function depositAsset(address assetAddress, uint amount) public payable onlyActive{
-        IERC20 asset = IERC20(assetAddress);
-    
+        IERC20 asset = IERC20(assetAddress);    
         require(asset.transferFrom(msg.sender, address(this), amount), "error transfering asset to exchange");
+
         assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].add(amount);
 
-        emit NewAssetDeposit(msg.sender, assetAddress, msg.value);
+        emit NewAssetDeposit(msg.sender, assetAddress, amount);
     }
 
     /**
-     * @dev Deposit ETH to the exchange contract
+     * @dev Deposit WAN to the exchange contract
      */
-    function depositEth() public payable onlyActive{
-        require(msg.value > 0, "deposited value has to be greater than zeo");
-        ethBalances[msg.sender] = ethBalances[msg.sender].add(msg.value);
+    function depositWan() public payable onlyActive{
+        require(msg.value > 0, "invalid amount sent");
 
-        emit NewEthDeposit(msg.sender, msg.value);
+        assetBalances[msg.sender][address(0)] = assetBalances[msg.sender][address(0)].add(msg.value);
+
+        emit NewAssetDeposit(msg.sender, address(0), msg.value);
     }
 
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
      */
-    function withdrawAsset(address assetAddress, uint amount) public{
+    function withdraw(address assetAddress, uint amount) public{
         require(assetBalances[msg.sender][assetAddress] >= amount, "not enough funds to withdraw");
         IERC20 asset = IERC20(assetAddress);
 
@@ -121,38 +114,13 @@ contract Exchange is Ownable{
 
         emit NewAssetWithdrawl(msg.sender, assetAddress, amount);
     }
-    
-    /**
-     * @dev Withdrawal of remaining funds from the contract back to the address
-     */
-    function withdrawEth(uint amount) external{
-        require(ethBalances[msg.sender] >= amount, "not enough funds to withdraw");
-        msg.sender.transfer(amount);
-        ethBalances[msg.sender] = ethBalances[msg.sender].sub(amount);
-
-        emit NewEthWithdrawl(msg.sender, amount);
-    } 
 
 
     /**
-     * @dev Receiving balance at a specific address
+     * @dev Asset balance for a specific address
      */
-    function getAssetBalance(address assetAddress, address user) public view returns(uint assetBalance){
+    function getBalance(address assetAddress, address user) public view returns(uint assetBalance){
         return assetBalances[user][assetAddress];
-    }
-
-    /**
-     * @dev Receiving balance at a specific address
-     */
-    function getEthBalance(address user) public view returns(uint ethBalance){
-        return ethBalances[user];
-    }
-
-    function makeOrder(Order memory newOrder) public onlyActive{
-        totalOrders = totalOrders.add(1);
-        orders[totalOrders] = newOrder;   
-
-        emit NewOrder(totalOrders, newOrder.senderAddress, newOrder.matcherAddress, newOrder.amount);     
     }
 
     /**
@@ -160,12 +128,52 @@ contract Exchange is Ownable{
         check conditions in orders for compliance filledPrice, filledAmount
         change balances on the contract respectively with buyer, seller, matcher
      */
-    function fillOrders(Order memory buyOrder, Order memory sellOrder, uint64 filledPrice, uint64 filledAmount) public onlyActive{
-        
+    function fillOrders(Order memory buyOrder, Order memory sellOrder, uint filledPrice, uint filledAmount) public onlyActive{
+        require(filledPrice == buyOrder.price, "incorrect filled price");
+        require(filledAmount <= buyOrder.amount, "incorrect filled amount");
+
+        uint amountToTake = filledAmount.mul(filledPrice);
+        require(amountToTake <= sellOrder.amount, "incorrect taker's amount");
+
+        require(buyOrder.baseAsset == sellOrder.quotetAsset, "incorrect asset match");
+
+        address maker = buyOrder.senderAddress;
+        address taker = sellOrder.senderAddress;
+
+        require(assetBalances[maker][buyOrder.baseAsset] >= filledAmount, "not enough maker's balance");       
+        require(assetBalances[taker][sellOrder.baseAsset] >= amountToTake, "not enough taker's balance");
+
+        // MAKER
+        assetBalances[maker][buyOrder.baseAsset] = assetBalances[maker][buyOrder.baseAsset].sub(amountToTake);
+        assetBalances[maker][buyOrder.quotetAsset] = assetBalances[maker][buyOrder.quotetAsset].add(filledAmount);
+
+        // TAKER
+        assetBalances[taker][sellOrder.baseAsset] = assetBalances[taker][sellOrder.baseAsset].sub(filledAmount);
+        assetBalances[taker][sellOrder.quotetAsset] = assetBalances[taker][sellOrder.quotetAsset].add(amountToTake);
+
+        totalTrades = totalTrades.add(1);
+
+        bytes32 orderHash = keccak256(abi.encodePacked(
+            "newTrade",
+            maker,
+            taker,
+            buyOrder.baseAsset,
+            sellOrder.baseAsset,
+            filledPrice,
+            filledAmount
+        ));
+
+        Trade memory newTrade = Trade(orderHash, 0, filledAmount);
+        trades[totalTrades] = newTrade;
+
+        emit NewTrade(totalTrades, orderHash, filledPrice, filledAmount);
+
+        //TODO Fees
+
     }
 
     /**
-     * @dev write an orderHash in the contract so that such an order cannot be filed (executed)
+     * @dev write an orderHash in the contract so that such an order cannot be filled (executed)
      */
     function cancelOrder(Order memory order) public{
         
