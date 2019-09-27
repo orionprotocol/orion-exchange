@@ -3,12 +3,12 @@ pragma experimental ABIEncoderV2;
 
 import '@openzeppelin/contracts/math/SafeMath.sol';
 import '@openzeppelin/contracts/ownership/Ownable.sol';
-import '@openzeppelin/contracts/token/ERC20/IERC20.sol'; 
+import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
 
 /**
  * @title Exchange
- * @dev Exchange contract for the Orion Protocol * 
+ * @dev Exchange contract for the Orion Protocol
  * @author @wafflemakr
  */
 contract Exchange is Ownable{
@@ -25,7 +25,9 @@ contract Exchange is Ownable{
 
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
 
-    event NewTrade(uint tradeId, bytes32 orderHash, uint price, uint amount);
+    event NewTrade(uint tradeId, bytes32 buyOrderHash, bytes32 sellOrderHash, uint price, uint amount);
+
+    event OrderCancelled(bytes32 indexed orderHash);
 
 
     // GLOBAL VARIABLES
@@ -37,7 +39,7 @@ contract Exchange is Ownable{
         address matcherAddress;
         address baseAsset;
         address quotetAsset;
-        address matcherFeeAsset;        
+        address matcherFeeAsset;
         uint256 amount;
         uint256 price;
         uint256 matcherFee;
@@ -47,7 +49,8 @@ contract Exchange is Ownable{
     }
 
     struct Trade{
-        bytes32 orderHash;
+        bytes32 buyOrderHash;
+        bytes32 sellOrderHash;
         uint8 orderStatus;
         uint256 filledAmount;
     }
@@ -57,6 +60,9 @@ contract Exchange is Ownable{
 
     // Get user balance by address and asset address
     mapping(address => mapping(address => uint256)) public assetBalances;
+
+    // Check if an order was cancelled
+    mapping(bytes32 => bool) public cancelledOrders;
 
     uint public totalOrders;
     uint public totalTrades;
@@ -83,7 +89,7 @@ contract Exchange is Ownable{
      * @dev User needs to approve token contract first
      */
     function depositAsset(address assetAddress, uint amount) public payable onlyActive{
-        IERC20 asset = IERC20(assetAddress);    
+        IERC20 asset = IERC20(assetAddress);
         require(asset.transferFrom(msg.sender, address(this), amount), "error transfering asset to exchange");
 
         assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].add(amount);
@@ -124,49 +130,73 @@ contract Exchange is Ownable{
     }
 
     /**
+     * @notice Settle a trade with two orders, filled price and amount
      * @dev 2 orders are submitted, it is necessary to match them:
         check conditions in orders for compliance filledPrice, filledAmount
         change balances on the contract respectively with buyer, seller, matcher
+     * @param buyOrder structure of buy side order
+     * @param sellOrder structure of sell side order
+     * @param filledPrice price at which the order was settled
+     * @param filledAmount amount settled between orders
      */
     function fillOrders(Order memory buyOrder, Order memory sellOrder, uint filledPrice, uint filledAmount) public onlyActive{
-        require(filledPrice == buyOrder.price, "incorrect filled price");
-        require(filledAmount <= buyOrder.amount, "incorrect filled amount");
 
+        require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
+        require(filledPrice >= sellOrder.price, "incorrect filled price for sell order");
+
+        require(filledAmount <= buyOrder.amount && filledAmount <= sellOrder.amount, "incorrect filled amount");
+
+        //Amount of opposite asset according to filledPrice and filledAmount
         uint amountToTake = filledAmount.mul(filledPrice);
-        require(amountToTake <= sellOrder.amount, "incorrect taker's amount");
+        require(amountToTake <= sellOrder.amount, "incorrect amount of quotet");
 
         require(buyOrder.baseAsset == sellOrder.quotetAsset, "incorrect asset match");
 
-        address maker = buyOrder.senderAddress;
-        address taker = sellOrder.senderAddress;
+        address buyer = buyOrder.senderAddress;
+        address seller = sellOrder.senderAddress;
 
-        require(assetBalances[maker][buyOrder.baseAsset] >= filledAmount, "not enough maker's balance");       
-        require(assetBalances[taker][sellOrder.baseAsset] >= amountToTake, "not enough taker's balance");
+        require(assetBalances[buyer][buyOrder.baseAsset] >= amountToTake, "insufficient maker's balance");       
+        require(assetBalances[seller][sellOrder.baseAsset] >= filledAmount, "insufficient seller's balance");
 
-        // MAKER
-        assetBalances[maker][buyOrder.baseAsset] = assetBalances[maker][buyOrder.baseAsset].sub(amountToTake);
-        assetBalances[maker][buyOrder.quotetAsset] = assetBalances[maker][buyOrder.quotetAsset].add(filledAmount);
+        // Update Buyer's Balance
+        assetBalances[buyer][buyOrder.baseAsset] = assetBalances[buyer][buyOrder.baseAsset].sub(amountToTake);
+        assetBalances[buyer][buyOrder.quotetAsset] = assetBalances[buyer][buyOrder.quotetAsset].add(filledAmount);
 
-        // TAKER
-        assetBalances[taker][sellOrder.baseAsset] = assetBalances[taker][sellOrder.baseAsset].sub(filledAmount);
-        assetBalances[taker][sellOrder.quotetAsset] = assetBalances[taker][sellOrder.quotetAsset].add(amountToTake);
+        // Update Seller's Balance
+        assetBalances[seller][sellOrder.baseAsset] = assetBalances[seller][sellOrder.baseAsset].sub(filledAmount);
+        assetBalances[seller][sellOrder.quotetAsset] = assetBalances[seller][sellOrder.quotetAsset].add(amountToTake);
+       
+
+        bytes32 buyOrderHash = keccak256(abi.encodePacked(
+            "order",
+            buyOrder.senderAddress,
+            buyOrder.matcherAddress,
+            buyOrder.baseAsset,
+            buyOrder.quotetAsset,
+            buyOrder.amount,
+            buyOrder.price
+        ));
+
+        require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
+
+        bytes32 sellOrderHash = keccak256(abi.encodePacked(
+            "order",
+            sellOrder.senderAddress,
+            sellOrder.matcherAddress,
+            sellOrder.baseAsset,
+            sellOrder.quotetAsset,
+            sellOrder.amount,
+            sellOrder.price
+        ));
+
+        require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
 
         totalTrades = totalTrades.add(1);
 
-        bytes32 orderHash = keccak256(abi.encodePacked(
-            "newTrade",
-            maker,
-            taker,
-            buyOrder.baseAsset,
-            sellOrder.baseAsset,
-            filledPrice,
-            filledAmount
-        ));
+        //TODO what to put in orderStatus (compare filledAmount to which amount? buy or sell order)
+        trades[totalTrades] = Trade(buyOrderHash, sellOrderHash, 0, filledAmount);
 
-        Trade memory newTrade = Trade(orderHash, 0, filledAmount);
-        trades[totalTrades] = newTrade;
-
-        emit NewTrade(totalTrades, orderHash, filledPrice, filledAmount);
+        emit NewTrade(totalTrades, buyOrderHash, sellOrderHash, filledPrice, filledAmount);
 
         //TODO Fees
 
@@ -176,7 +206,20 @@ contract Exchange is Ownable{
      * @dev write an orderHash in the contract so that such an order cannot be filled (executed)
      */
     function cancelOrder(Order memory order) public{
-        
+        //TODO: check if order can be cancelled
+
+        bytes32 orderHash = keccak256(abi.encodePacked(
+            "order",
+            order.senderAddress,
+            order.matcherAddress,
+            order.baseAsset,
+            order.quotetAsset,
+            order.amount,
+            order.price
+        ));
+
+        cancelledOrders[orderHash] = true;
+        emit OrderCancelled(orderHash);
     }
 
     // OWNER FUNCTIONS
