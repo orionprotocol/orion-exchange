@@ -13,20 +13,14 @@ import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
  */
 contract Exchange is Ownable{
 
-    using SafeMath for uint256;
+    using SafeMath for uint;
 
     // EVENTS
-    
     event NewWanDeposit(address indexed user, uint amount);
-
     event NewAssetDeposit(address indexed user, address indexed assetAddress, uint amount);
-
     event NewWanWithdrawl(address indexed user, uint amount);
-
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
-
-    event NewTrade(uint tradeId, bytes32 buyOrderHash, bytes32 sellOrderHash, uint price, uint amount);
-
+    event NewTrade(bytes32 buyOrderHash, bytes32 sellOrderHash, uint pricebuyOrderHash, uint amount);
     event OrderCancelled(bytes32 indexed orderHash);
 
 
@@ -40,37 +34,34 @@ contract Exchange is Ownable{
         address baseAsset;
         address quotetAsset;
         address matcherFeeAsset;
-        uint256 amount;
-        uint256 price;
-        uint256 matcherFee;
-        uint256 nonce;
-        uint256 expirationTimestamp;
+        uint amount;
+        uint price;
+        uint matcherFee;
+        uint nonce;
+        uint expiration;
         bool side; // true = buy false = sell
     }
 
     struct Trade{
-        bytes32 buyOrderHash;
-        bytes32 sellOrderHash;
+        bytes32 orderHash;
         uint8 orderStatus;
-        uint256 filledAmount;
+        uint filledAmount;
     }
 
-    // Get trades by id
-    mapping(uint => Trade) public trades;
+    // Get trades by orderHash
+    mapping(bytes32 => Trade[]) public trades;
 
     // Get user balance by address and asset address
-    mapping(address => mapping(address => uint256)) public assetBalances;
+    mapping(address => mapping(address => uint)) public assetBalances;
 
     // Check if an order was cancelled
     mapping(bytes32 => bool) public cancelledOrders;
 
     uint public totalOrders;
     uint public totalTrades;
-
-    // Pause or unpause exchange
+    // Pause or unpause exchangebuyOrderHash
     bool isActive = true;
 
-    
     // MODIFIERS
 
     /**
@@ -82,8 +73,7 @@ contract Exchange is Ownable{
     }
 
 
-    // MAIN FUNCTIONS
-
+    // MAIN FUNCTIONSh
     /**
      * @dev Deposit WAN or ERC20 tokens to the exchange contract
      * @dev User needs to approve token contract first
@@ -132,74 +122,87 @@ contract Exchange is Ownable{
     /**
      * @notice Settle a trade with two orders, filled price and amount
      * @dev 2 orders are submitted, it is necessary to match them:
-        check conditions in orders for compliance filledPrice, filledAmount
-        change balances on the contract respectively with buyer, seller, matcher
-     * @param buyOrder structure of buy side order
+        check conditions in orders for compliance filledPrice, filledAmountbuyOrderHash
+        change balances on the contract respectively with buyer, seller, matcbuyOrderHashher
+     * @param buyOrder structure of buy side orderbuyOrderHash
      * @param sellOrder structure of sell side order
      * @param filledPrice price at which the order was settled
      * @param filledAmount amount settled between orders
      */
     function fillOrders(Order memory buyOrder, Order memory sellOrder, uint filledPrice, uint filledAmount) public onlyActive{
 
+        //VERIFICATIONS
+
+        require(buyOrder.matcherAddress == msg.sender && sellOrder.matcherAddress == msg.sender, "incorrect matcher address");
+        require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quotetAsset == sellOrder.quotetAsset, "assets do not match");
         require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
         require(filledPrice >= sellOrder.price, "incorrect filled price for sell order");
-
-        require(filledAmount <= buyOrder.amount && filledAmount <= sellOrder.amount, "incorrect filled amount");
+        require(buyOrder.expiration <= now && sellOrder.expiration <= now, "order expiration");
 
         //Amount of opposite asset according to filledPrice and filledAmount
         uint amountToTake = filledAmount.mul(filledPrice);
-        require(amountToTake <= sellOrder.amount, "incorrect amount of quotet");
-
-        require(buyOrder.baseAsset == sellOrder.quotetAsset, "incorrect asset match");
+        require(amountToTake <= sellOrder.amount, "incorrect amount to take");
 
         address buyer = buyOrder.senderAddress;
         address seller = sellOrder.senderAddress;
 
-        require(assetBalances[buyer][buyOrder.baseAsset] >= amountToTake, "insufficient maker's balance");       
+        // BUY SIDE CHECK
+
+        require(assetBalances[buyer][buyOrder.quotetAsset] >= amountToTake, "insufficient buyer's balance");
+        bytes32 buyOrderHash = _getOrderhash(buyOrder);
+        require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
+        require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
+
+        // SELL SIDE CHECK
         require(assetBalances[seller][sellOrder.baseAsset] >= filledAmount, "insufficient seller's balance");
+        bytes32 sellOrderHash = _getOrderhash(sellOrder);
+        require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
+        require(_checkAmount(sellOrderHash, sellOrder.amount, filledAmount), "incorrect filled amount");
 
-        // Update Buyer's Balance
-        assetBalances[buyer][buyOrder.baseAsset] = assetBalances[buyer][buyOrder.baseAsset].sub(amountToTake);
-        assetBalances[buyer][buyOrder.quotetAsset] = assetBalances[buyer][buyOrder.quotetAsset].add(filledAmount);
+        // === VERIFICATIONS DONE ===
 
-        // Update Seller's Balance
+        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset)
+        assetBalances[buyer][buyOrder.quotetAsset] = assetBalances[buyer][buyOrder.quotetAsset].sub(amountToTake);
+        assetBalances[buyer][buyOrder.baseAsset] = assetBalances[buyer][buyOrder.baseAsset].add(filledAmount);
+
+        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset)
         assetBalances[seller][sellOrder.baseAsset] = assetBalances[seller][sellOrder.baseAsset].sub(filledAmount);
         assetBalances[seller][sellOrder.quotetAsset] = assetBalances[seller][sellOrder.quotetAsset].add(amountToTake);
-       
-
-        bytes32 buyOrderHash = keccak256(abi.encodePacked(
-            "order",
-            buyOrder.senderAddress,
-            buyOrder.matcherAddress,
-            buyOrder.baseAsset,
-            buyOrder.quotetAsset,
-            buyOrder.amount,
-            buyOrder.price
-        ));
-
-        require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
-
-        bytes32 sellOrderHash = keccak256(abi.encodePacked(
-            "order",
-            sellOrder.senderAddress,
-            sellOrder.matcherAddress,
-            sellOrder.baseAsset,
-            sellOrder.quotetAsset,
-            sellOrder.amount,
-            sellOrder.price
-        ));
-
-        require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
 
         totalTrades = totalTrades.add(1);
 
+        //Store trades
+        Trade memory buyTrade = Trade(buyOrderHash, 0, filledAmount); //temporary set 0 for orderStatus until logic implemented
+        trades[buyOrderHash].push(buyTrade);
+        Trade memory sellTrade = Trade(sellOrderHash, 0, filledAmount); //temporary set 0 for orderStatus until logic implemented
+        trades[sellOrderHash].push(sellTrade);
+
+
         //TODO what to put in orderStatus (compare filledAmount to which amount? buy or sell order)
-        trades[totalTrades] = Trade(buyOrderHash, sellOrderHash, 0, filledAmount);
 
-        emit NewTrade(totalTrades, buyOrderHash, sellOrderHash, filledPrice, filledAmount);
+        emit NewTrade(buyOrderHash, sellOrderHash, filledPrice, filledAmount);
 
-        //TODO Fees
+    }
 
+    function _checkAmount(bytes32 orderHash, uint orderAmount, uint newTradeAmount) internal view returns(bool){
+        uint totalTradeAmount;
+        for(uint i = 0; i < trades[orderHash].length; i++){
+            totalTradeAmount = totalTradeAmount.add(trades[orderHash][i].filledAmount);
+        }
+        return (totalTradeAmount.add(newTradeAmount) <= orderAmount);
+    }
+
+    function _getOrderhash(Order memory _order) internal pure returns(bytes32){
+        return keccak256(abi.encodePacked(
+            "order",
+            _order.senderAddress,
+            _order.matcherAddress,
+            _order.baseAsset,
+            _order.quotetAsset,
+            _order.amount,
+            _order.price,
+            _order.nonce
+        ));
     }
 
     /**
