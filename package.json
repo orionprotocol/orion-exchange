@@ -24,6 +24,7 @@
     "@openzeppelin/contracts": "^2.3.0",
     "@waves/waves-transactions": "^3.19.0",
     "dotenv": "^8.1.0",
+    "ethers": "^4.0.37",
     "iwan-sdk": "^1.1.1",
     "long": "^4.0.0",
     "truffle-hdwallet-provider": "^1.0.17",

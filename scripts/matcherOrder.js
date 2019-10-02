@@ -4,21 +4,21 @@ const { binary, json } = require('@waves/marshall');
 const Web3 = require("web3");
 const web3 = new Web3("http://localhost:8545");
 const Long = require("long");
+const ethers = require('ethers');
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 let senderAddress = "0xf8a1775286dddb8a0d2d35598d00f46873b4f8f6";
 let matcherAddress = "0xb35d39bb41c69e4377a16c08eda54999175c1cdd";
-let baseAsset = ZERO_ADDRESS; //ETH or WAN (base currency)
-let quotetAsset = "0x0284fd64d75d76948076C5f0918159D86bC0Af6D"; // ORN token
-let matcherFeeAsset = ZERO_ADDRESS;
+let baseAsset = "0x46397994A7e1E926eA0DE95557A4806d38F10B0d"; // WETH
+let quotetAsset = "0x89A3e1494Bc3Db81dAdC893DEd7476d33D47dCBD"; // WBTC
+let matcherFeeAsset = baseAsset;
 let amount = 150000000;
 let price = 2000000;
 let matcherFee = 150000;
-let nonce = 123;
-let side;
 
-const t = Date.now();
+const timestamp = Date.now();
+const expiration = timestamp + 29 * 24 * 60 * 60 * 1000;
 const senderPublicKey = "HzSnoJKTVwezUBmo2gh9HYq52F1maKBsvv1ZWrZAHyHV";
 
 const wparams = {
@@ -31,8 +31,8 @@ const wparams = {
     matcherFee: 300000,
     version: 3,
     orderType: 'buy',
-    timestamp: t,
-    expiration: t + 29 * 24 * 60 * 60 * 1000,
+    timestamp: timestamp,
+    expiration: timestamp + 29 * 24 * 60 * 60 * 1000,
 };
 
 const word = {
@@ -67,9 +67,12 @@ function byte(num) {
 }
 
 function assetBytes(asset) {
-    return Buffer.concat([byte(1), wc.base58Decode(asset)]);
+    return ethers.utils.concat([byte(1), ethers.utils.arrayify(asset)]);
 }
 
+function assetBytesWaves(asset) {
+    return Buffer.concat([byte(1), wc.base58Decode(asset)]);
+}
 
 
 
@@ -77,17 +80,60 @@ const orderBytes = Buffer.concat([
     byte(3),
     wc.base58Decode(senderPublicKey),
     wc.base58Decode(wparams.matcherPublicKey),
-    assetBytes(wparams.amountAsset),
-    assetBytes(wparams.priceAsset),
+    assetBytesWaves(wparams.amountAsset),
+    assetBytesWaves(wparams.priceAsset),
     byte(wparams.orderType === 'buy' ? 0 : 0),
     longToBytes(wparams.price),
     longToBytes(wparams.amount),
     longToBytes(wparams.timestamp),
     longToBytes(wparams.expiration),
     longToBytes(wparams.matcherFee),
-    assetBytes(wparams.matcherFeeAssetId)
+    assetBytesWaves(wparams.matcherFeeAssetId)
 ]);
 
 const signedOrder = order(wparams, "seed");
 console.log(signedOrder);
 console.log("Signature is valid: " + wc.verifySignature(senderPublicKey, orderBytes, signedOrder.proofs[0]));
+
+let privateKey = "0x3141592653589793238462643383279502884197169399375105820974944592";
+console.log(assetBytes(privateKey));
+
+let wallet = new ethers.Wallet(privateKey);
+
+const nowTimestamp = Date.now();
+const orionOrder = {
+    senderAddress: "0xf8a1775286dddb8a0d2d35598d00f46873b4f8f6",
+    matcherAddress: "0xb35d39bb41c69e4377a16c08eda54999175c1cdd",
+    baseAsset: "0x46397994A7e1E926eA0DE95557A4806d38F10B0d", // WETH
+    quoteAsset: "0x89A3e1494Bc3Db81dAdC893DEd7476d33D47dCBD", // WBTC
+    side: "buy",
+    amount: 150000000,
+    price: 2000000,
+    matcherFee: 150000,
+    matcherFeeAsset: "0x46397994A7e1E926eA0DE95557A4806d38F10B0d", // WETH
+    nonce: nowTimestamp,
+    expirationTimestamp: nowTimestamp + 29 * 24 * 60 * 60 * 1000,
+};
+
+function getOrderMessage(order) {
+    return Buffer.concat([
+        byte(3),
+        ethers.utils.arrayify(order.senderAddress),
+        ethers.utils.arrayify(order.matcherAddress),
+        assetBytes(order.baseAsset),
+        assetBytes(order.quoteAsset),
+        byte(order.side === 'buy' ? 0 : 1),
+        longToBytes(order.price),
+        longToBytes(order.amount),
+        longToBytes(order.nonce),
+        longToBytes(order.expiration),
+        longToBytes(order.matcherFee),
+        assetBytes(order.matcherFeeAsset)
+    ]);
+}
+
+const bytes = getOrderMessage(orionOrder);
+
+const sig = wallet.signMessage(bytes).then( s => {
+    console.log(s);
+});
