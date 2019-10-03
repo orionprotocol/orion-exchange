@@ -31,7 +31,7 @@ module.exports = {
     development: {
       host: "127.0.0.1",
       port: 8544,
-      network_id: "*",
+      network_id: "999",
       gas: 6000000
     },
     mainnet: {

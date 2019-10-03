@@ -23,6 +23,8 @@ contract Exchange is Ownable{
     event NewTrade(bytes32 buyOrderHash, bytes32 sellOrderHash, uint pricebuyOrderHash, uint amount);
     event OrderCancelled(bytes32 indexed orderHash);
 
+    event RecoveredAddress(address sender);
+
 
     // GLOBAL VARIABLES
 
@@ -61,6 +63,7 @@ contract Exchange is Ownable{
     uint public totalTrades;
     // Pause or unpause exchangebuyOrderHash
     bool isActive = true;
+
 
     // MODIFIERS
 
@@ -199,10 +202,34 @@ contract Exchange is Ownable{
             _order.matcherAddress,
             _order.baseAsset,
             _order.quotetAsset,
+            _order.matcherFeeAsset,
             _order.amount,
             _order.price,
-            _order.nonce
+            _order.matcherFee,
+            _order.nonce,
+            _order.expiration,
+            _order.side
         ));
+    }
+
+    /**
+     *  @dev Performs an `ecrecover` operation for signed message hashes
+     */
+    function _recoverAddress(bytes32 _hash, uint8 _v, bytes32 _r, bytes32 _s)
+        private
+        pure
+        returns (address)
+    {
+        bytes memory prefix = "\x19Ethereum Signed Message:\n32";
+        bytes32 prefixedHash = keccak256(abi.encodePacked(prefix, _hash));
+        return ecrecover(prefixedHash, _v, _r, _s);
+    }
+
+    function validateOrder(Order memory order, uint8 v, bytes32 r, bytes32 s) public {
+        bytes32 orderHash = _getOrderhash(order);
+        address recovered = _recoverAddress(orderHash, v, r, s);
+
+        emit RecoveredAddress(recovered);
     }
 
     /**
