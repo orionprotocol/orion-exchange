@@ -212,22 +212,10 @@ contract Exchange is Ownable{
         ));
     }
 
-    /**
-     *  @dev Performs an `ecrecover` operation for signed message hashes
-     */
-    function _recoverAddress(bytes32 _hash, uint8 _v, bytes32 _r, bytes32 _s)
-        private
-        pure
-        returns (address)
-    {
+    function validateOrder(Order memory order, bytes32 message, uint8 v, bytes32 r, bytes32 s) public {
         bytes memory prefix = "\x19Ethereum Signed Message:\n32";
-        bytes32 prefixedHash = keccak256(abi.encodePacked(prefix, _hash));
-        return ecrecover(prefixedHash, _v, _r, _s);
-    }
-
-    function validateOrder(Order memory order, uint8 v, bytes32 r, bytes32 s) public {
-        bytes32 orderHash = _getOrderhash(order);
-        address recovered = _recoverAddress(orderHash, v, r, s);
+        bytes32 prefixedHash = keccak256(abi.encode(prefix, message));
+        address recovered = ecrecover(prefixedHash, v, r, s);
 
         emit RecoveredAddress(recovered);
     }
@@ -238,15 +226,7 @@ contract Exchange is Ownable{
     function cancelOrder(Order memory order) public{
         //TODO: check if order can be cancelled
 
-        bytes32 orderHash = keccak256(abi.encodePacked(
-            "order",
-            order.senderAddress,
-            order.matcherAddress,
-            order.baseAsset,
-            order.quotetAsset,
-            order.amount,
-            order.price
-        ));
+        bytes32 orderHash = _getOrderhash(order);
 
         cancelledOrders[orderHash] = true;
         emit OrderCancelled(orderHash);

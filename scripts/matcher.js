@@ -1,17 +1,13 @@
 const Web3 = require("web3");
+const Long = require("long");
+const ethers = require("ethers");
 const web3 = new Web3("http://localhost:8544");
 
 const exchangeArtifact = require("../build/contracts/Exchange.json");
 const WETHArtifact = require("../build/contracts/WETH.json");
 const WBTCArtifact = require("../build/contracts/WBTC.json");
 
-const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-
-let exchange;
-
-let accounts;
-
-let netId;
+let accounts, netId, exchange;
 
 // === CONTRACT INSTANCE === //
 
@@ -26,51 +22,29 @@ async function setupContracts() {
   accounts = await web3.eth.getAccounts();
 }
 
-// === HASH ORDER === //
+// === CREATE ORDER BYTES=== //
 
-function hashOrder(orderInfo) {
-  let message = web3.utils.soliditySha3(
-    "order",
-    orderInfo.senderAddress,
-    orderInfo.matcherAddress,
-    orderInfo.baseAsset,
-    orderInfo.quotetAsset,
-    orderInfo.matcherFeeAsset,
-    orderInfo.amount,
-    orderInfo.price,
-    orderInfo.matcherFee,
-    orderInfo.nonce,
-    orderInfo.expiration,
-    orderInfo.side
-  );
-
-  return message;
-}
-
-// === SIGN ORDER === //
-async function signOrder(orderInfo) {
-  let message = hashOrder(orderInfo);
-
-  //Wanmask
-  //   let signedMessage = await window.wan3.eth.sign(
-  //     sender,
-  //     message
-  //   );
-
-  //Web3 v1
-  let signedMessage = await web3.eth.sign(message, orderInfo.senderAddress);
-
-  //Web3 v0.2
-  //   let signedMessage = await web3.eth.sign(sender, message);
-
-  return signedMessage;
+function getOrderMessage(order) {
+  return Buffer.concat([
+    byte(3),
+    ethers.utils.arrayify(order.senderAddress),
+    ethers.utils.arrayify(order.matcherAddress),
+    assetBytes(order.baseAsset),
+    assetBytes(order.quotetAsset),
+    byte(order.side),
+    longToBytes(order.price),
+    longToBytes(order.amount),
+    longToBytes(order.nonce),
+    longToBytes(order.expirationTimestamp),
+    longToBytes(order.matcherFee),
+    assetBytes(order.matcherFeeAsset)
+  ]);
 }
 
 // === VALIDATE ORDER === //
 async function validateSignature(signature, orderInfo) {
-  let message = hashOrder(orderInfo);
-
-  console.log("length", signature.length);
+  let message = getOrderMessage(orderInfo);
+  message = "0x" + message.toString("hex");
 
   let sender = await web3.eth.accounts.recover(message, signature);
 
@@ -78,12 +52,27 @@ async function validateSignature(signature, orderInfo) {
 }
 // ======================== //
 
+// === UTILS === //
+
+function longToBytes(long) {
+  return Uint8Array.from(Long.fromNumber(long).toBytesBE());
+}
+
+function byte(num) {
+  return Uint8Array.from([num]);
+}
+
+function assetBytes(asset) {
+  return ethers.utils.concat([byte(1), ethers.utils.arrayify(asset)]);
+}
+
 // // === MAIN FLOW === //
 
 (async function main() {
   await setupContracts();
 
-  const nowTimestamp = Date.now();
+  //Input same timestamp as created order in client
+  nowTimestamp = 1570173742523;
 
   const orionOrder = {
     senderAddress: accounts[0],
@@ -99,11 +88,9 @@ async function validateSignature(signature, orderInfo) {
     side: true //true = buy, false = sell
   };
 
-  //Client signs order
-  let signature = await signOrder(orionOrder);
-  console.log("Signed Data: ", signature);
-  console.log("Signed By: ", orionOrder.senderAddress);
-  console.log("Order Struct: \n", orionOrder);
+  //Result from client script
+  signature =
+    "0x8fb309783dd6fee6549fbd32c111b394f71cd896d3626b25408a382010eb248e5f070e032d587e0c31276c189a328b94f37cd244d9acccffb368fee0d92120bc00";
 
   //Matcher validates order
   let sender = await validateSignature(signature, orionOrder);
@@ -117,10 +104,13 @@ async function validateSignature(signature, orderInfo) {
   const r = "0x" + signature.slice(0, 64);
   const s = "0x" + signature.slice(64, 128);
   const v = web3.utils.hexToNumber("0x" + signature.slice(128, 130)) + 27;
+  console.log(r, s, v);
 
   //Validate in smart contract
+  let message = getOrderMessage(orionOrder);
+  let messageHash = web3.utils.soliditySha3(message);
   let response = await exchange.methods
-    .validateOrder(orionOrder, v, r, s)
+    .validateOrder(orionOrder, messageHash, v, r, s)
     .send({ from: accounts[0] });
 
   console.log(
