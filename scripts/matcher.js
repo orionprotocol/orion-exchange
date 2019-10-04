@@ -1,6 +1,4 @@
 const Web3 = require("web3");
-const Long = require("long");
-const ethers = require("ethers");
 const web3 = new Web3("http://localhost:8544");
 
 const exchangeArtifact = require("../build/contracts/Exchange.json");
@@ -22,29 +20,30 @@ async function setupContracts() {
   accounts = await web3.eth.getAccounts();
 }
 
-// === CREATE ORDER BYTES=== //
+// === Hash Order=== //
 
-function getOrderMessage(order) {
-  return Buffer.concat([
-    byte(3),
-    ethers.utils.arrayify(order.senderAddress),
-    ethers.utils.arrayify(order.matcherAddress),
-    assetBytes(order.baseAsset),
-    assetBytes(order.quotetAsset),
-    byte(order.side),
-    longToBytes(order.price),
-    longToBytes(order.amount),
-    longToBytes(order.nonce),
-    longToBytes(order.expirationTimestamp),
-    longToBytes(order.matcherFee),
-    assetBytes(order.matcherFeeAsset)
-  ]);
+function hashOrder(orderInfo) {
+  let message = web3.utils.soliditySha3(
+    3,
+    orderInfo.senderAddress,
+    orderInfo.matcherAddress,
+    orderInfo.baseAsset,
+    orderInfo.quotetAsset,
+    orderInfo.matcherFeeAsset,
+    orderInfo.amount,
+    orderInfo.price,
+    orderInfo.matcherFee,
+    orderInfo.nonce,
+    orderInfo.expiration,
+    orderInfo.side
+  );
+
+  return message;
 }
 
-// === VALIDATE ORDER === //
+// === VALIDATE ORDER IN MATCHER === //
 async function validateSignature(signature, orderInfo) {
-  let message = getOrderMessage(orderInfo);
-  message = "0x" + message.toString("hex");
+  let message = hashOrder(orderInfo);
 
   let sender = await web3.eth.accounts.recover(message, signature);
 
@@ -52,19 +51,22 @@ async function validateSignature(signature, orderInfo) {
 }
 // ======================== //
 
-// === UTILS === //
+// === VALIDATE ORDER IN SOLIDITY === //
+async function validateSolidity(signature, orderInfo) {
+  //Retrieves r, s, and v values
+  signature = signature.substr(2); //remove 0x
+  const r = "0x" + signature.slice(0, 64);
+  const s = "0x" + signature.slice(64, 128);
+  const v = web3.utils.hexToNumber("0x" + signature.slice(128, 130)) + 27;
 
-function longToBytes(long) {
-  return Uint8Array.from(Long.fromNumber(long).toBytesBE());
-}
+  //Validate in smart contract
+  let response = await exchange.methods
+    .validateOrder(orderInfo, v, r, s)
+    .send({ from: accounts[0] });
 
-function byte(num) {
-  return Uint8Array.from([num]);
+  return response.events.RecoveredAddress.returnValues.sender;
 }
-
-function assetBytes(asset) {
-  return ethers.utils.concat([byte(1), ethers.utils.arrayify(asset)]);
-}
+// ======================== //
 
 // // === MAIN FLOW === //
 
@@ -72,7 +74,7 @@ function assetBytes(asset) {
   await setupContracts();
 
   //Input same timestamp as created order in client
-  nowTimestamp = 1570173742523;
+  nowTimestamp = 1570228600024;
 
   const orionOrder = {
     senderAddress: accounts[0],
@@ -90,31 +92,22 @@ function assetBytes(asset) {
 
   //Result from client script
   signature =
-    "0x8fb309783dd6fee6549fbd32c111b394f71cd896d3626b25408a382010eb248e5f070e032d587e0c31276c189a328b94f37cd244d9acccffb368fee0d92120bc00";
+    "0x65a5849f14846b0180a9e3a88c7d544caec0f5ef961949da36443c596beb359c1d8f7d865576f58f93144435fa6fc278fc70f81c6a977ef09809141cb10aa0d900";
 
   //Matcher validates order
   let sender = await validateSignature(signature, orionOrder);
   console.log(
-    "\nValid Signature? ",
+    "\nValid Signature in matcher? ",
     sender === web3.utils.toChecksumAddress(orionOrder.senderAddress)
   );
 
-  //Retrieves r, s, and v values
-  signature = signature.substr(2); //remove 0x
-  const r = "0x" + signature.slice(0, 64);
-  const s = "0x" + signature.slice(64, 128);
-  const v = web3.utils.hexToNumber("0x" + signature.slice(128, 130)) + 27;
-  console.log(r, s, v);
-
-  //Validate in smart contract
-  let message = getOrderMessage(orionOrder);
-  let messageHash = web3.utils.soliditySha3(message);
-  let response = await exchange.methods
-    .validateOrder(orionOrder, messageHash, v, r, s)
-    .send({ from: accounts[0] });
+  sender = await validateSolidity(signature, orionOrder);
 
   console.log(
-    "\nRecovered Address from smart contract:",
-    response.events.RecoveredAddress.returnValues.sender
+    "\nValid Signature in solidity? ",
+    sender === web3.utils.toChecksumAddress(orionOrder.senderAddress)
   );
 })();
+
+//remix
+// ["0xd632Db06A2AE8D1Be142b3309AB48BED08f9DeBF", "0xD88E683DD82458C400bcA10E708Eb0fB6D068e19", "0x0b8260891a9464056951963a0C03d3a531cAaF0B", "0x164D698328068b8740128FCE204f9F0c2632e157", "0x0b8260891a9464056951963a0C03d3a531cAaF0B", 150000000, 2000000, 150000, 1570220723491, 1572726323491, true]

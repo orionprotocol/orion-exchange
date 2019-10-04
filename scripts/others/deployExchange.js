@@ -2,7 +2,7 @@ const Web3 = require("web3");
 var net = require("net");
 var web3 = new Web3("/home/wafflemakr/.wanchain/testnet/gwan.ipc", net);
 
-const exchangeArtifact = require("../build/contracts/Exchange.json");
+const exchangeArtifact = require("../../build/contracts/Exchange.json");
 
 let exchangeContract = new web3.eth.Contract(exchangeArtifact.abi);
 exchangeContract

@@ -6,33 +6,30 @@ const web3 = new Web3("http://localhost:8544");
 const WETHArtifact = require("../build/contracts/WETH.json");
 const WBTCArtifact = require("../build/contracts/WBTC.json");
 
-let accounts;
+// === Hash Order=== //
 
-let netId;
+function hashOrder(orderInfo) {
+  let message = web3.utils.soliditySha3(
+    3,
+    orderInfo.senderAddress,
+    orderInfo.matcherAddress,
+    orderInfo.baseAsset,
+    orderInfo.quotetAsset,
+    orderInfo.matcherFeeAsset,
+    orderInfo.amount,
+    orderInfo.price,
+    orderInfo.matcherFee,
+    orderInfo.nonce,
+    orderInfo.expiration,
+    orderInfo.side
+  );
 
-// === CREATE ORDER BYTES=== //
-
-function getOrderMessage(order) {
-  return Buffer.concat([
-    byte(3),
-    ethers.utils.arrayify(order.senderAddress),
-    ethers.utils.arrayify(order.matcherAddress),
-    assetBytes(order.baseAsset),
-    assetBytes(order.quotetAsset),
-    byte(order.side),
-    longToBytes(order.price),
-    longToBytes(order.amount),
-    longToBytes(order.nonce),
-    longToBytes(order.expirationTimestamp),
-    longToBytes(order.matcherFee),
-    assetBytes(order.matcherFeeAsset)
-  ]);
+  return message;
 }
 
 // === SIGN ORDER === //
 async function signOrder(orderInfo) {
-  let message = getOrderMessage(orderInfo);
-  message = "0x" + message.toString("hex");
+  let message = hashOrder(orderInfo);
   //Wanmask
   //   let signedMessage = await window.wan3.eth.sign(
   //     sender,
@@ -48,27 +45,13 @@ async function signOrder(orderInfo) {
   return signedMessage;
 }
 
-// === UTILS === //
-
-function longToBytes(long) {
-  return Uint8Array.from(Long.fromNumber(long).toBytesBE());
-}
-
-function byte(num) {
-  return Uint8Array.from([num]);
-}
-
-function assetBytes(asset) {
-  return ethers.utils.concat([byte(1), ethers.utils.arrayify(asset)]);
-}
-
 // // === MAIN FLOW === //
 
 (async function main() {
-  const nowTimestamp = Date.now();
+  const netId = await web3.eth.net.getId();
+  const accounts = await web3.eth.getAccounts();
 
-  accounts = await web3.eth.getAccounts();
-  netId = await web3.eth.net.getId();
+  const nowTimestamp = Date.now();
 
   const orionOrder = {
     senderAddress: accounts[0],
