@@ -106,10 +106,15 @@ contract Exchange is Ownable{
      */
     function withdraw(address assetAddress, uint amount) public{
         require(assetBalances[msg.sender][assetAddress] >= amount, "not enough funds to withdraw");
-        IERC20 asset = IERC20(assetAddress);
 
-        require(asset.transfer(msg.sender, amount), "error transfering funds to user");
         assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].sub(amount);
+
+        if(assetAddress == address(0))
+            msg.sender.transfer(amount);
+        else{
+            IERC20 asset = IERC20(assetAddress);
+            require(asset.transfer(msg.sender, amount), "error transfering funds to user");
+        }
 
         emit NewAssetWithdrawl(msg.sender, assetAddress, amount);
     }
