@@ -51,6 +51,16 @@ async function validateSignature(signature, orderInfo) {
 }
 // ======================== //
 
+// === FILL ORDERS BY MATCHER === //
+async function fillOrders(buyOrder, sellOrder, fillAmount, fillPrice) {
+  let response = await exchange.methods
+    .validateOrder(orderInfo, v, r, s)
+    .send({ from: accounts[0] }); //matcher address is accounts 0
+
+  return response;
+}
+// ======================== //
+
 // === VALIDATE ORDER IN SOLIDITY === //
 async function validateSolidity(signature, orderInfo) {
   //Retrieves r, s, and v values
@@ -73,12 +83,30 @@ async function validateSolidity(signature, orderInfo) {
 (async function main() {
   await setupContracts();
 
-  //Input same timestamp as created order in client
-  nowTimestamp = 1570228600024;
+  //Input same timestamp as the one created order in client
+  nowTimestamp = 1570722872347;
 
-  const orionOrder = {
-    senderAddress: accounts[0],
-    matcherAddress: accounts[1],
+  const buyOrder = {
+    senderAddress: accounts[1],
+    matcherAddress: accounts[0],
+    baseAsset: WETHArtifact.networks[netId].address,
+    quotetAsset: WBTCArtifact.networks[netId].address, // WBTC
+    matcherFeeAsset: WETHArtifact.networks[netId].address, // WETH
+    amount: 350000000,
+    price: 2100000,
+    matcherFee: 350000,
+    nonce: nowTimestamp,
+    expiration: nowTimestamp + 29 * 24 * 60 * 60,
+    side: true //true = buy, false = sell
+  };
+
+  //Result from client script
+  signature1 =
+    "0x2aa3d4091783310bb9d33d5f3d892a389ba0a5f3dcd5c282fdcd3176a9946d9652b56e7e512f52664ae68b9106f5e91d49bd284ee3fbac9337c60168b9c722aa01";
+
+  const sellOrder = {
+    senderAddress: accounts[2],
+    matcherAddress: accounts[0],
     baseAsset: WETHArtifact.networks[netId].address,
     quotetAsset: WBTCArtifact.networks[netId].address, // WBTC
     matcherFeeAsset: WETHArtifact.networks[netId].address, // WETH
@@ -86,27 +114,38 @@ async function validateSolidity(signature, orderInfo) {
     price: 2000000,
     matcherFee: 150000,
     nonce: nowTimestamp,
-    expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000,
-    side: true //true = buy, false = sell
+    expiration: nowTimestamp + 29 * 24 * 60 * 60,
+    side: false //true = buy, false = sell
   };
 
   //Result from client script
-  signature =
-    "0x65a5849f14846b0180a9e3a88c7d544caec0f5ef961949da36443c596beb359c1d8f7d865576f58f93144435fa6fc278fc70f81c6a977ef09809141cb10aa0d900";
+  signature2 =
+    "0x36b3697f8fd6b66f164a82eb4fe1b0de4c588f0276bc5c28eff5a32fd403015865768200a3bea86a64292c75f070017deed5f80a5a12fb24a75ff231245a3ddf01";
 
-  //Matcher validates order
-  let sender = await validateSignature(signature, orionOrder);
+  //Matcher validates orders
+  let sender1 = await validateSignature(signature1, buyOrder);
   console.log(
-    "\nValid Signature in matcher? ",
-    sender === web3.utils.toChecksumAddress(orionOrder.senderAddress)
+    "\nValid Signature for Buy Order? ",
+    sender1 === web3.utils.toChecksumAddress(buyOrder.senderAddress)
   );
 
-  sender = await validateSolidity(signature, orionOrder);
-
+  let sender2 = await validateSignature(signature2, sellOrder);
   console.log(
-    "\nValid Signature in solidity? ",
-    sender === web3.utils.toChecksumAddress(orionOrder.senderAddress)
+    "\nValid Signature for Sell Order? ",
+    sender2 === web3.utils.toChecksumAddress(sellOrder.senderAddress)
   );
+
+  //FILL ORDERS
+  let response = await exchange.methods
+    .fillOrders(buyOrder, sellOrder, 2100000, 150000000)
+    .send({ from: accounts[0] }); //matcher address is accounts 0
+
+  console.log(response);
+  // sender = await validateSolidity(signature, orionOrder);
+  // console.log(
+  //   "\nValid Signature in solidity? ",
+  //   sender === web3.utils.toChecksumAddress(orionOrder.senderAddress)
+  // );
 })();
 
 //remix

@@ -7,6 +7,8 @@
     "compile": "truffle compile --all",
     "deploy": "truffle migrate --reset --network gwan",
     "test": "truffle test test/2_exchange.test.js --network gwan",
+    "client": "node scripts/client.js",
+    "matcher": "node scripts/matcher.js",
     "ganache": "ganache-cli --port 8544 --networkId 999"
   },
   "repository": {

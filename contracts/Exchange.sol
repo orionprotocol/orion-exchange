@@ -30,6 +30,8 @@ contract Exchange is Ownable{
 
     IERC20 public orion;
 
+    enum Status {NEW, PARTIALLY_FILLED, FILLED, PARTIALLY_CANCELLED, CANCELLED}
+
     struct Order{
         address senderAddress;
         address matcherAddress;
@@ -46,7 +48,7 @@ contract Exchange is Ownable{
 
     struct Trade{
         bytes32 orderHash;
-        uint8 orderStatus;
+        Status orderStatus;
         uint filledAmount;
     }
 
@@ -128,6 +130,15 @@ contract Exchange is Ownable{
     }
 
     /**
+     * @dev Batch request of asset balances
+     */
+    function getBalance(address[] memory assetsAddresses, address user) public view returns(uint[] memory balances){
+        for(uint8 i = 0; i < assetsAddresses.length; i++){
+            balances[i] = (assetBalances[user][assetsAddresses[i]]);
+        }
+    }
+
+    /**
      * @notice Settle a trade with two orders, filled price and amount
      * @dev 2 orders are submitted, it is necessary to match them:
         check conditions in orders for compliance filledPrice, filledAmountbuyOrderHash
@@ -145,12 +156,10 @@ contract Exchange is Ownable{
         require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quotetAsset == sellOrder.quotetAsset, "assets do not match");
         require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
         require(filledPrice >= sellOrder.price, "incorrect filled price for sell order");
-        require(buyOrder.expiration <= now && sellOrder.expiration <= now, "order expiration");
+        require(buyOrder.expiration >= now && sellOrder.expiration >= now, "order expiration");
 
-        //Amount of opposite asset according to filledPrice and filledAmount
+        //Amount of quotet asset
         uint amountToTake = filledAmount.mul(filledPrice);
-        require(amountToTake <= sellOrder.amount, "incorrect amount to take");
-
         address buyer = buyOrder.senderAddress;
         address seller = sellOrder.senderAddress;
 
@@ -158,14 +167,14 @@ contract Exchange is Ownable{
 
         require(assetBalances[buyer][buyOrder.quotetAsset] >= amountToTake, "insufficient buyer's balance");
         bytes32 buyOrderHash = _getOrderhash(buyOrder);
-        require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
-        require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
+        // require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
+        // require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
 
         // SELL SIDE CHECK
         require(assetBalances[seller][sellOrder.baseAsset] >= filledAmount, "insufficient seller's balance");
         bytes32 sellOrderHash = _getOrderhash(sellOrder);
-        require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
-        require(_checkAmount(sellOrderHash, sellOrder.amount, filledAmount), "incorrect filled amount");
+        // require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
+        // require(_checkAmount(sellOrderHash, sellOrder.amount, filledAmount), "incorrect filled amount");
 
         // === VERIFICATIONS DONE ===
 
@@ -180,9 +189,9 @@ contract Exchange is Ownable{
         totalTrades = totalTrades.add(1);
 
         //Store trades
-        Trade memory buyTrade = Trade(buyOrderHash, 0, filledAmount); //temporary set 0 for orderStatus until logic implemented
+        Trade memory buyTrade = Trade(buyOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
         trades[buyOrderHash].push(buyTrade);
-        Trade memory sellTrade = Trade(sellOrderHash, 0, filledAmount); //temporary set 0 for orderStatus until logic implemented
+        Trade memory sellTrade = Trade(sellOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
         trades[sellOrderHash].push(sellTrade);
 
 
