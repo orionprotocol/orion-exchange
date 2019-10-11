@@ -83,15 +83,18 @@ async function validateSolidity(signature, orderInfo) {
 (async function main() {
   await setupContracts();
 
+  let wbtcAddress = WBTCArtifact.networks[netId].address;
+  let wethAddress = WETHArtifact.networks[netId].address;
+
   //Input same timestamp as the one created order in client
-  nowTimestamp = 1570722872347;
+  nowTimestamp = 1570752916653;
 
   const buyOrder = {
     senderAddress: accounts[1],
     matcherAddress: accounts[0],
-    baseAsset: WETHArtifact.networks[netId].address,
-    quotetAsset: WBTCArtifact.networks[netId].address, // WBTC
-    matcherFeeAsset: WETHArtifact.networks[netId].address, // WETH
+    baseAsset: wethAddress,
+    quotetAsset: wbtcAddress, // WBTC
+    matcherFeeAsset: wethAddress, // WETH
     amount: 350000000,
     price: 2100000,
     matcherFee: 350000,
@@ -102,14 +105,14 @@ async function validateSolidity(signature, orderInfo) {
 
   //Result from client script
   signature1 =
-    "0x2aa3d4091783310bb9d33d5f3d892a389ba0a5f3dcd5c282fdcd3176a9946d9652b56e7e512f52664ae68b9106f5e91d49bd284ee3fbac9337c60168b9c722aa01";
+    "0xba5f9f696136c5956b7cba6a6fcf5016204a7fb0c8057db01784558f5263a3b07fa902cb364509a448e8ca6a76e2e81abd40576ff0170773f3cc69b33e4d6c0a00";
 
   const sellOrder = {
     senderAddress: accounts[2],
     matcherAddress: accounts[0],
-    baseAsset: WETHArtifact.networks[netId].address,
-    quotetAsset: WBTCArtifact.networks[netId].address, // WBTC
-    matcherFeeAsset: WETHArtifact.networks[netId].address, // WETH
+    baseAsset: wethAddress,
+    quotetAsset: wbtcAddress, // WBTC
+    matcherFeeAsset: wethAddress, // WETH
     amount: 150000000,
     price: 2000000,
     matcherFee: 150000,
@@ -120,7 +123,7 @@ async function validateSolidity(signature, orderInfo) {
 
   //Result from client script
   signature2 =
-    "0x36b3697f8fd6b66f164a82eb4fe1b0de4c588f0276bc5c28eff5a32fd403015865768200a3bea86a64292c75f070017deed5f80a5a12fb24a75ff231245a3ddf01";
+    "0x6682dba84661891be4f1df50e12e46d89fb7e7e1e1a917fd17cd9d7ab82d2c615d6bccf1c5960e107bc768bb27d9680c040f8a5bae9f1d74789f914d1540a50100";
 
   //Matcher validates orders
   let sender1 = await validateSignature(signature1, buyOrder);
@@ -135,12 +138,57 @@ async function validateSolidity(signature, orderInfo) {
     sender2 === web3.utils.toChecksumAddress(sellOrder.senderAddress)
   );
 
-  //FILL ORDERS
+  //Initial Balances
+  let balances1 = await exchange.methods
+    .getBalances([wethAddress, wbtcAddress], accounts[1])
+    .call();
+  console.log(
+    "BUYER INITIAL BALANCES:\nWETH: ",
+    balances1[0],
+    "WBTC: ",
+    balances1[1]
+  );
+
+  let balances2 = await exchange.methods
+    .getBalances([wethAddress, wbtcAddress], accounts[2])
+    .call();
+  console.log(
+    "SELLER INITIAL BALANCES:\nWETH: ",
+    balances2[0],
+    "WBTC: ",
+    balances2[1]
+  );
+
+  // FILL ORDERS
   let response = await exchange.methods
     .fillOrders(buyOrder, sellOrder, 2100000, 150000000)
-    .send({ from: accounts[0] }); //matcher address is accounts 0
+    .send({ from: accounts[0], gas: 1e6 }); //matcher address is accounts 0
 
-  console.log(response);
+  console.log("\nTransaction successful? ", response.status);
+  console.log("New Trade Event:\n", response.events.NewTrade.returnValues);
+
+  //Final Balances
+  balances1 = await exchange.methods
+    .getBalances([wethAddress, wbtcAddress], accounts[1])
+    .call();
+  console.log(
+    "\nBUYER FINAL BALANCES:\nWETH: ",
+    balances1[0],
+    "WBTC: ",
+    balances1[1]
+  );
+
+  balances2 = await exchange.methods
+    .getBalances([wethAddress, wbtcAddress], accounts[2])
+    .call();
+  console.log(
+    "SELLER FINAL BALANCES:\nWETH: ",
+    balances2[0],
+    "WBTC: ",
+    balances2[1]
+  );
+
+  //Validate order in solidity
   // sender = await validateSolidity(signature, orionOrder);
   // console.log(
   //   "\nValid Signature in solidity? ",

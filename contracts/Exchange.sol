@@ -20,7 +20,7 @@ contract Exchange is Ownable{
     event NewAssetDeposit(address indexed user, address indexed assetAddress, uint amount);
     event NewWanWithdrawl(address indexed user, uint amount);
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
-    event NewTrade(bytes32 buyOrderHash, bytes32 sellOrderHash, uint pricebuyOrderHash, uint amount);
+    event NewTrade(bytes32 buyOrderHash, bytes32 sellOrderHash, uint filledPrice, uint filledAmount, uint amountToTake);
     event OrderCancelled(bytes32 indexed orderHash);
 
     event RecoveredAddress(address sender);
@@ -132,10 +132,12 @@ contract Exchange is Ownable{
     /**
      * @dev Batch request of asset balances
      */
-    function getBalance(address[] memory assetsAddresses, address user) public view returns(uint[] memory balances){
-        for(uint8 i = 0; i < assetsAddresses.length; i++){
-            balances[i] = (assetBalances[user][assetsAddresses[i]]);
+    function getBalances(address[] memory assetsAddresses, address user) public view returns(uint[] memory){
+        uint[] memory balances = new uint[](assetsAddresses.length);
+        for(uint i = 0; i < assetsAddresses.length; i++){
+            balances[i] = assetBalances[user][assetsAddresses[i]];
         }
+        return balances;
     }
 
     /**
@@ -167,37 +169,42 @@ contract Exchange is Ownable{
 
         require(assetBalances[buyer][buyOrder.quotetAsset] >= amountToTake, "insufficient buyer's balance");
         bytes32 buyOrderHash = _getOrderhash(buyOrder);
-        // require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
+        require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
         // require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
 
         // SELL SIDE CHECK
         require(assetBalances[seller][sellOrder.baseAsset] >= filledAmount, "insufficient seller's balance");
         bytes32 sellOrderHash = _getOrderhash(sellOrder);
-        // require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
+        require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
         // require(_checkAmount(sellOrderHash, sellOrder.amount, filledAmount), "incorrect filled amount");
 
         // === VERIFICATIONS DONE ===
 
-        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset)
-        assetBalances[buyer][buyOrder.quotetAsset] = assetBalances[buyer][buyOrder.quotetAsset].sub(amountToTake);
-        assetBalances[buyer][buyOrder.baseAsset] = assetBalances[buyer][buyOrder.baseAsset].add(filledAmount);
-
-        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset)
-        assetBalances[seller][sellOrder.baseAsset] = assetBalances[seller][sellOrder.baseAsset].sub(filledAmount);
-        assetBalances[seller][sellOrder.quotetAsset] = assetBalances[seller][sellOrder.quotetAsset].add(amountToTake);
+        _updateBalances(buyer, seller, buyOrder.baseAsset, buyOrder.quotetAsset, filledAmount, amountToTake);
 
         totalTrades = totalTrades.add(1);
 
-        //Store trades
+        // Store trades
         Trade memory buyTrade = Trade(buyOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
         trades[buyOrderHash].push(buyTrade);
         Trade memory sellTrade = Trade(sellOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
         trades[sellOrderHash].push(sellTrade);
 
+        emit NewTrade(buyOrderHash, sellOrderHash, filledPrice, filledAmount, amountToTake);
 
-        //TODO what to put in orderStatus (compare filledAmount to which amount? buy or sell order)
+    }
 
-        emit NewTrade(buyOrderHash, sellOrderHash, filledPrice, filledAmount);
+    function _updateBalances(
+        address buyer, address seller, address baseAsset,
+        address quotetAsset, uint filledAmount, uint amountToTake
+    ) internal{
+        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset)
+        assetBalances[buyer][quotetAsset] = assetBalances[buyer][quotetAsset].sub(amountToTake);
+        assetBalances[buyer][baseAsset] = assetBalances[buyer][baseAsset].add(filledAmount);
+
+        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset)
+        assetBalances[seller][quotetAsset] = assetBalances[seller][quotetAsset].add(amountToTake);
+        assetBalances[seller][baseAsset] = assetBalances[seller][baseAsset].sub(filledAmount);
 
     }
 

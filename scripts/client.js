@@ -92,11 +92,6 @@ async function signOrder(orderInfo) {
     .depositAsset(wbtcAddress, web3.utils.toWei("100"))
     .send({ from: accounts[1] });
 
-  // let balanceBTC = await exchange.methods
-  //   .getBalance(wbtcAddress, accounts[1])
-  //   .call();
-  // console.log(balanceBTC.toString());
-
   //Mint WBTC to Seller
   await weth.methods
     .mint(accounts[2], web3.utils.toWei("100"))
@@ -112,12 +107,8 @@ async function signOrder(orderInfo) {
     .depositAsset(wethAddress, web3.utils.toWei("100"))
     .send({ from: accounts[2] });
 
-  // let balanceETH = await exchange.methods
-  //   .getBalance(wethAddress, accounts[2])
-  //   .call();
-  // console.log(balanceETH.toString());
-
-  const nowTimestamp = Date.now();
+  // const nowTimestamp = Date.now();
+  nowTimestamp = 1570752916653; //For testing
 
   //Client1 Order
   const buyOrder = {
@@ -136,7 +127,8 @@ async function signOrder(orderInfo) {
 
   //Client1 signs buy order
   let signature1 = await signOrder(buyOrder);
-  console.log("Signed Data: ", signature1);
+  console.log("Message: ", hashOrder(buyOrder));
+  console.log("Signature: ", signature1);
   console.log("Signed By: ", buyOrder.senderAddress);
   console.log("Buy Order Struct: \n", buyOrder);
 
@@ -156,6 +148,7 @@ async function signOrder(orderInfo) {
 
   //Client2 signs sell order
   let signature2 = await signOrder(sellOrder);
+  console.log("Message: ", hashOrder(sellOrder));
   console.log("\nSigned Data: ", signature2);
   console.log("Signed By: ", sellOrder.senderAddress);
   console.log("Sell Order Struct: \n", sellOrder);
