@@ -1,5 +1,6 @@
 const Web3 = require("web3");
 const web3 = new Web3("http://localhost:8544");
+const Long = require("long");
 
 const exchangeArtifact = require("../build/contracts/Exchange.json");
 const WETHArtifact = require("../build/contracts/WETH.json");
@@ -20,22 +21,26 @@ async function setupContracts() {
   accounts = await web3.eth.getAccounts();
 }
 
-// === Hash Order=== //
+// CONVERT LONG TO BYTES
+function longToBytes(long) {
+  return web3.utils.bytesToHex(Long.fromNumber(long).toBytesBE());
+}
 
+// === GET ORDER HASH=== //
 function hashOrder(orderInfo) {
   let message = web3.utils.soliditySha3(
-    3,
+    "0x03",
     orderInfo.senderAddress,
     orderInfo.matcherAddress,
     orderInfo.baseAsset,
     orderInfo.quotetAsset,
     orderInfo.matcherFeeAsset,
-    orderInfo.amount,
-    orderInfo.price,
-    orderInfo.matcherFee,
-    orderInfo.nonce,
-    orderInfo.expiration,
-    orderInfo.side
+    longToBytes(orderInfo.amount),
+    longToBytes(orderInfo.price),
+    longToBytes(orderInfo.matcherFee),
+    longToBytes(orderInfo.nonce),
+    longToBytes(orderInfo.expiration),
+    orderInfo.side === "buy" ? "0x00" : "0x01"
   );
 
   return message;
@@ -51,32 +56,51 @@ async function validateSignature(signature, orderInfo) {
 }
 // ======================== //
 
-// === FILL ORDERS BY MATCHER === //
-async function fillOrders(buyOrder, sellOrder, fillAmount, fillPrice) {
-  let response = await exchange.methods
-    .validateOrder(orderInfo, v, r, s)
-    .send({ from: accounts[0] }); //matcher address is accounts 0
-
-  return response;
-}
-// ======================== //
-
-// === VALIDATE ORDER IN SOLIDITY === //
-async function validateSolidity(signature, orderInfo) {
-  //Retrieves r, s, and v values
+// === GET SIGATURE OBJECT === //
+function getSignatureObj(signature) {
   signature = signature.substr(2); //remove 0x
   const r = "0x" + signature.slice(0, 64);
   const s = "0x" + signature.slice(64, 128);
   const v = web3.utils.hexToNumber("0x" + signature.slice(128, 130)) + 27;
 
-  //Validate in smart contract
-  let response = await exchange.methods
-    .validateOrder(orderInfo, v, r, s)
-    .send({ from: accounts[0] });
-
-  return response.events.RecoveredAddress.returnValues.sender;
+  return { r, s, v };
 }
 // ======================== //
+
+// === VALIDATE ORDER IN SOLIDITY === //
+async function validateSolidity(orderInfo, signature) {
+  //Validate in smart contract
+  let response = await exchange.methods
+    .isValidSignature(orderInfo, getSignatureObj(signature))
+    .call();
+
+  return response;
+}
+// ======================== //
+
+// === FILL ORDERS ===
+async function fillOrdersByMatcher(
+  buyOrder,
+  sellOrder,
+  signature1,
+  signature2,
+  fillPrice,
+  fillAmount
+) {
+  let response = await exchange.methods
+    .fillOrders(
+      buyOrder,
+      sellOrder,
+      getSignatureObj(signature1),
+      getSignatureObj(signature2),
+      fillPrice,
+      fillAmount
+    )
+    .send({ from: accounts[0], gas: 1e6 }); //matcher address is accounts 0
+
+  console.log("\nTransaction successful? ", response.status);
+  console.log("New Trade Event:\n", response.events.NewTrade.returnValues);
+}
 
 // // === MAIN FLOW === //
 
@@ -100,12 +124,12 @@ async function validateSolidity(signature, orderInfo) {
     matcherFee: 350000,
     nonce: nowTimestamp,
     expiration: nowTimestamp + 29 * 24 * 60 * 60,
-    side: true //true = buy, false = sell
+    side: "buy"
   };
 
   //Result from client script
   signature1 =
-    "0xba5f9f696136c5956b7cba6a6fcf5016204a7fb0c8057db01784558f5263a3b07fa902cb364509a448e8ca6a76e2e81abd40576ff0170773f3cc69b33e4d6c0a00";
+    "0xb3f15a601e7208d329e48be8517ee1289defb3a749abf6d6eb64970b28db5faa1cf28c9774e28a76217182f26a7664ed094cc69a310d6a953c12cd7143b8e1f001";
 
   const sellOrder = {
     senderAddress: accounts[2],
@@ -118,12 +142,12 @@ async function validateSolidity(signature, orderInfo) {
     matcherFee: 150000,
     nonce: nowTimestamp,
     expiration: nowTimestamp + 29 * 24 * 60 * 60,
-    side: false //true = buy, false = sell
+    side: "sell"
   };
 
   //Result from client script
   signature2 =
-    "0x6682dba84661891be4f1df50e12e46d89fb7e7e1e1a917fd17cd9d7ab82d2c615d6bccf1c5960e107bc768bb27d9680c040f8a5bae9f1d74789f914d1540a50100";
+    "0xefce17bda00d945ea80eba49c26a09d294e3a81b215c15c1fd9f8d31fa680ffb22c3d707b589806ee2c5037dcff05abeb4ba38bb17da52376297511df93c60a401";
 
   //Matcher validates orders
   let sender1 = await validateSignature(signature1, buyOrder);
@@ -142,6 +166,7 @@ async function validateSolidity(signature, orderInfo) {
   let balances1 = await exchange.methods
     .getBalances([wethAddress, wbtcAddress], accounts[1])
     .call();
+  console.log("\nInitial Balances");
   console.log(
     "BUYER INITIAL BALANCES:\nWETH: ",
     balances1[0],
@@ -160,12 +185,14 @@ async function validateSolidity(signature, orderInfo) {
   );
 
   // FILL ORDERS
-  let response = await exchange.methods
-    .fillOrders(buyOrder, sellOrder, 2100000, 150000000)
-    .send({ from: accounts[0], gas: 1e6 }); //matcher address is accounts 0
-
-  console.log("\nTransaction successful? ", response.status);
-  console.log("New Trade Event:\n", response.events.NewTrade.returnValues);
+  await fillOrdersByMatcher(
+    buyOrder,
+    sellOrder,
+    signature1,
+    signature2,
+    2100000,
+    150000000
+  );
 
   //Final Balances
   balances1 = await exchange.methods
@@ -188,13 +215,10 @@ async function validateSolidity(signature, orderInfo) {
     balances2[1]
   );
 
-  //Validate order in solidity
-  // sender = await validateSolidity(signature, orionOrder);
-  // console.log(
-  //   "\nValid Signature in solidity? ",
-  //   sender === web3.utils.toChecksumAddress(orionOrder.senderAddress)
-  // );
-})();
+  // VALIDATE ORDER SIGNATURES WITH SOLIDITY FUNCTION
+  let isValid = await validateSolidity(buyOrder, signature1);
+  console.log("\nValid Signature for Buy Order in solidity? ", isValid);
 
-//remix
-// ["0xd632Db06A2AE8D1Be142b3309AB48BED08f9DeBF", "0xD88E683DD82458C400bcA10E708Eb0fB6D068e19", "0x0b8260891a9464056951963a0C03d3a531cAaF0B", "0x164D698328068b8740128FCE204f9F0c2632e157", "0x0b8260891a9464056951963a0C03d3a531cAaF0B", 150000000, 2000000, 150000, 1570220723491, 1572726323491, true]
+  isValid = await validateSolidity(sellOrder, signature2);
+  console.log("Valid Signature for Sell Order in solidity? ", isValid);
+})();

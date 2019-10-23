@@ -1,5 +1,6 @@
 const Web3 = require("web3");
 const web3 = new Web3("http://localhost:8544");
+const Long = require("long");
 
 const WETHArtifact = require("../build/contracts/WETH.json");
 const WBTCArtifact = require("../build/contracts/WBTC.json");
@@ -30,22 +31,26 @@ async function setupContracts() {
   accounts = await web3.eth.getAccounts();
 }
 
+function longToBytes(long) {
+  return web3.utils.bytesToHex(Long.fromNumber(long).toBytesBE());
+}
+
 // === Hash Order=== //
 
 function hashOrder(orderInfo) {
   let message = web3.utils.soliditySha3(
-    3,
+    "0x03",
     orderInfo.senderAddress,
     orderInfo.matcherAddress,
     orderInfo.baseAsset,
     orderInfo.quotetAsset,
     orderInfo.matcherFeeAsset,
-    orderInfo.amount,
-    orderInfo.price,
-    orderInfo.matcherFee,
-    orderInfo.nonce,
-    orderInfo.expiration,
-    orderInfo.side
+    longToBytes(orderInfo.amount),
+    longToBytes(orderInfo.price),
+    longToBytes(orderInfo.matcherFee),
+    longToBytes(orderInfo.nonce),
+    longToBytes(orderInfo.expiration),
+    orderInfo.side === "buy" ? "0x00" : "0x01"
   );
 
   return message;
@@ -122,7 +127,7 @@ async function signOrder(orderInfo) {
     matcherFee: 350000,
     nonce: nowTimestamp,
     expiration: nowTimestamp + 29 * 24 * 60 * 60,
-    side: true //true = buy, false = sell
+    side: "buy"
   };
 
   //Client1 signs buy order
@@ -143,13 +148,13 @@ async function signOrder(orderInfo) {
     matcherFee: 150000,
     nonce: nowTimestamp,
     expiration: nowTimestamp + 29 * 24 * 60 * 60,
-    side: false //true = buy, false = sell
+    side: "sell"
   };
 
   //Client2 signs sell order
   let signature2 = await signOrder(sellOrder);
-  console.log("Message: ", hashOrder(sellOrder));
-  console.log("\nSigned Data: ", signature2);
+  console.log("\nMessage: ", hashOrder(sellOrder));
+  console.log("Signed Data: ", signature2);
   console.log("Signed By: ", sellOrder.senderAddress);
   console.log("Sell Order Struct: \n", sellOrder);
 })();

@@ -16,14 +16,10 @@ contract Exchange is Ownable{
     using SafeMath for uint;
 
     // EVENTS
-    event NewWanDeposit(address indexed user, uint amount);
     event NewAssetDeposit(address indexed user, address indexed assetAddress, uint amount);
-    event NewWanWithdrawl(address indexed user, uint amount);
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
     event NewTrade(bytes32 buyOrderHash, bytes32 sellOrderHash, uint filledPrice, uint filledAmount, uint amountToTake);
     event OrderCancelled(bytes32 indexed orderHash);
-
-    event RecoveredAddress(address sender);
 
 
     // GLOBAL VARIABLES
@@ -38,18 +34,24 @@ contract Exchange is Ownable{
         address baseAsset;
         address quotetAsset;
         address matcherFeeAsset;
-        uint amount;
-        uint price;
-        uint matcherFee;
-        uint nonce;
-        uint expiration;
-        bool side; // true = buy false = sell
+        uint64 amount;
+        uint64 price;
+        uint64 matcherFee;
+        uint64 nonce;
+        uint64 expiration;
+        string side; // true = buy false = sell
     }
 
     struct Trade{
         bytes32 orderHash;
         Status orderStatus;
         uint filledAmount;
+    }
+
+    struct Signature{
+        bytes32 r;
+        bytes32 s;
+        uint8 v ;
     }
 
     // Get trades by orderHash
@@ -150,7 +152,17 @@ contract Exchange is Ownable{
      * @param filledPrice price at which the order was settled
      * @param filledAmount amount settled between orders
      */
-    function fillOrders(Order memory buyOrder, Order memory sellOrder, uint filledPrice, uint filledAmount) public onlyActive{
+    function fillOrders(
+        Order memory buyOrder, Order memory sellOrder,
+        Signature memory buySig, Signature memory sellSig,
+        uint filledPrice, uint filledAmount
+    )
+        public onlyActive
+    {
+
+        // VALIDATE SIGNATURES
+        require(isValidSignature(buyOrder, buySig), "Invalid signature for Buy order");
+        require(isValidSignature(sellOrder, sellSig), "Invalid signature for Sell order");
 
         //VERIFICATIONS
 
@@ -217,19 +229,21 @@ contract Exchange is Ownable{
     }
 
     function _getOrderhash(Order memory _order) internal pure returns(bytes32){
+        bytes32 buySide = keccak256(abi.encodePacked("buy"));
+
         return keccak256(abi.encodePacked(
-            uint(3),
+            bytes1(0x03),
             _order.senderAddress,
             _order.matcherAddress,
             _order.baseAsset,
             _order.quotetAsset,
             _order.matcherFeeAsset,
-            _order.amount,
-            _order.price,
-            _order.matcherFee,
-            _order.nonce,
-            _order.expiration,
-            _order.side
+            bytes8(_order.amount),
+            bytes8(_order.price),
+            bytes8(_order.matcherFee),
+            bytes8(_order.nonce),
+            bytes8(_order.expiration),
+            keccak256(abi.encodePacked(_order.side)) == buySide ? bytes1(0x00):bytes1(0x01)
         ));
     }
 
@@ -237,7 +251,7 @@ contract Exchange is Ownable{
      *  @dev Performs an `ecrecover` operation for signed message hashes
      */
     function _recoverAddress(bytes32 _hash, uint8 _v, bytes32 _r, bytes32 _s)
-        private
+        internal
         pure
         returns (address)
     {
@@ -246,11 +260,10 @@ contract Exchange is Ownable{
         return ecrecover(prefixedHash, _v, _r, _s);
     }
 
-    function validateOrder(Order memory order, uint8 v, bytes32 r, bytes32 s) public {
+    function isValidSignature(Order memory order, Signature memory sig) public returns(bool) {
         bytes32 orderHash = _getOrderhash(order);
-        address recovered = _recoverAddress(orderHash, v, r, s);
-
-        emit RecoveredAddress(recovered);
+        address recovered = _recoverAddress(orderHash, sig.v, sig.r, sig.s);
+        return recovered == order.senderAddress;
     }
 
 
