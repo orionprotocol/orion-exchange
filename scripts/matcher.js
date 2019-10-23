@@ -123,13 +123,13 @@ async function fillOrdersByMatcher(
     price: 2100000,
     matcherFee: 350000,
     nonce: nowTimestamp,
-    expiration: nowTimestamp + 29 * 24 * 60 * 60,
+    expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
     side: "buy"
   };
 
   //Result from client script
   signature1 =
-    "0xb3f15a601e7208d329e48be8517ee1289defb3a749abf6d6eb64970b28db5faa1cf28c9774e28a76217182f26a7664ed094cc69a310d6a953c12cd7143b8e1f001";
+    "0x101f893c5b7a55ea268d584c25b88e97d4707bf41dd707f474daa1992ad60ba333b34a21df4b20cf56d23c72a230be9008c99526bc667e6d0d61874e18afce1f00";
 
   const sellOrder = {
     senderAddress: accounts[2],
@@ -141,13 +141,13 @@ async function fillOrdersByMatcher(
     price: 2000000,
     matcherFee: 150000,
     nonce: nowTimestamp,
-    expiration: nowTimestamp + 29 * 24 * 60 * 60,
+    expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
     side: "sell"
   };
 
   //Result from client script
   signature2 =
-    "0xefce17bda00d945ea80eba49c26a09d294e3a81b215c15c1fd9f8d31fa680ffb22c3d707b589806ee2c5037dcff05abeb4ba38bb17da52376297511df93c60a401";
+    "0x531ea80fd708f652b2ded1d07874b25fc359ce351e8edda59f73ff568fa150233d9336287e4ab50a8d30ecd523e80f364adb19a7b30d6fe0611f7358cddeae3700";
 
   //Matcher validates orders
   let sender1 = await validateSignature(signature1, buyOrder);

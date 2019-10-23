@@ -126,7 +126,7 @@ async function signOrder(orderInfo) {
     price: 2100000,
     matcherFee: 350000,
     nonce: nowTimestamp,
-    expiration: nowTimestamp + 29 * 24 * 60 * 60,
+    expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
     side: "buy"
   };
 
@@ -147,7 +147,7 @@ async function signOrder(orderInfo) {
     price: 2000000,
     matcherFee: 150000,
     nonce: nowTimestamp,
-    expiration: nowTimestamp + 29 * 24 * 60 * 60,
+    expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
     side: "sell"
   };
 
