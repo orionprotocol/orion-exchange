@@ -6,6 +6,8 @@ const exchangeArtifact = require("../build/contracts/Exchange.json");
 const WETHArtifact = require("../build/contracts/WETH.json");
 const WBTCArtifact = require("../build/contracts/WBTC.json");
 
+const BigNumber = web3.utils.BN;
+
 let accounts, netId, exchange;
 
 // === CONTRACT INSTANCE === //
@@ -33,7 +35,7 @@ function hashOrder(orderInfo) {
     orderInfo.senderAddress,
     orderInfo.matcherAddress,
     orderInfo.baseAsset,
-    orderInfo.quotetAsset,
+    orderInfo.quoteAsset,
     orderInfo.matcherFeeAsset,
     longToBytes(orderInfo.amount),
     longToBytes(orderInfo.price),
@@ -117,7 +119,7 @@ async function fillOrdersByMatcher(
     senderAddress: accounts[1],
     matcherAddress: accounts[0],
     baseAsset: wethAddress,
-    quotetAsset: wbtcAddress, // WBTC
+    quoteAsset: wbtcAddress, // WBTC
     matcherFeeAsset: wethAddress, // WETH
     amount: 350000000,
     price: 2100000,
@@ -135,7 +137,7 @@ async function fillOrdersByMatcher(
     senderAddress: accounts[2],
     matcherAddress: accounts[0],
     baseAsset: wethAddress,
-    quotetAsset: wbtcAddress, // WBTC
+    quoteAsset: wbtcAddress, // WBTC
     matcherFeeAsset: wethAddress, // WETH
     amount: 150000000,
     price: 2000000,

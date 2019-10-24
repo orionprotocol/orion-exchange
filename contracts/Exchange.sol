@@ -32,7 +32,7 @@ contract Exchange is Ownable{
         address senderAddress;
         address matcherAddress;
         address baseAsset;
-        address quotetAsset;
+        address quoteAsset;
         address matcherFeeAsset;
         uint64 amount;
         uint64 price;
@@ -167,19 +167,19 @@ contract Exchange is Ownable{
         //VERIFICATIONS
 
         require(buyOrder.matcherAddress == msg.sender && sellOrder.matcherAddress == msg.sender, "incorrect matcher address");
-        require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quotetAsset == sellOrder.quotetAsset, "assets do not match");
+        require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quoteAsset == sellOrder.quoteAsset, "assets do not match");
         require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
         require(filledPrice >= sellOrder.price, "incorrect filled price for sell order");
         require(buyOrder.expiration >= now && sellOrder.expiration >= now, "order expiration");
 
-        //Amount of quotet asset
-        uint amountToTake = filledAmount.mul(filledPrice);
+        //Amount of quote asset
+        uint amountToTake = filledAmount.mul(filledPrice).div(10**8);
         address buyer = buyOrder.senderAddress;
         address seller = sellOrder.senderAddress;
 
         // BUY SIDE CHECK
 
-        require(assetBalances[buyer][buyOrder.quotetAsset] >= amountToTake, "insufficient buyer's balance");
+        require(assetBalances[buyer][buyOrder.quoteAsset] >= amountToTake, "insufficient buyer's balance");
         bytes32 buyOrderHash = _getOrderhash(buyOrder);
         require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
         // require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
@@ -192,7 +192,7 @@ contract Exchange is Ownable{
 
         // === VERIFICATIONS DONE ===
 
-        _updateBalances(buyer, seller, buyOrder.baseAsset, buyOrder.quotetAsset, filledAmount, amountToTake);
+        _updateBalances(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledAmount, amountToTake);
 
         totalTrades = totalTrades.add(1);
 
@@ -208,14 +208,14 @@ contract Exchange is Ownable{
 
     function _updateBalances(
         address buyer, address seller, address baseAsset,
-        address quotetAsset, uint filledAmount, uint amountToTake
+        address quoteAsset, uint filledAmount, uint amountToTake
     ) internal{
         // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset)
-        assetBalances[buyer][quotetAsset] = assetBalances[buyer][quotetAsset].sub(amountToTake);
+        assetBalances[buyer][quoteAsset] = assetBalances[buyer][quoteAsset].sub(amountToTake);
         assetBalances[buyer][baseAsset] = assetBalances[buyer][baseAsset].add(filledAmount);
 
         // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset)
-        assetBalances[seller][quotetAsset] = assetBalances[seller][quotetAsset].add(amountToTake);
+        assetBalances[seller][quoteAsset] = assetBalances[seller][quoteAsset].add(amountToTake);
         assetBalances[seller][baseAsset] = assetBalances[seller][baseAsset].sub(filledAmount);
 
     }
@@ -236,7 +236,7 @@ contract Exchange is Ownable{
             _order.senderAddress,
             _order.matcherAddress,
             _order.baseAsset,
-            _order.quotetAsset,
+            _order.quoteAsset,
             _order.matcherFeeAsset,
             bytes8(_order.amount),
             bytes8(_order.price),

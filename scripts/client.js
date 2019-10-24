@@ -1,10 +1,12 @@
 const Web3 = require("web3");
-const web3 = new Web3("http://localhost:8544");
+const web3 = new Web3("http://localhost:8545");
 const Long = require("long");
 
 const WETHArtifact = require("../build/contracts/WETH.json");
 const WBTCArtifact = require("../build/contracts/WBTC.json");
 const exchangeArtifact = require("../build/contracts/Exchange.json");
+
+const BigNumber = web3.utils.BN;
 
 // === CONTRACT INSTANCES === //
 
@@ -43,7 +45,7 @@ function hashOrder(orderInfo) {
     orderInfo.senderAddress,
     orderInfo.matcherAddress,
     orderInfo.baseAsset,
-    orderInfo.quotetAsset,
+    orderInfo.quoteAsset,
     orderInfo.matcherFeeAsset,
     longToBytes(orderInfo.amount),
     longToBytes(orderInfo.price),
@@ -84,17 +86,17 @@ async function signOrder(orderInfo) {
 
   //Mint WBTC to Buyer
   await wbtc.methods
-    .mint(accounts[1], web3.utils.toWei("100"))
+    .mint(accounts[1], String(100e8))
     .send({ from: accounts[0] });
 
   //Buyer Approves Token Transfer to exchange
   await wbtc.methods
-    .approve(exchangeAddress, web3.utils.toWei("100"))
+    .approve(exchangeAddress, String(100e8))
     .send({ from: accounts[1] });
 
   //Buyer Deposits all WBTC
   await exchange.methods
-    .depositAsset(wbtcAddress, web3.utils.toWei("100"))
+    .depositAsset(wbtcAddress, String(100e8))
     .send({ from: accounts[1] });
 
   //Mint WBTC to Seller
@@ -120,10 +122,10 @@ async function signOrder(orderInfo) {
     senderAddress: accounts[1],
     matcherAddress: accounts[0],
     baseAsset: wethAddress,
-    quotetAsset: wbtcAddress, // WBTC
+    quoteAsset: wbtcAddress, // WBTC
     matcherFeeAsset: wethAddress, // WETH
-    amount: 350000000,
-    price: 2100000,
+    amount: 350000000, //3.5 ETH * 10^8
+    price: 2100000, //0.021 WBTC/WETH * 10^8
     matcherFee: 350000,
     nonce: nowTimestamp,
     expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
@@ -141,7 +143,7 @@ async function signOrder(orderInfo) {
     senderAddress: accounts[2],
     matcherAddress: accounts[0],
     baseAsset: wethAddress,
-    quotetAsset: wbtcAddress, // WBTC
+    quoteAsset: wbtcAddress, // WBTC
     matcherFeeAsset: wethAddress, // WETH
     amount: 150000000,
     price: 2000000,
