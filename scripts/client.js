@@ -78,44 +78,67 @@ async function signOrder(orderInfo) {
 
 // // === MAIN FLOW === //
 
+function toMatcherOrder(bo) {
+  return {
+    version: 3,
+    senderPublicKey: bo.senderAddress,
+    matcherPublicKey: bo.matcherAddress,
+    orderType: bo.side,
+    assetPair: {
+      amountAsset: bo.baseAsset,
+      priceAsset: bo.quoteAsset,
+    },
+    price: bo.price,
+    amount: bo.amount,
+    timestamp: bo.nonce,
+    expiration: bo.expiration,
+    matcherFee: bo.matcherFee,
+    matcherFeeAssetId: bo.matcherFeeAsset,
+    proofs: [bo.signature]
+  }
+}
+
+async function mint(wbtcAddress, wethAddress, exchangeAddress) {
+  //Mint WBTC to Buyer
+  await wbtc.methods
+      .mint(accounts[1], String(100e8))
+      .send({ from: accounts[0] });
+
+  //Buyer Approves Token Transfer to exchange
+  await wbtc.methods
+      .approve(exchangeAddress, String(100e8))
+      .send({ from: accounts[1] });
+
+  //Buyer Deposits all WBTC
+  await exchange.methods
+      .depositAsset(wbtcAddress, String(100e8))
+      .send({ from: accounts[1] });
+
+  //Mint WBTC to Seller
+  await weth.methods
+      .mint(accounts[2], web3.utils.toWei("100"))
+      .send({ from: accounts[0] });
+
+  //Seller Approves Token Transfer to exchange
+  await weth.methods
+      .approve(exchangeAddress, web3.utils.toWei("100"))
+      .send({ from: accounts[2] });
+
+  //Seller Deposits all WETH
+  await exchange.methods
+      .depositAsset(wethAddress, web3.utils.toWei("100"))
+      .send({ from: accounts[2] });
+}
+
 (async function main() {
   await setupContracts();
   let wbtcAddress = WBTCArtifact.networks[netId].address;
   let wethAddress = WETHArtifact.networks[netId].address;
   let exchangeAddress = exchangeArtifact.networks[netId].address;
 
-  //Mint WBTC to Buyer
-  await wbtc.methods
-    .mint(accounts[1], String(100e8))
-    .send({ from: accounts[0] });
+  await mint(wbtcAddress, wethAddress, exchangeAddress);
 
-  //Buyer Approves Token Transfer to exchange
-  await wbtc.methods
-    .approve(exchangeAddress, String(100e8))
-    .send({ from: accounts[1] });
-
-  //Buyer Deposits all WBTC
-  await exchange.methods
-    .depositAsset(wbtcAddress, String(100e8))
-    .send({ from: accounts[1] });
-
-  //Mint WBTC to Seller
-  await weth.methods
-    .mint(accounts[2], web3.utils.toWei("100"))
-    .send({ from: accounts[0] });
-
-  //Seller Approves Token Transfer to exchange
-  await weth.methods
-    .approve(exchangeAddress, web3.utils.toWei("100"))
-    .send({ from: accounts[2] });
-
-  //Seller Deposits all WETH
-  await exchange.methods
-    .depositAsset(wethAddress, web3.utils.toWei("100"))
-    .send({ from: accounts[2] });
-
-  // const nowTimestamp = Date.now();
-  nowTimestamp = 1570752916653; //For testing
+  nowTimestamp = 1571843003887;//Date.now();
 
   //Client1 Order
   const buyOrder = {
@@ -136,8 +159,10 @@ async function signOrder(orderInfo) {
   let signature1 = await signOrder(buyOrder);
   console.log("Message: ", hashOrder(buyOrder));
   console.log("Signature: ", signature1);
+  buyOrder.signature = signature1;
   console.log("Signed By: ", buyOrder.senderAddress);
   console.log("Buy Order Struct: \n", buyOrder);
+  console.log("Buy Matcher Order Struct: \n", JSON.stringify(toMatcherOrder(buyOrder), null, 2));
 
   const sellOrder = {
     senderAddress: accounts[2],
@@ -155,8 +180,11 @@ async function signOrder(orderInfo) {
 
   //Client2 signs sell order
   let signature2 = await signOrder(sellOrder);
-  console.log("\nMessage: ", hashOrder(sellOrder));
-  console.log("Signed Data: ", signature2);
+  console.log("Message: ", hashOrder(sellOrder));
+  sellOrder.signature = signature2;
+  console.log("\nSigned Data: ", signature2);
   console.log("Signed By: ", sellOrder.senderAddress);
   console.log("Sell Order Struct: \n", sellOrder);
+  console.log("Sell Matcher Order Struct: \n", JSON.stringify(toMatcherOrder(sellOrder), null, 2));
 })();
+
