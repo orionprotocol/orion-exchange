@@ -2,6 +2,7 @@ module.exports = {
   compilers: {
     solc: {
       version: "^0.5.10",
+      // evmVersion: "byzantium",
       optimizer: {
         enabled: true,
         runs: 200

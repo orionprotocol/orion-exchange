@@ -1,12 +1,11 @@
 const Web3 = require("web3");
-const web3 = new Web3("http://localhost:8545");
+// const web3 = new Web3("http://localhost:8544"); // ganache
+const web3 = new Web3("http://localhost:8545"); // gwan
 const Long = require("long");
 
 const WETHArtifact = require("../build/contracts/WETH.json");
 const WBTCArtifact = require("../build/contracts/WBTC.json");
 const exchangeArtifact = require("../build/contracts/Exchange.json");
-
-const BigNumber = web3.utils.BN;
 
 // === CONTRACT INSTANCES === //
 
@@ -66,6 +65,7 @@ async function signOrder(orderInfo) {
   //     sender,
   //     message
   //   );
+  console.log(message);
 
   //Web3 v1
   let signedMessage = await web3.eth.sign(message, orderInfo.senderAddress);

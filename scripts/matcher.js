@@ -1,12 +1,11 @@
 const Web3 = require("web3");
-const web3 = new Web3("http://localhost:8544");
+// const web3 = new Web3("http://localhost:8544"); // ganache
+const web3 = new Web3("http://localhost:8545"); // gwan
 const Long = require("long");
 
 const exchangeArtifact = require("../build/contracts/Exchange.json");
 const WETHArtifact = require("../build/contracts/WETH.json");
 const WBTCArtifact = require("../build/contracts/WBTC.json");
-
-const BigNumber = web3.utils.BN;
 
 let accounts, netId, exchange;
 
@@ -14,6 +13,7 @@ let accounts, netId, exchange;
 
 async function setupContracts() {
   netId = await web3.eth.net.getId();
+  console.log(typeof netId, netId);
 
   exchange = new web3.eth.Contract(
     exchangeArtifact.abi,
@@ -51,7 +51,6 @@ function hashOrder(orderInfo) {
 // === VALIDATE ORDER IN MATCHER === //
 async function validateSignature(signature, orderInfo) {
   let message = hashOrder(orderInfo);
-
   let sender = await web3.eth.accounts.recover(message, signature);
 
   return sender;
@@ -63,9 +62,9 @@ function getSignatureObj(signature) {
   signature = signature.substr(2); //remove 0x
   const r = "0x" + signature.slice(0, 64);
   const s = "0x" + signature.slice(64, 128);
-  const v = web3.utils.hexToNumber("0x" + signature.slice(128, 130)) + 27;
-
-  return { r, s, v };
+  let v = web3.utils.hexToNumber("0x" + signature.slice(128, 130)); //gwan
+  if (netId !== 3) v += 27; //ganache
+  return { v, r, s };
 }
 // ======================== //
 
@@ -131,7 +130,7 @@ async function fillOrdersByMatcher(
 
   //Result from client script
   signature1 =
-    "0x101f893c5b7a55ea268d584c25b88e97d4707bf41dd707f474daa1992ad60ba333b34a21df4b20cf56d23c72a230be9008c99526bc667e6d0d61874e18afce1f00";
+    "0x0580dc3895d0595f0a628018774f83bb72f20c1b98cd9bb0a97f08ace0fcc77c47439512eadea420d403eca76c27b9a14cbb11b646186ee6792113bdfc46cabf1c";
 
   const sellOrder = {
     senderAddress: accounts[2],
@@ -149,7 +148,7 @@ async function fillOrdersByMatcher(
 
   //Result from client script
   signature2 =
-    "0x531ea80fd708f652b2ded1d07874b25fc359ce351e8edda59f73ff568fa150233d9336287e4ab50a8d30ecd523e80f364adb19a7b30d6fe0611f7358cddeae3700";
+    "0x1e10c7862fa15a4659f82a9836198723950fbca8d99d30db515f9869be9c94954c08065e17b266fdbf8934f53804813f39122d8e4961565894737d8a6962ce421b";
 
   //Matcher validates orders
   let sender1 = await validateSignature(signature1, buyOrder);
