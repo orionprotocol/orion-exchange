@@ -65,7 +65,6 @@ async function signOrder(orderInfo) {
   //     sender,
   //     message
   //   );
-  console.log(message);
 
   //Web3 v1
   let signedMessage = await web3.eth.sign(message, orderInfo.senderAddress);
@@ -86,7 +85,7 @@ function toMatcherOrder(bo) {
     orderType: bo.side,
     assetPair: {
       amountAsset: bo.baseAsset,
-      priceAsset: bo.quoteAsset,
+      priceAsset: bo.quoteAsset
     },
     price: bo.price,
     amount: bo.amount,
@@ -95,39 +94,39 @@ function toMatcherOrder(bo) {
     matcherFee: bo.matcherFee,
     matcherFeeAssetId: bo.matcherFeeAsset,
     proofs: [bo.signature]
-  }
+  };
 }
 
 async function mint(wbtcAddress, wethAddress, exchangeAddress) {
   //Mint WBTC to Buyer
   await wbtc.methods
-      .mint(accounts[1], String(100e8))
-      .send({ from: accounts[0] });
+    .mint(accounts[1], String(100e8))
+    .send({ from: accounts[0] });
 
   //Buyer Approves Token Transfer to exchange
   await wbtc.methods
-      .approve(exchangeAddress, String(100e8))
-      .send({ from: accounts[1] });
+    .approve(exchangeAddress, String(100e8))
+    .send({ from: accounts[1] });
 
   //Buyer Deposits all WBTC
   await exchange.methods
-      .depositAsset(wbtcAddress, String(100e8))
-      .send({ from: accounts[1] });
+    .depositAsset(wbtcAddress, String(100e8))
+    .send({ from: accounts[1] });
 
   //Mint WBTC to Seller
   await weth.methods
-      .mint(accounts[2], web3.utils.toWei("100"))
-      .send({ from: accounts[0] });
+    .mint(accounts[2], web3.utils.toWei("100"))
+    .send({ from: accounts[0] });
 
   //Seller Approves Token Transfer to exchange
   await weth.methods
-      .approve(exchangeAddress, web3.utils.toWei("100"))
-      .send({ from: accounts[2] });
+    .approve(exchangeAddress, web3.utils.toWei("100"))
+    .send({ from: accounts[2] });
 
   //Seller Deposits all WETH
   await exchange.methods
-      .depositAsset(wethAddress, web3.utils.toWei("100"))
-      .send({ from: accounts[2] });
+    .depositAsset(wethAddress, web3.utils.toWei("100"))
+    .send({ from: accounts[2] });
 }
 
 (async function main() {
@@ -138,7 +137,7 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress) {
 
   await mint(wbtcAddress, wethAddress, exchangeAddress);
 
-  nowTimestamp = 1571843003887;//Date.now();
+  nowTimestamp = 1571843003887; //Date.now();
 
   //Client1 Order
   const buyOrder = {
@@ -162,7 +161,10 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress) {
   buyOrder.signature = signature1;
   console.log("Signed By: ", buyOrder.senderAddress);
   console.log("Buy Order Struct: \n", buyOrder);
-  console.log("Buy Matcher Order Struct: \n", JSON.stringify(toMatcherOrder(buyOrder), null, 2));
+  console.log(
+    "\nBuy Matcher Order Struct: \n",
+    JSON.stringify(toMatcherOrder(buyOrder), null, 2)
+  );
 
   const sellOrder = {
     senderAddress: accounts[2],
@@ -180,11 +182,13 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress) {
 
   //Client2 signs sell order
   let signature2 = await signOrder(sellOrder);
-  console.log("Message: ", hashOrder(sellOrder));
+  console.log("\nMessage: ", hashOrder(sellOrder));
   sellOrder.signature = signature2;
-  console.log("\nSigned Data: ", signature2);
+  console.log("Signed Data: ", signature2);
   console.log("Signed By: ", sellOrder.senderAddress);
   console.log("Sell Order Struct: \n", sellOrder);
-  console.log("Sell Matcher Order Struct: \n", JSON.stringify(toMatcherOrder(sellOrder), null, 2));
+  console.log(
+    "\nSell Matcher Order Struct: \n",
+    JSON.stringify(toMatcherOrder(sellOrder), null, 2)
+  );
 })();
-

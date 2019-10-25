@@ -13,7 +13,6 @@ let accounts, netId, exchange;
 
 async function setupContracts() {
   netId = await web3.eth.net.getId();
-  console.log(typeof netId, netId);
 
   exchange = new web3.eth.Contract(
     exchangeArtifact.abi,
@@ -112,7 +111,7 @@ async function fillOrdersByMatcher(
   let wethAddress = WETHArtifact.networks[netId].address;
 
   //Input same timestamp as the one created order in client
-  nowTimestamp = 1570752916653;
+  nowTimestamp = 1571843003887;
 
   const buyOrder = {
     senderAddress: accounts[1],
@@ -130,7 +129,7 @@ async function fillOrdersByMatcher(
 
   //Result from client script
   signature1 =
-    "0x0580dc3895d0595f0a628018774f83bb72f20c1b98cd9bb0a97f08ace0fcc77c47439512eadea420d403eca76c27b9a14cbb11b646186ee6792113bdfc46cabf1c";
+    "0x5afb61f966d9130702833e178506e2196f724d8d4eb945dc2103623884c42dd4534612186e2bf5df8c4d4640045c31dfec56d10bea8a513a5808aaa4cefd68291c";
 
   const sellOrder = {
     senderAddress: accounts[2],
@@ -148,7 +147,7 @@ async function fillOrdersByMatcher(
 
   //Result from client script
   signature2 =
-    "0x1e10c7862fa15a4659f82a9836198723950fbca8d99d30db515f9869be9c94954c08065e17b266fdbf8934f53804813f39122d8e4961565894737d8a6962ce421b";
+    "0x89c221c5375df5f9e57a7a4262faf35534b3c3309dd26a9fa849c461df2386f97b012e46854519da9e5b718a11c4b2d10f964b3cf50c36132fb90539a969fdc41b";
 
   //Matcher validates orders
   let sender1 = await validateSignature(signature1, buyOrder);
