@@ -11,14 +11,16 @@ module.exports = async callback => {
     let to = process.argv[4];
     let amount = process.argv[5];
 
-    await token.mint(to, web3.utils.toWei(String(amount)));
+    let decimals = await token.decimals();
+
+    await token.mint(to, String(amount*10**decimals));
+    console.log(token.address);
 
     balance = await token.balanceOf(to);
 
     console.log(
-      `New Balance for account ${to} is ${web3.utils.fromWei(
-        balance.toString()
-      )} WBTC`
+      `New Balance for account ${to} is ${balance / (10 ** decimals)
+      } WBTC`
     );
 
     callback();

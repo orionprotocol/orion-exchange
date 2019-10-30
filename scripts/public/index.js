@@ -37,7 +37,7 @@ window.onload = function(e) {
       name: "Orion Exchange",
       version: "1",
       chainId: Number(wan3.version.network),
-      verifyingContract: "0x1C56346CD2A2Bf3202F771f50d3D14a367B48070", // Update to exchange Contract
+      verifyingContract: "0xb4a3f5b8d096aa03808853db807f1233a2515df2", // Update to exchange Contract
       salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557"
     };
 

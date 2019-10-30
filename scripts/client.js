@@ -1,6 +1,7 @@
 const Web3 = require("web3");
-const web3 = new Web3("http://localhost:8544"); // ganache
-// const web3 = new Web3("http://localhost:8545"); // gwan
+// const web3 = new Web3("http://localhost:8544"); // ganache
+const web3 = new Web3("http://localhost:8545"); // gwan
+// const web3 = new Web3("http://localhost:7545"); // wanache
 const Long = require("long");
 
 const WETHArtifact = require("../build/contracts/WETH.json");

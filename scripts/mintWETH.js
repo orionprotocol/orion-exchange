@@ -11,6 +11,8 @@ module.exports = async callback => {
     let to = process.argv[4];
     let amount = process.argv[5];
 
+    console.log(token.address);
+
     await token.mint(to, web3.utils.toWei(String(amount)));
 
     balance = await token.balanceOf(to);
