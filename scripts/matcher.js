@@ -1,6 +1,6 @@
 const Web3 = require("web3");
-// const web3 = new Web3("http://localhost:8544"); // ganache
-const web3 = new Web3("http://localhost:8545"); // gwan
+const web3 = new Web3("http://localhost:8544"); // ganache
+// const web3 = new Web3("http://localhost:8545"); // gwan
 const Long = require("long");
 
 const exchangeArtifact = require("../build/contracts/Exchange.json");
@@ -129,7 +129,7 @@ async function fillOrdersByMatcher(
 
   //Result from client script
   signature1 =
-    "0x5afb61f966d9130702833e178506e2196f724d8d4eb945dc2103623884c42dd4534612186e2bf5df8c4d4640045c31dfec56d10bea8a513a5808aaa4cefd68291c";
+    "0x30dab39a24e354e458d39c27d6a6c9f20e25216a3234ee04033a9aef173b7df2363efa8d4c03a767323a6beff718c04b6b91288693e6047581ba6d0a75d1f7c301";
 
   const sellOrder = {
     senderAddress: accounts[2],
@@ -147,7 +147,7 @@ async function fillOrdersByMatcher(
 
   //Result from client script
   signature2 =
-    "0x89c221c5375df5f9e57a7a4262faf35534b3c3309dd26a9fa849c461df2386f97b012e46854519da9e5b718a11c4b2d10f964b3cf50c36132fb90539a969fdc41b";
+    "0x5bd6cfcbb1042ff9800bf2891128394e70c4d1f2a510ee8f9f1a5629bba2b434218fc63da88ec2377fb7b3029c29955757f1b3ad73c38ed4c8cd3de88fc4c51100";
 
   //Matcher validates orders
   let sender1 = await validateSignature(signature1, buyOrder);
@@ -184,7 +184,7 @@ async function fillOrdersByMatcher(
     balances2[1]
   );
 
-  // FILL ORDERS
+  // *** ==== FILL ORDER ==== *** //
   await fillOrdersByMatcher(
     buyOrder,
     sellOrder,
@@ -193,6 +193,7 @@ async function fillOrdersByMatcher(
     2100000,
     150000000
   );
+  // ============================= //
 
   //Final Balances
   balances1 = await exchange.methods

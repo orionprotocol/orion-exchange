@@ -8,7 +8,10 @@ module.exports = async (deployer, network) => {
     await deployer.deploy(WBTC);
     await deployer.deploy(Exchange);
   }
-  // await deployer.deploy(WETH);
-  // await deployer.deploy(WBTC);
-  else await deployer.deploy(Exchange);
+
+  if (network === "gwan") {
+    await deployer.deploy(WETH);
+    await deployer.deploy(WBTC);
+    await deployer.deploy(Exchange);
+  }
 };

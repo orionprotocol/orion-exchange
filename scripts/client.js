@@ -1,6 +1,6 @@
 const Web3 = require("web3");
-// const web3 = new Web3("http://localhost:8544"); // ganache
-const web3 = new Web3("http://localhost:8545"); // gwan
+const web3 = new Web3("http://localhost:8544"); // ganache
+// const web3 = new Web3("http://localhost:8545"); // gwan
 const Long = require("long");
 
 const WETHArtifact = require("../build/contracts/WETH.json");
@@ -100,32 +100,32 @@ function toMatcherOrder(bo) {
 async function mint(wbtcAddress, wethAddress, exchangeAddress) {
   //Mint WBTC to Buyer
   await wbtc.methods
-    .mint(accounts[1], String(100e8))
+    .mint(accounts[1], String(10e8))
     .send({ from: accounts[0] });
 
   //Buyer Approves Token Transfer to exchange
   await wbtc.methods
-    .approve(exchangeAddress, String(100e8))
+    .approve(exchangeAddress, String(10e8))
     .send({ from: accounts[1] });
 
   //Buyer Deposits all WBTC
   await exchange.methods
-    .depositAsset(wbtcAddress, String(100e8))
+    .depositAsset(wbtcAddress, String(10e8))
     .send({ from: accounts[1] });
 
-  //Mint WBTC to Seller
+  //Mint WETH to Seller
   await weth.methods
-    .mint(accounts[2], web3.utils.toWei("100"))
+    .mint(accounts[2], web3.utils.toWei("10"))
     .send({ from: accounts[0] });
 
   //Seller Approves Token Transfer to exchange
   await weth.methods
-    .approve(exchangeAddress, web3.utils.toWei("100"))
+    .approve(exchangeAddress, web3.utils.toWei("10"))
     .send({ from: accounts[2] });
 
   //Seller Deposits all WETH
   await exchange.methods
-    .depositAsset(wethAddress, web3.utils.toWei("100"))
+    .depositAsset(wethAddress, web3.utils.toWei("10"))
     .send({ from: accounts[2] });
 }
 

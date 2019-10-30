@@ -4,6 +4,7 @@ pragma experimental ABIEncoderV2;
 import '@openzeppelin/contracts/math/SafeMath.sol';
 import '@openzeppelin/contracts/ownership/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
+import './Utils.sol';
 
 
 /**
@@ -11,9 +12,10 @@ import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
  * @dev Exchange contract for the Orion Protocol
  * @author @wafflemakr
  */
-contract Exchange is Ownable{
+contract Exchange is Ownable, Utils{
 
     using SafeMath for uint;
+    using SafeMath for uint64;
 
     // EVENTS
     event NewAssetDeposit(address indexed user, address indexed assetAddress, uint amount);
@@ -80,18 +82,21 @@ contract Exchange is Ownable{
     }
 
 
-    // MAIN FUNCTIONSh
+    // MAIN FUNCTIONS
     /**
      * @dev Deposit WAN or ERC20 tokens to the exchange contract
      * @dev User needs to approve token contract first
+     * @param amount asset amount to deposit in its base unit
      */
     function depositAsset(address assetAddress, uint amount) public payable onlyActive{
         IERC20 asset = IERC20(assetAddress);
         require(asset.transferFrom(msg.sender, address(this), amount), "error transfering asset to exchange");
 
-        assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].add(amount);
+        uint amountDecimal = baseUnitToDecimal(assetAddress, amount);
 
-        emit NewAssetDeposit(msg.sender, assetAddress, amount);
+        assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].add(amountDecimal);
+
+        emit NewAssetDeposit(msg.sender, assetAddress, amountDecimal);
     }
 
     /**
@@ -100,18 +105,23 @@ contract Exchange is Ownable{
     function depositWan() public payable onlyActive{
         require(msg.value > 0, "invalid amount sent");
 
-        assetBalances[msg.sender][address(0)] = assetBalances[msg.sender][address(0)].add(msg.value);
+        uint amountDecimal = baseUnitToDecimal(address(0), msg.value);
 
-        emit NewAssetDeposit(msg.sender, address(0), msg.value);
+        assetBalances[msg.sender][address(0)] = assetBalances[msg.sender][address(0)].add(amountDecimal);
+
+        emit NewAssetDeposit(msg.sender, address(0), amountDecimal);
     }
 
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
+     * @param amount asset amount to withdraw in its base unit
      */
     function withdraw(address assetAddress, uint amount) public{
-        require(assetBalances[msg.sender][assetAddress] >= amount, "not enough funds to withdraw");
+        uint amountDecimal = baseUnitToDecimal(assetAddress, amount);
 
-        assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].sub(amount);
+        require(assetBalances[msg.sender][assetAddress] >= amountDecimal, "not enough funds to withdraw");
+
+        assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].sub(amountDecimal);
 
         if(assetAddress == address(0))
             msg.sender.transfer(amount);
@@ -120,7 +130,7 @@ contract Exchange is Ownable{
             require(asset.transfer(msg.sender, amount), "error transfering funds to user");
         }
 
-        emit NewAssetWithdrawl(msg.sender, assetAddress, amount);
+        emit NewAssetWithdrawl(msg.sender, assetAddress, amountDecimal);
     }
 
 
@@ -164,15 +174,21 @@ contract Exchange is Ownable{
         require(isValidSignature(buyOrder, buySig), "Invalid signature for Buy order");
         require(isValidSignature(sellOrder, sellSig), "Invalid signature for Sell order");
 
-        //VERIFICATIONS
+        // VERIFICATIONS
 
+        // Check matching assets
         require(buyOrder.matcherAddress == msg.sender && sellOrder.matcherAddress == msg.sender, "incorrect matcher address");
         require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quoteAsset == sellOrder.quoteAsset, "assets do not match");
+
+        // Check Price
         require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
         require(filledPrice >= sellOrder.price, "incorrect filled price for sell order");
-        require(buyOrder.expiration >= now && sellOrder.expiration >= now, "order expiration");
 
-        //Amount of quote asset
+        // Check Expiration Time
+        require(buyOrder.expiration.div(1000) >= now, "buy order expired");
+        require(sellOrder.expiration.div(1000) >= now, "sell order expired");
+
+        // Amount of quote asset
         uint amountToTake = filledAmount.mul(filledPrice).div(10**8);
         address buyer = buyOrder.senderAddress;
         address seller = sellOrder.senderAddress;
