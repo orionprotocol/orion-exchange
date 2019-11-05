@@ -4,7 +4,67 @@ window.onload = function(e) {
 
   let signBtn = document.getElementById("signBtn");
 
-  wan3 = web3; // change to web3 and metamask
+  let signBtn2 = document.getElementById("signBtn2");
+
+  // wan3 = web3; // change to web3 and metamask
+
+  signBtn2.onclick = function(e) {
+    if (wan3.eth.accounts[0] == null) {
+      return;
+    }
+
+    nowTimestamp = 1571843003887; //Date.now();
+
+    const message = {
+      senderAddress: "0x6Cac5eeB01d56E889AFac1f8D7f6666b344225E3",
+      matcherAddress: "0xFF800d38664b546E9a0b7a72af802137629d4f11",
+      baseAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
+      quoteAsset: "0x8f07FA50C14ed117771e6959f2265881bB919e00", // WBTC
+      matcherFeeAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
+      amount: 350000000, //3.5 ETH * 10^8
+      price: 2100000, //0.021 WBTC/WETH * 10^8
+      matcherFee: 350000,
+      nonce: nowTimestamp,
+      expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
+      side: "buy"
+    };
+
+    const msgParams = [
+      { name: "senderAddress", type: "address", value:message.senderAddress },
+      { name: "matcherAddress", type: "address", value:message.matcherAddress  },
+      { name: "baseAsset", type: "address", value:message.baseAsset  },
+      { name: "quoteAsset", type: "address", value:message.quoteAsset  },
+      { name: "matcherFeeAsset", type: "address", value:message.matcherFeeAsset  },
+      { name: "amount", type: "uint64", value:message.amount  },
+      { name: "price", type: "uint64", value:message.price  },
+      { name: "matcherFee", type: "uint64", value:message.matcherFee  },
+      { name: "nonce", type: "uint64", value:message.nonce  },
+      { name: "expiration", type: "uint64", value:message.expiration  },
+      { name: "side", type: "string", value:message.side  }
+    ];
+
+    var from = wan3.toChecksumAddress(wan3.eth.accounts[0]);
+
+    var params = [msgParams, from];
+    var method = "eth_signTypedData";
+
+    wan3.currentProvider.sendAsync(
+      {
+        method,
+        params,
+        from
+      },
+      function(err, result) {
+        if (err) return console.dir(err);
+        if (result.error) {
+          alert(result.error.message);
+        }
+        let sign = result.result;
+        console.log("EthSignTyped SIGNED:" + JSON.stringify(sign));
+        
+      }
+    );
+  };
 
   signBtn.onclick = function(e) {
     if (wan3.eth.accounts[0] == null) {
