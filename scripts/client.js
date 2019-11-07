@@ -1,7 +1,9 @@
 const Web3 = require("web3");
-// const web3 = new Web3("http://localhost:8544"); // ganache
+// const Wan3 = require("wan3");
+
 const web3 = new Web3("http://localhost:8545"); // gwan
-// const web3 = new Web3("http://localhost:7545"); // wanache
+// const wan3 = new Wan3("http://localhost:8545"); // gwan
+
 const Long = require("long");
 
 const WETHArtifact = require("../build/contracts/WETH.json");
@@ -60,20 +62,56 @@ function hashOrder(orderInfo) {
 
 // === SIGN ORDER === //
 async function signOrder(orderInfo) {
-  let message = hashOrder(orderInfo);
-  //Wanmask
-  //   let signedMessage = await window.wan3.eth.sign(
-  //     sender,
-  //     message
-  //   );
+  const msgParams = [
+    { name: "senderAddress", type: "address", value:orderInfo.senderAddress },
+    { name: "matcherAddress", type: "address", value:orderInfo.matcherAddress  },
+    { name: "baseAsset", type: "address", value:orderInfo.baseAsset  },
+    { name: "quoteAsset", type: "address", value:orderInfo.quoteAsset  },
+    { name: "matcherFeeAsset", type: "address", value:orderInfo.matcherFeeAsset  },
+    { name: "amount", type: "uint64", value:orderInfo.amount  },
+    { name: "price", type: "uint64", value:orderInfo.price  },
+    { name: "matcherFee", type: "uint64", value:orderInfo.matcherFee  },
+    { name: "nonce", type: "uint64", value:orderInfo.nonce  },
+    { name: "expiration", type: "uint64", value:orderInfo.expiration  },
+    { name: "side", type: "string", value:orderInfo.side  }
+  ];
+  // console.log(orderInfo.senderAddress)
+  let from = web3.utils.toChecksumAddress(orderInfo.senderAddress);
+  // let from = wan3.utils.toChecksumAddress(orderInfo.senderAddress);
+  let params = [msgParams, from];
+  // console.log(params);
+  let method = "eth_signTypedData";
 
-  //Web3 v1
-  let signedMessage = await web3.eth.sign(message, orderInfo.senderAddress);
+  // web3.currentProvider.send({ jsonrpc: '2.0', method: 'evm_increaseTime', params: ['60']
 
-  //Web3 v0.2
-  //   let signedMessage = await web3.eth.sign(sender, message);
 
-  return signedMessage;
+  // web3.currentProvider.send(
+  //   {
+  //     jsonrpc: '1.0',
+  //     method,
+  //     params,
+  //     id:'10',
+  //     from
+  //   },
+  //   function(err, result) {
+  //     if (err) return console.dir(err);
+  //     if (result.error) {
+  //       return console.log(result.error);
+  //     }
+  //     let sign = result.result;
+  //     console.log("EthSignTyped SIGNED:" + JSON.stringify(sign));
+      
+  //   }
+  // );
+  await web3.currentProvider.send(
+    {
+      method,
+      params,
+      from
+    }
+  );
+
+  
 }
 
 // // === MAIN FLOW === //
@@ -136,7 +174,7 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress) {
   let wethAddress = WETHArtifact.networks[netId].address;
   let exchangeAddress = exchangeArtifact.networks[netId].address;
 
-  await mint(wbtcAddress, wethAddress, exchangeAddress);
+  // await mint(wbtcAddress, wethAddress, exchangeAddress);
 
   nowTimestamp = 1571843003887; //Date.now();
 
@@ -157,6 +195,8 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress) {
 
   //Client1 signs buy order
   let signature1 = await signOrder(buyOrder);
+
+  return null;
   console.log("Message: ", hashOrder(buyOrder));
   console.log("Signature: ", signature1);
   buyOrder.signature = signature1;

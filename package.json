@@ -31,7 +31,7 @@
     "long": "^4.0.0",
     "truffle-hdwallet-provider": "^1.0.17",
     "wanchainjs-tx": "^1.5.0",
-    "web3": "^1.2.1"
+    "web3": "^1.2.2"
   },
   "devDependencies": {
     "chai": "^4.2.0",

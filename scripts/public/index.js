@@ -6,7 +6,7 @@ window.onload = function(e) {
 
   let signBtn2 = document.getElementById("signBtn2");
 
-  // wan3 = web3; // change to web3 and metamask
+  wan3 = web3; // change to web3 and metamask
 
   signBtn2.onclick = function(e) {
     if (wan3.eth.accounts[0] == null) {
@@ -16,7 +16,7 @@ window.onload = function(e) {
     nowTimestamp = 1571843003887; //Date.now();
 
     const message = {
-      senderAddress: "0x6Cac5eeB01d56E889AFac1f8D7f6666b344225E3",
+      senderAddress: wan3.eth.accounts[0],
       matcherAddress: "0xFF800d38664b546E9a0b7a72af802137629d4f11",
       baseAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
       quoteAsset: "0x8f07FA50C14ed117771e6959f2265881bB919e00", // WBTC
@@ -29,19 +29,56 @@ window.onload = function(e) {
       side: "buy"
     };
 
+    console.log([
+      message.senderAddress,
+      message.matcherAddress,
+      message.baseAsset,
+      message.quoteAsset,
+      message.matcherFeeAsset,
+      message.amount,
+      message.price,
+      message.matcherFee,
+      message.nonce,
+      message.expiration,
+      message.side
+    ]);
+
     const msgParams = [
-      { name: "senderAddress", type: "address", value:message.senderAddress },
-      { name: "matcherAddress", type: "address", value:message.matcherAddress  },
-      { name: "baseAsset", type: "address", value:message.baseAsset  },
-      { name: "quoteAsset", type: "address", value:message.quoteAsset  },
-      { name: "matcherFeeAsset", type: "address", value:message.matcherFeeAsset  },
-      { name: "amount", type: "uint64", value:message.amount  },
-      { name: "price", type: "uint64", value:message.price  },
-      { name: "matcherFee", type: "uint64", value:message.matcherFee  },
-      { name: "nonce", type: "uint64", value:message.nonce  },
-      { name: "expiration", type: "uint64", value:message.expiration  },
-      { name: "side", type: "string", value:message.side  }
+      { type: "address", name: "senderAddress", value: message.senderAddress },
+      {
+        type: "address",
+        name: "matcherAddress",
+        value: message.matcherAddress
+      },
+      { type: "address", name: "baseAsset", value: message.baseAsset },
+      { type: "address", name: "quoteAsset", value: message.quoteAsset },
+      {
+        type: "address",
+        name: "matcherFeeAsset",
+        value: message.matcherFeeAsset
+      },
+      { type: "uint64", name: "amount", value: message.amount },
+      { type: "uint64", name: "price", value: message.price },
+      { type: "uint64", name: "matcherFee", value: message.matcherFee },
+      { type: "uint64", name: "nonce", value: message.nonce },
+      { type: "uint64", name: "expiration", value: message.expiration },
+      { type: "string", name: "side", value: message.side }
     ];
+
+    // var msg1 = "heeeyyyy!";
+    // var num1 = 46;
+    // var msgParams = [
+    //   {
+    //     type: "string",
+    //     name: "Message",
+    //     value: msg1
+    //   },
+    //   {
+    //     type: "uint256",
+    //     name: "num",
+    //     value: num1
+    //   }
+    // ];
 
     var from = wan3.toChecksumAddress(wan3.eth.accounts[0]);
 
@@ -61,7 +98,6 @@ window.onload = function(e) {
         }
         let sign = result.result;
         console.log("EthSignTyped SIGNED:" + JSON.stringify(sign));
-        
       }
     );
   };

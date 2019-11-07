@@ -20,7 +20,8 @@ contract Exchange is Ownable, Utils{
     // EVENTS
     event NewAssetDeposit(address indexed user, address indexed assetAddress, uint amount);
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
-    event NewTrade(bytes32 buyOrderHash, bytes32 sellOrderHash, uint filledPrice, uint filledAmount, uint amountToTake);
+    event NewTrade(address indexed buyer, address indexed seller, address baseAsset,
+        address quoteAsset, uint filledPrice, uint filledAmount, uint amountToTake);
     event OrderCancelled(bytes32 indexed orderHash);
 
 
@@ -29,20 +30,6 @@ contract Exchange is Ownable, Utils{
     IERC20 public orion;
 
     enum Status {NEW, PARTIALLY_FILLED, FILLED, PARTIALLY_CANCELLED, CANCELLED}
-
-    struct Order{
-        address senderAddress;
-        address matcherAddress;
-        address baseAsset;
-        address quoteAsset;
-        address matcherFeeAsset;
-        uint64 amount;
-        uint64 price;
-        uint64 matcherFee;
-        uint64 nonce;
-        uint64 expiration;
-        string side; // true = buy false = sell
-    }
 
     struct Trade{
         bytes32 orderHash;
@@ -164,15 +151,21 @@ contract Exchange is Ownable, Utils{
      */
     function fillOrders(
         Order memory buyOrder, Order memory sellOrder,
-        Signature memory buySig, Signature memory sellSig,
         uint filledPrice, uint filledAmount
     )
         public onlyActive
     {
 
         // VALIDATE SIGNATURES
-        require(isValidSignature(buyOrder, buySig), "Invalid signature for Buy order");
-        require(isValidSignature(sellOrder, sellSig), "Invalid signature for Sell order");
+
+        // Using web3 sign
+        // require(isValidSignature(buyOrder, buySig), "Invalid signature for Buy order");
+        // require(isValidSignature(sellOrder, sellSig), "Invalid signature for Sell order");
+
+        // Using eth typed sign V1
+        require(validateAddress(buyOrder), "Invalid signature for Buy order");
+        require(validateAddress(sellOrder), "Invalid signature for Sell order");
+
 
         // VERIFICATIONS
 
@@ -194,15 +187,14 @@ contract Exchange is Ownable, Utils{
         address seller = sellOrder.senderAddress;
 
         // BUY SIDE CHECK
-
         require(assetBalances[buyer][buyOrder.quoteAsset] >= amountToTake, "insufficient buyer's balance");
-        bytes32 buyOrderHash = _getOrderhash(buyOrder);
+        bytes32 buyOrderHash = getValueHash(buyOrder);
         require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
         // require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
 
         // SELL SIDE CHECK
         require(assetBalances[seller][sellOrder.baseAsset] >= filledAmount, "insufficient seller's balance");
-        bytes32 sellOrderHash = _getOrderhash(sellOrder);
+        bytes32 sellOrderHash = getValueHash(sellOrder);
         require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
         // require(_checkAmount(sellOrderHash, sellOrder.amount, filledAmount), "incorrect filled amount");
 
@@ -218,7 +210,7 @@ contract Exchange is Ownable, Utils{
         Trade memory sellTrade = Trade(sellOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
         trades[sellOrderHash].push(sellTrade);
 
-        emit NewTrade(buyOrderHash, sellOrderHash, filledPrice, filledAmount, amountToTake);
+        emit NewTrade(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledPrice, filledAmount, amountToTake);
 
     }
 
@@ -226,6 +218,7 @@ contract Exchange is Ownable, Utils{
         address buyer, address seller, address baseAsset,
         address quoteAsset, uint filledAmount, uint amountToTake
     ) internal{
+
         // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset)
         assetBalances[buyer][quoteAsset] = assetBalances[buyer][quoteAsset].sub(amountToTake);
         assetBalances[buyer][baseAsset] = assetBalances[buyer][baseAsset].add(filledAmount);
