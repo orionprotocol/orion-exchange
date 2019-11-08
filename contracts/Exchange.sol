@@ -5,6 +5,7 @@ import '@openzeppelin/contracts/math/SafeMath.sol';
 import '@openzeppelin/contracts/ownership/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import './Utils.sol';
+import './Validators/ValidatorV1.sol';
 
 
 /**
@@ -12,7 +13,7 @@ import './Utils.sol';
  * @dev Exchange contract for the Orion Protocol
  * @author @wafflemakr
  */
-contract Exchange is Ownable, Utils{
+contract Exchange is Ownable, Utils, ValidatorV1{
 
     using SafeMath for uint;
     using SafeMath for uint64;
@@ -27,20 +28,12 @@ contract Exchange is Ownable, Utils{
 
     // GLOBAL VARIABLES
 
-    IERC20 public orion;
-
     enum Status {NEW, PARTIALLY_FILLED, FILLED, PARTIALLY_CANCELLED, CANCELLED}
 
     struct Trade{
         bytes32 orderHash;
         Status orderStatus;
         uint filledAmount;
-    }
-
-    struct Signature{
-        bytes32 r;
-        bytes32 s;
-        uint8 v ;
     }
 
     // Get trades by orderHash
@@ -54,6 +47,7 @@ contract Exchange is Ownable, Utils{
 
     uint public totalOrders;
     uint public totalTrades;
+
     // Pause or unpause exchangebuyOrderHash
     bool isActive = true;
 
@@ -153,82 +147,104 @@ contract Exchange is Ownable, Utils{
         Order memory buyOrder, Order memory sellOrder,
         uint filledPrice, uint filledAmount
     )
-        public onlyActive
+        public
+        onlyActive
     {
 
-        // VALIDATE SIGNATURES
-
-        // Using web3 sign
-        // require(isValidSignature(buyOrder, buySig), "Invalid signature for Buy order");
-        // require(isValidSignature(sellOrder, sellSig), "Invalid signature for Sell order");
-
-        // Using eth typed sign V1
-        require(validateAddress(buyOrder), "Invalid signature for Buy order");
-        require(validateAddress(sellOrder), "Invalid signature for Sell order");
-
-
-        // VERIFICATIONS
-
-        // Check matching assets
-        require(buyOrder.matcherAddress == msg.sender && sellOrder.matcherAddress == msg.sender, "incorrect matcher address");
-        require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quoteAsset == sellOrder.quoteAsset, "assets do not match");
-
-        // Check Price
-        require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
-        require(filledPrice >= sellOrder.price, "incorrect filled price for sell order");
-
-        // Check Expiration Time
-        require(buyOrder.expiration.div(1000) >= now, "buy order expired");
-        require(sellOrder.expiration.div(1000) >= now, "sell order expired");
-
+        // VARIABLES
         // Amount of quote asset
-        uint amountToTake = filledAmount.mul(filledPrice).div(10**8);
+        uint amountQuote = filledAmount.mul(filledPrice).div(10**8);
+
+        // Parties
         address buyer = buyOrder.senderAddress;
         address seller = sellOrder.senderAddress;
 
+        // Order Hashes
+        bytes32 buyOrderHash = getTypeValueHash(buyOrder);
+        bytes32 sellOrderHash = getTypeValueHash(sellOrder);
+
+        _validateOrders(buyOrder, sellOrder, filledPrice, filledAmount, amountQuote);
+
+
         // BUY SIDE CHECK
-        require(assetBalances[buyer][buyOrder.quoteAsset] >= amountToTake, "insufficient buyer's balance");
-        bytes32 buyOrderHash = getValueHash(buyOrder);
+        require(assetBalances[buyer][buyOrder.quoteAsset] >= amountQuote, "insufficient buyer's balance");
         require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
         // require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
 
         // SELL SIDE CHECK
         require(assetBalances[seller][sellOrder.baseAsset] >= filledAmount, "insufficient seller's balance");
-        bytes32 sellOrderHash = getValueHash(sellOrder);
         require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
         // require(_checkAmount(sellOrderHash, sellOrder.amount, filledAmount), "incorrect filled amount");
 
         // === VERIFICATIONS DONE ===
 
-        _updateBalances(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledAmount, amountToTake);
+        _updateBalances(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledAmount, amountQuote);
 
         totalTrades = totalTrades.add(1);
 
         // Store trades
         Trade memory buyTrade = Trade(buyOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
         trades[buyOrderHash].push(buyTrade);
-        Trade memory sellTrade = Trade(sellOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
+        Trade memory sellTrade = Trade(sellOrderHash, Status.NEW, amountQuote); //temporary set 0 for orderStatus until logic implemented
         trades[sellOrderHash].push(sellTrade);
 
-        emit NewTrade(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledPrice, filledAmount, amountToTake);
+        emit NewTrade(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledPrice, filledAmount, amountQuote);
 
     }
 
+    /**
+        @notice Orders values checks
+        @dev helper function to validate orders
+     */
+    function _validateOrders(
+        Order memory buyOrder, Order memory sellOrder,
+        uint filledPrice, uint filledAmount, uint amountQuote
+    ) internal {
+
+        // Validate signatures using eth typed sign V1
+        require(validateV1(buyOrder), "Invalid signature for Buy order");
+        require(validateV1(sellOrder), "Invalid signature for Sell order");
+
+        // Same matcher address
+        require(buyOrder.matcherAddress == msg.sender && sellOrder.matcherAddress == msg.sender, "incorrect matcher address");
+
+        // Check matching assets
+        require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quoteAsset == sellOrder.quoteAsset, "assets do not match");
+
+        // Check order amounts
+        require(filledAmount <= buyOrder.amount, "incorrect amount for buy order");
+        require(amountQuote <= sellOrder.amount, "incorrect amount for sell order");
+
+        // Check Price values
+        require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
+        require(filledPrice >= sellOrder.price, "incorrect filled price for sell order");
+
+        // Check Expiration Time. Convert to seconds first
+        require(buyOrder.expiration.div(1000) >= now, "buy order expired");
+        require(sellOrder.expiration.div(1000) >= now, "sell order expired");
+    }
+
+    /**
+        @notice update buyer and seller balances
+     */
     function _updateBalances(
         address buyer, address seller, address baseAsset,
-        address quoteAsset, uint filledAmount, uint amountToTake
+        address quoteAsset, uint filledAmount, uint amountQuote
     ) internal{
 
         // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset)
-        assetBalances[buyer][quoteAsset] = assetBalances[buyer][quoteAsset].sub(amountToTake);
+        assetBalances[buyer][quoteAsset] = assetBalances[buyer][quoteAsset].sub(amountQuote);
         assetBalances[buyer][baseAsset] = assetBalances[buyer][baseAsset].add(filledAmount);
 
         // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset)
-        assetBalances[seller][quoteAsset] = assetBalances[seller][quoteAsset].add(amountToTake);
+        assetBalances[seller][quoteAsset] = assetBalances[seller][quoteAsset].add(amountQuote);
         assetBalances[seller][baseAsset] = assetBalances[seller][baseAsset].sub(filledAmount);
 
     }
 
+    /**
+        @notice check if the order has been filled completely
+     */
     function _checkAmount(bytes32 orderHash, uint orderAmount, uint newTradeAmount) internal view returns(bool){
         uint totalTradeAmount;
         for(uint i = 0; i < trades[orderHash].length; i++){
@@ -236,44 +252,8 @@ contract Exchange is Ownable, Utils{
         }
         return (totalTradeAmount.add(newTradeAmount) <= orderAmount);
     }
+    
 
-    function _getOrderhash(Order memory _order) internal pure returns(bytes32){
-        bytes32 buySide = keccak256(abi.encodePacked("buy"));
-
-        return keccak256(abi.encodePacked(
-            bytes1(0x03),
-            _order.senderAddress,
-            _order.matcherAddress,
-            _order.baseAsset,
-            _order.quoteAsset,
-            _order.matcherFeeAsset,
-            bytes8(_order.amount),
-            bytes8(_order.price),
-            bytes8(_order.matcherFee),
-            bytes8(_order.nonce),
-            bytes8(_order.expiration),
-            keccak256(abi.encodePacked(_order.side)) == buySide ? bytes1(0x00):bytes1(0x01)
-        ));
-    }
-
-    /**
-     *  @dev Performs an `ecrecover` operation for signed message hashes
-     */
-    function _recoverAddress(bytes32 _hash, uint8 _v, bytes32 _r, bytes32 _s)
-        internal
-        pure
-        returns (address)
-    {
-        bytes memory prefix = "\x19Ethereum Signed Message:\n32";
-        bytes32 prefixedHash = keccak256(abi.encodePacked(prefix, _hash));
-        return ecrecover(prefixedHash, _v, _r, _s);
-    }
-
-    function isValidSignature(Order memory order, Signature memory sig) public returns(bool) {
-        bytes32 orderHash = _getOrderhash(order);
-        address recovered = _recoverAddress(orderHash, sig.v, sig.r, sig.s);
-        return recovered == order.senderAddress;
-    }
 
 
     /**
@@ -282,7 +262,7 @@ contract Exchange is Ownable, Utils{
     function cancelOrder(Order memory order) public{
         //TODO: check if order can be cancelled
 
-        bytes32 orderHash = _getOrderhash(order);
+        bytes32 orderHash = getTypeValueHash(order);
 
         cancelledOrders[orderHash] = true;
         emit OrderCancelled(orderHash);
