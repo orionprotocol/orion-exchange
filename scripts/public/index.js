@@ -1,9 +1,9 @@
 window.onload = function(e) {
   const myWeb3 = window.Web3;
 
-  // const wan3 = new Web3(window.wan3.currentProvider); // wanmask
-  const mywan3 = new myWeb3(window.web3.currentProvider); // metamask
-  console.log(mywan3);
+  const mywan3 = new myWeb3(window.wan3.currentProvider); // wanmask
+  // const mywan3 = new myWeb3(window.web3.currentProvider); // metamask
+  // console.log(mywan3);
 
   // const wan3 = window.web3;
   // const wan3 = new Web3(window.web3.currentProvider); // metamask
@@ -77,7 +77,9 @@ window.onload = function(e) {
   // eth_signTypedData
   signBtn2.onclick = async () => {
     // const accounts = await wan3.eth.getAccounts();
-    const accounts = wan3.eth.accounts;
+    // const accounts = wan3.eth.accounts;
+
+    const accounts = await mywan3.eth.getAccounts();
 
     if (accounts[0] == null) {
       alert("Connect to web3 Wallet");
@@ -88,10 +90,10 @@ window.onload = function(e) {
     const message = {
       version: 3,
       senderAddress: accounts[0],
-      matcherAddress: "0xFF800d38664b546E9a0b7a72af802137629d4f11",
-      baseAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
-      quoteAsset: "0x8f07FA50C14ed117771e6959f2265881bB919e00", // WBTC
-      matcherFeeAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
+      matcherAddress: "0xB35d39BB41C69E4377A16C08EDA54999175c1cdD",
+      baseAsset: "0x16D0770f8Dd8B3F3Ce75f39ce6A7626EDf7c2af4", // WETH
+      quoteAsset: "0x092Ca292Ba7b104c551c89013F10e366203a4E5e", // WBTC
+      matcherFeeAsset: "0x16D0770f8Dd8B3F3Ce75f39ce6A7626EDf7c2af4", // WETH
       amount: 350000000, //3.5 ETH * 10^8
       price: 2100000, //0.021 WBTC/WETH * 10^8
       matcherFee: 350000,
@@ -138,11 +140,13 @@ window.onload = function(e) {
     ];
 
     // const from = wan3.utils.toChecksumAddress(wan3.eth.accounts[0]); v 1.0
-    const from = wan3.toChecksumAddress(wan3.eth.accounts[0]); // v 0.2
+    // const from = wan3.toChecksumAddress(wan3.eth.accounts[0]); // v 0.2
+    const from = wan3.toChecksumAddress(accounts[0]); // v 0.2
 
     const params = [msgParams, from];
     const method = "eth_signTypedData";
 
+    // window.web3.currentProvider.sendAsync(
     wan3.currentProvider.sendAsync(
       {
         method,

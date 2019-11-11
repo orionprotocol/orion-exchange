@@ -1,4 +1,3 @@
-const BigNumber = web3.utils.BN;
 require("chai")
   .use(require("chai-shallow-deep-equal"))
   .use(require("chai-as-promised"))
