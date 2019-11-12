@@ -1,10 +1,12 @@
 const Web3 = require("web3");
-const web3 = new Web3("http://localhost:8545"); // gwan
-// const web3 = new Web3("http://localhost:8544"); // ganache
+
+const network = process.argv[2];
+
+let web3;
+if (network === "ganache") web3 = new Web3("http://localhost:8544");
+else web3 = new Web3("http://localhost:8545"); // gwan
 
 const sigUtil = require("eth-sig-util");
-
-const Long = require("long");
 
 require("dotenv").config();
 
@@ -207,13 +209,13 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
   const wethAddress = WETHArtifact.networks[netId].address;
   const exchangeAddress = exchangeArtifact.networks[netId].address;
 
-  // await mint(
-  //   wbtcAddress,
-  //   wethAddress,
-  //   exchangeAddress,
-  //   buyer.account,
-  //   seller.account
-  // );
+  await mint(
+    wbtcAddress,
+    wethAddress,
+    exchangeAddress,
+    buyer.account,
+    seller.account
+  );
 
   nowTimestamp = 1571843003887; //Date.now();
 
@@ -223,7 +225,7 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
     matcherAddress: matcher,
     baseAsset: wethAddress,
     quoteAsset: wbtcAddress, // WBTC
-    matcherFeeAsset: wethAddress, // WETH
+    matcherFeeAsset: wbtcAddress, // WBTC
     amount: 350000000, //3.5 ETH * 10^8
     price: 2100000, //0.021 WBTC/WETH * 10^8
     matcherFee: 350000,
@@ -272,31 +274,25 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
   // === MATCHER FLOW === //
 
   //Matcher validates orders in JS
-  let sender1 = await validateSigJS(buyOrder.signature, buyOrder);
+  const sender1 = await validateSigJS(buyOrder.signature, buyOrder);
   console.log(
     "\nValid Signature for Buy Order using JS? ",
     compare(sender1, buyOrder.senderAddress)
   );
 
-  let sender2 = await validateSigJS(sellOrder.signature, sellOrder);
+  const sender2 = await validateSigJS(sellOrder.signature, sellOrder);
   console.log(
     "Valid Signature for Sell Order using JS? ",
     compare(sender2, sellOrder.senderAddress)
   );
 
   //Matcher validates orders in Solidity
-  sender1 = await validateSigSolidity(buyOrder);
-  console.log(
-    "\nValid Signature for Buy Order using Solidity? ",
-    sender1 === buyOrder.senderAddress
-  );
+  const isSigner1 = await validateSigSolidity(buyOrder);
+  console.log("\nValid Signature for Buy Order using Solidity? ", isSigner1);
 
-  sender2 = await validateSigSolidity(sellOrder);
-  console.log(
-    "Valid Signature for Sell Order using Solidity? ",
-    sender2 === sellOrder.senderAddress
-  );
-  return;
+  const isSigner2 = await validateSigSolidity(sellOrder);
+  console.log("Valid Signature for Sell Order using Solidity? ", isSigner2);
+  // return;
 
   // *** ==== FILL ORDERS ==== *** //
 

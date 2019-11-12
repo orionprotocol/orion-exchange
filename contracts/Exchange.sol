@@ -33,7 +33,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     struct Trade{
         bytes32 orderHash;
         Status orderStatus;
-        uint filledAmount;
+        uint amount;
     }
 
     // Get trades by orderHash
@@ -103,7 +103,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
 
         assetBalances[_msgSender()][assetAddress] = assetBalances[_msgSender()][assetAddress].sub(amountDecimal);
 
-        safeTransfer(_msgSender(), assetAddress, amount);
+        safeTransfer(_msgSender(), assetAddress, amountDecimal);
 
         emit NewAssetWithdrawl(_msgSender(), assetAddress, amountDecimal);
     }
@@ -181,10 +181,8 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         totalTrades = totalTrades.add(1);
 
         // Store trades
-        Trade memory buyTrade = Trade(buyOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
-        trades[buyOrderHash].push(buyTrade);
-        Trade memory sellTrade = Trade(sellOrderHash, Status.NEW, amountQuote); //temporary set 0 for orderStatus until logic implemented
-        trades[sellOrderHash].push(sellTrade);
+        updateTrade(buyOrderHash, buyOrder.amount, filledAmount);
+        updateTrade(sellOrderHash, sellOrder.amount, amountQuote);
 
         emit NewTrade(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledPrice, filledAmount, amountQuote);
 
@@ -244,6 +242,9 @@ contract Exchange is Ownable, Utils, ValidatorV1{
             feeQuote = buyOrder.matcherFee;
         }
 
+        // Transfer Matcher Fee;
+        safeTransfer(buyOrder.matcherAddress, buyOrder.matcherFeeAsset, buyOrder.matcherFee);
+
         // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset (one will be 0))
         assetBalances[buyer][buyOrder.quoteAsset] = quoteBalance.sub(amountQuote).sub(feeQuote);
         assetBalances[buyer][buyOrder.baseAsset] = baseBalance.add(filledAmount).sub(feeBase);
@@ -280,19 +281,25 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         assetBalances[seller][sellOrder.baseAsset] = baseBalance.sub(filledAmount).sub(feeBase);
     }
 
-    /**
-        @notice check if the order has been filled completely
-     */
-    function _checkAmount(bytes32 orderHash, uint orderAmount, uint newTradeAmount) internal view returns(bool){
-        uint totalTradeAmount;
+    function updateTrade(bytes32 orderHash, uint64 orderAmount, uint tradeAmount) internal {
+        uint totalFilled;
         for(uint i = 0; i < trades[orderHash].length; i++){
-            totalTradeAmount = totalTradeAmount.add(trades[orderHash][i].filledAmount);
+            totalFilled = totalFilled.add(trades[orderHash][i].amount);
         }
-        return (totalTradeAmount.add(newTradeAmount) <= orderAmount);
+
+        require(totalFilled.add(tradeAmount) <= orderAmount, "trade cannot be processed, exceeds order amount");
+
+        uint newTotalFilled = totalFilled.add(tradeAmount);
+
+        Status orderStatus = Status.NEW;
+
+        if(newTotalFilled < orderAmount) orderStatus = Status.PARTIALLY_FILLED;
+        if(newTotalFilled == orderAmount) orderStatus = Status.FILLED;
+
+        Trade memory trade = Trade(orderHash, orderStatus, tradeAmount);
+
+        trades[orderHash].push(trade);
     }
-    
-
-
 
     /**
      * @dev write an orderHash in the contract so that such an order cannot be filled (executed)

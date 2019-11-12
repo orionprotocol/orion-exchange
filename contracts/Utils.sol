@@ -34,8 +34,8 @@ contract Utils {
     /**
         @notice convert asset amount from8 decimals (10^8) to its base unit
      */
-    function decimalToBaseUnit(address assetAddress, uint64 _amount) public view returns(uint){
-        uint amount = uint(_amount); // conver to uint256
+    function decimalToBaseUnit(address assetAddress, uint amount) public view returns(uint){
+        // uint amount = uint(_amount); // conver to uint256
 
         if(assetAddress == address(0)){
             return amount.mul(1 ether).div(10**8); // 18 decimals
@@ -75,7 +75,10 @@ contract Utils {
         return msg.sender;
     }
 
-    function safeTransfer(address to, address assetAddress, uint amount) internal nonReentrant{
+    function safeTransfer(address to, address assetAddress, uint _amount) internal {
+
+        uint amount = decimalToBaseUnit(assetAddress, _amount);
+
         if(assetAddress == address(0)){
             uint balanceBeforeTransfer = address(this).balance;
             // solhint-disable-next-line
@@ -84,13 +87,10 @@ contract Utils {
             assert(address(this).balance == balanceBeforeTransfer.sub(amount));
         }
         else{
-            IERC20 asset = IERC20(assetAddress);
-            uint balanceBeforeTransfer = asset.balanceOf(address(this));            
+            ERC20Detailed asset = ERC20Detailed(assetAddress);
+            uint balanceBeforeTransfer = asset.balanceOf(address(this));
             require(asset.transfer(_msgSender(), amount), "error transfering funds to user");
-            assert( asset.balanceOf(address(this)) == balanceBeforeTransfer.sub(amount));
+            assert(asset.balanceOf(address(this)) == balanceBeforeTransfer.sub(amount));
         }
-        
     }
-    
-
 }

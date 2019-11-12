@@ -11,6 +11,15 @@ const WBTC = artifacts.require("WBTC");
 
 let exchange, weth, wbtc, msgParams1, msgParams2, buyOrder, sellOrder;
 
+async function getLastTradeEvent(buyer, seller) {
+  let events = await exchange.getPastEvents("NewTrade", {
+    buyer,
+    seller
+  });
+
+  return events[0].returnValues;
+}
+
 contract("Exchange", ([matcher, user1, user2]) => {
   describe("Exchange::instance", async () => {
     exchange = await Exchange.deployed();
@@ -61,9 +70,9 @@ contract("Exchange", ([matcher, user1, user2]) => {
       buyOrder = {
         senderAddress: user1,
         matcherAddress: matcher,
-        baseAsset: weth.address,
+        baseAsset: weth.address, // WETH
         quoteAsset: wbtc.address, // WBTC
-        matcherFeeAsset: weth.address, // WETH
+        matcherFeeAsset: wbtc.address, // WBTC
         amount: 350000000, //3.5 ETH * 10^8
         price: 2100000, //0.021 WBTC/WETH * 10^8
         matcherFee: 350000,
@@ -185,12 +194,12 @@ contract("Exchange", ([matcher, user1, user2]) => {
   });
 
   describe("Exchange::fill orders", () => {
-    it("buy order in exchange contract", async () => {
+    it("validate buy order in exchange contract", async () => {
       let isValid = await exchange.validateV1(buyOrder, { from: matcher });
       isValid.should.be.true;
     });
 
-    it("sell order in exchange contract", async () => {
+    it("validate sell order in exchange contract", async () => {
       let isValid = await exchange.validateV1(sellOrder, { from: matcher });
       isValid.should.be.true;
     });
@@ -203,6 +212,16 @@ contract("Exchange", ([matcher, user1, user2]) => {
         150000000, // fill Amount
         { from: matcher }
       ).should.be.fulfilled;
+
+      const event = await getLastTradeEvent(
+        buyOrder.senderAddress,
+        sellOrder.senderAddress
+      );
+
+      event.buyer.should.be.equal(buyOrder.senderAddress);
+      event.seller.should.be.equal(sellOrder.senderAddress);
+      event.baseAsset.should.be.equal(buyOrder.baseAsset);
+      event.filledPrice.should.be.equal(String(2100000));
     });
 
     it("correct buyer WETH balance after trade", async () => {
@@ -212,17 +231,17 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("correct buyer WBTC balance after trade", async () => {
-      // WBTC deducted = initialbalance - (fillPrice * fillAmount )
-      // WBTC deducted = 10 WBTC - 0.021 WBTC/WETH * 1.5 WETH = 9.685 WBTC
+      // WBTC deducted = initialbalance - (fillPrice * fillAmount ) - matcherFee
+      // WBTC deducted = 10 WBTC - 0.021 WBTC/WETH * 1.5 WETH - 0.0035 WTBC = 9.965 WBTC
       let balance = await exchange.getBalance(wbtc.address, user1);
-      balance.toString().should.be.equal(String(9.9685e8));
+      balance.toString().should.be.equal(String(9.965e8));
     });
 
     it("correct seller WETH balance after trade", async () => {
       // WETH deducted = initialBalance- fill amount
-      // WETH deducted = 10 WETH - 1.5 WETH = 8.5 WETH
+      // WETH deducted = 10 WETH - 1.5 WETH - 0.0015 WETH = 8.4985 WETH
       let balance = await exchange.getBalance(weth.address, user2);
-      balance.toString().should.be.equal(String(8.5e8));
+      balance.toString().should.be.equal(String(8.4985e8));
     });
 
     it("correct seller WBTC balance after trade", async () => {
@@ -232,6 +251,28 @@ contract("Exchange", ([matcher, user1, user2]) => {
       balance.toString().should.be.equal(String(0.0315e8));
     });
 
-    // TODO: ADD FEES TO CONTRACT AND TESTS
+    it("correct total exchange balance in WBTC after trade", async () => {
+      // WBTC = depositUser1 - feeMatcher
+      // WBTC = 10WBTC - 0.0035 WBTC
+      let WBTCbalance = await wbtc.balanceOf(exchange.address);
+      WBTCbalance.toString().should.be.equal(String(10e8 - 0.0035e8));
+    });
+
+    it("correct total exchange balance in WETH after trade", async () => {
+      // WETH = depositUser2 - feeMatcher
+      // WETH = 10WETH - 0.0015 WETH
+      let WETHbalance = await weth.balanceOf(exchange.address);
+      WETHbalance.toString().should.be.equal(String(10e18 - 0.0015e18));
+    });
+
+    it("correct matcher fee in WETH", async () => {
+      let WETHbalance = await weth.balanceOf(matcher);
+      WETHbalance.toString().should.be.equal(String(0.0015e18)); // 0.0015 WETH
+    });
+
+    it("correct matcher fee in WBTC", async () => {
+      let WBTCbalance = await wbtc.balanceOf(matcher);
+      WBTCbalance.toString().should.be.equal(String(0.0035e8));
+    });
   });
 });
