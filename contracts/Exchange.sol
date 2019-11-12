@@ -1,4 +1,4 @@
-pragma solidity ^0.5.10;
+pragma solidity 0.5.10;
 pragma experimental ABIEncoderV2;
 
 import '@openzeppelin/contracts/math/SafeMath.sol';
@@ -15,7 +15,7 @@ import './Validators/ValidatorV1.sol';
  */
 contract Exchange is Ownable, Utils, ValidatorV1{
 
-    using SafeMath for uint;
+    // using SafeMath for uint;
     using SafeMath for uint64;
 
     // EVENTS
@@ -23,7 +23,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
     event NewTrade(address indexed buyer, address indexed seller, address baseAsset,
         address quoteAsset, uint filledPrice, uint filledAmount, uint amountToTake);
-    event OrderCancelled(bytes32 indexed orderHash);
+    event OrderCancelled(bytes32 indexed orderHash, address user);
 
 
     // GLOBAL VARIABLES
@@ -71,13 +71,13 @@ contract Exchange is Ownable, Utils, ValidatorV1{
      */
     function depositAsset(address assetAddress, uint amount) public payable onlyActive{
         IERC20 asset = IERC20(assetAddress);
-        require(asset.transferFrom(msg.sender, address(this), amount), "error transfering asset to exchange");
+        require(asset.transferFrom(_msgSender(), address(this), amount), "error transfering asset to exchange");
 
         uint amountDecimal = baseUnitToDecimal(assetAddress, amount);
 
-        assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].add(amountDecimal);
+        assetBalances[_msgSender()][assetAddress] = assetBalances[_msgSender()][assetAddress].add(amountDecimal);
 
-        emit NewAssetDeposit(msg.sender, assetAddress, amountDecimal);
+        emit NewAssetDeposit(_msgSender(), assetAddress, amountDecimal);
     }
 
     /**
@@ -88,35 +88,29 @@ contract Exchange is Ownable, Utils, ValidatorV1{
 
         uint amountDecimal = baseUnitToDecimal(address(0), msg.value);
 
-        assetBalances[msg.sender][address(0)] = assetBalances[msg.sender][address(0)].add(amountDecimal);
+        assetBalances[_msgSender()][address(0)] = assetBalances[_msgSender()][address(0)].add(amountDecimal);
 
-        emit NewAssetDeposit(msg.sender, address(0), amountDecimal);
+        emit NewAssetDeposit(_msgSender(), address(0), amountDecimal);
     }
 
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
      * @param amount asset amount to withdraw in its base unit
      */
-    function withdraw(address assetAddress, uint amount) public{
+    function withdraw(address assetAddress, uint amount) external nonReentrant {
         uint amountDecimal = baseUnitToDecimal(assetAddress, amount);
+        require(assetBalances[_msgSender()][assetAddress] >= amountDecimal, "not enough funds to withdraw");
 
-        require(assetBalances[msg.sender][assetAddress] >= amountDecimal, "not enough funds to withdraw");
+        assetBalances[_msgSender()][assetAddress] = assetBalances[_msgSender()][assetAddress].sub(amountDecimal);
 
-        assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].sub(amountDecimal);
+        safeTransfer(_msgSender(), assetAddress, amount);
 
-        if(assetAddress == address(0))
-            msg.sender.transfer(amount);
-        else{
-            IERC20 asset = IERC20(assetAddress);
-            require(asset.transfer(msg.sender, amount), "error transfering funds to user");
-        }
-
-        emit NewAssetWithdrawl(msg.sender, assetAddress, amountDecimal);
+        emit NewAssetWithdrawl(_msgSender(), assetAddress, amountDecimal);
     }
 
 
     /**
-     * @dev Asset balance for a specific address
+     * @dev Get asset balance for a specific address
      */
     function getBalance(address assetAddress, address user) public view returns(uint assetBalance){
         return assetBalances[user][assetAddress];
@@ -149,9 +143,11 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     )
         public
         onlyActive
+        nonReentrant
     {
 
-        // VARIABLES
+        // --- VARIABLES --- //
+
         // Amount of quote asset
         uint amountQuote = filledAmount.mul(filledPrice).div(10**8);
 
@@ -163,22 +159,24 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         bytes32 buyOrderHash = getTypeValueHash(buyOrder);
         bytes32 sellOrderHash = getTypeValueHash(sellOrder);
 
+         // --- VALIDATIONS --- //
+
+        // Validate Order Content
         _validateOrders(buyOrder, sellOrder, filledPrice, filledAmount, amountQuote);
 
-
-        // BUY SIDE CHECK
-        require(assetBalances[buyer][buyOrder.quoteAsset] >= amountQuote, "insufficient buyer's balance");
+        // Check if orders were not cancelled
         require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
-        // require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
+        require(!cancelledOrders[sellOrderHash], "sell order was cancelled");
 
-        // SELL SIDE CHECK
-        require(assetBalances[seller][sellOrder.baseAsset] >= filledAmount, "insufficient seller's balance");
-        require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
+        // require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
         // require(_checkAmount(sellOrderHash, sellOrder.amount, filledAmount), "incorrect filled amount");
 
-        // === VERIFICATIONS DONE ===
+        // === VALIDATIONS DONE ===
 
-        _updateBalances(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledAmount, amountQuote);
+        // Update User's balances
+        updateBuyerBalance(buyOrder, filledAmount, amountQuote);
+        updateSellerBalance(sellOrder, filledAmount, amountQuote);
+
 
         totalTrades = totalTrades.add(1);
 
@@ -199,14 +197,14 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     function _validateOrders(
         Order memory buyOrder, Order memory sellOrder,
         uint filledPrice, uint filledAmount, uint amountQuote
-    ) internal {
+    ) internal view{
 
         // Validate signatures using eth typed sign V1
         require(validateV1(buyOrder), "Invalid signature for Buy order");
         require(validateV1(sellOrder), "Invalid signature for Sell order");
 
         // Same matcher address
-        require(buyOrder.matcherAddress == msg.sender && sellOrder.matcherAddress == msg.sender, "incorrect matcher address");
+        require(buyOrder.matcherAddress == _msgSender() && sellOrder.matcherAddress == _msgSender(), "incorrect matcher address");
 
         // Check matching assets
         require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quoteAsset == sellOrder.quoteAsset, "assets do not match");
@@ -224,22 +222,62 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         require(sellOrder.expiration.div(1000) >= now, "sell order expired");
     }
 
-    /**
-        @notice update buyer and seller balances
-     */
-    function _updateBalances(
-        address buyer, address seller, address baseAsset,
-        address quoteAsset, uint filledAmount, uint amountQuote
-    ) internal{
+    function updateBuyerBalance(Order memory buyOrder, uint filledAmount, uint amountQuote) internal{
+        address buyer = buyOrder.senderAddress;
+        uint baseBalance = assetBalances[buyer][buyOrder.baseAsset];
+        uint quoteBalance = assetBalances[buyer][buyOrder.quoteAsset];
 
-        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset)
-        assetBalances[buyer][quoteAsset] = assetBalances[buyer][quoteAsset].sub(amountQuote);
-        assetBalances[buyer][baseAsset] = assetBalances[buyer][baseAsset].add(filledAmount);
+        //Will be updated in this function depending on the asset
+        uint feeQuote = 0;
+        uint feeBase = 0;
 
-        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset)
-        assetBalances[seller][quoteAsset] = assetBalances[seller][quoteAsset].add(amountQuote);
-        assetBalances[seller][baseAsset] = assetBalances[seller][baseAsset].sub(filledAmount);
+        // If matcher fee is paid in base Asset, check if buyer has balance in that asset
+        if(buyOrder.matcherFeeAsset == buyOrder.baseAsset){
+            require(baseBalance >= uint(buyOrder.matcherFee), "insufficient buyer's base asset balance");
+            require(quoteBalance >= amountQuote, "insufficient buyer's quote asset balance");
 
+            feeBase = buyOrder.matcherFee;
+        }
+        // If not, add amount and fee and check balance
+        else{
+            require(quoteBalance >= amountQuote.add(uint(buyOrder.matcherFee)), "insufficient buyer's quote asset balance");
+            feeQuote = buyOrder.matcherFee;
+        }
+
+        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset (one will be 0))
+        assetBalances[buyer][buyOrder.quoteAsset] = quoteBalance.sub(amountQuote).sub(feeQuote);
+        assetBalances[buyer][buyOrder.baseAsset] = baseBalance.add(filledAmount).sub(feeBase);
+    }
+
+    function updateSellerBalance(Order memory sellOrder, uint filledAmount, uint amountQuote) internal{
+        address seller = sellOrder.senderAddress;
+        uint baseBalance = assetBalances[sellOrder.senderAddress][sellOrder.baseAsset];
+        uint quoteBalance = assetBalances[sellOrder.senderAddress][sellOrder.quoteAsset];
+
+         //Will be updated in this function depending on the asset
+        uint feeQuote = 0;
+        uint feeBase = 0;
+
+        // If matcher fee is paid in quote Asset, check if seller has balance in that asset
+        if(sellOrder.matcherFeeAsset == sellOrder.quoteAsset){
+            require(quoteBalance >= uint(sellOrder.matcherFee), "insufficient seller's quote asset balance");
+            require(baseBalance >= filledAmount, "insufficient seller's base asset balance");
+
+            feeQuote = sellOrder.matcherFee;
+        }
+        // If not, add amount and fee and check balance
+        else{
+            require(baseBalance >= filledAmount.add(uint(sellOrder.matcherFee)), "insufficient seller's base asset balance");
+            feeBase = sellOrder.matcherFee;
+        }
+
+        // Transfer Matcher Fee;
+        safeTransfer(sellOrder.matcherAddress, sellOrder.matcherFeeAsset, sellOrder.matcherFee);
+
+
+        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset (one will be 0) )
+        assetBalances[seller][sellOrder.quoteAsset] = quoteBalance.add(amountQuote).sub(feeQuote);
+        assetBalances[seller][sellOrder.baseAsset] = baseBalance.sub(filledAmount).sub(feeBase);
     }
 
     /**
@@ -265,7 +303,11 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         bytes32 orderHash = getTypeValueHash(order);
 
         cancelledOrders[orderHash] = true;
-        emit OrderCancelled(orderHash);
+        emit OrderCancelled(orderHash, order.senderAddress);
+    }
+
+    function () external{
+        revert("Please use depositWan function");
     }
 
     // OWNER FUNCTIONS

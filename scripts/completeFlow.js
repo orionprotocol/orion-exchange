@@ -1,6 +1,6 @@
 const Web3 = require("web3");
-// const web3 = new Web3("http://localhost:8545"); // gwan
-const web3 = new Web3("http://localhost:8544"); // ganache
+const web3 = new Web3("http://localhost:8545"); // gwan
+// const web3 = new Web3("http://localhost:8544"); // ganache
 
 const sigUtil = require("eth-sig-util");
 
@@ -131,6 +131,13 @@ function toMatcherOrder(bo) {
   };
 }
 
+function compare(address1, address2) {
+  return (
+    web3.utils.toChecksumAddress(address1) ===
+    web3.utils.toChecksumAddress(address2)
+  );
+}
+
 async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
   //Mint WBTC to Buyer
   await wbtc.methods.mint(buyer, String(10e8)).send({ from: matcher });
@@ -200,13 +207,13 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
   const wethAddress = WETHArtifact.networks[netId].address;
   const exchangeAddress = exchangeArtifact.networks[netId].address;
 
-  await mint(
-    wbtcAddress,
-    wethAddress,
-    exchangeAddress,
-    buyer.account,
-    seller.account
-  );
+  // await mint(
+  //   wbtcAddress,
+  //   wethAddress,
+  //   exchangeAddress,
+  //   buyer.account,
+  //   seller.account
+  // );
 
   nowTimestamp = 1571843003887; //Date.now();
 
@@ -268,13 +275,13 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
   let sender1 = await validateSigJS(buyOrder.signature, buyOrder);
   console.log(
     "\nValid Signature for Buy Order using JS? ",
-    sender1 === buyOrder.senderAddress
+    compare(sender1, buyOrder.senderAddress)
   );
 
   let sender2 = await validateSigJS(sellOrder.signature, sellOrder);
   console.log(
     "Valid Signature for Sell Order using JS? ",
-    sender2 === sellOrder.senderAddress
+    compare(sender2, sellOrder.senderAddress)
   );
 
   //Matcher validates orders in Solidity
@@ -289,6 +296,7 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
     "Valid Signature for Sell Order using Solidity? ",
     sender2 === sellOrder.senderAddress
   );
+  return;
 
   // *** ==== FILL ORDERS ==== *** //
 

@@ -22,7 +22,7 @@
   },
   "homepage": "https://github.com/orionprotocol/orion-exchange#readme",
   "dependencies": {
-    "@openzeppelin/contracts": "^2.3.0",
+    "@openzeppelin/contracts": "^2.4.0",
     "@waves/waves-transactions": "^3.19.0",
     "dotenv": "^8.1.0",
     "eth-sig-util": "^2.5.0",
