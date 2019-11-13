@@ -204,12 +204,32 @@ contract("Exchange", ([matcher, user1, user2]) => {
       isValid.should.be.true;
     });
 
+    it("incorrect fill price should be rejected", async () => {
+      await exchange.fillOrders(
+        buyOrder,
+        sellOrder,
+        1900000, //fill Price 0.019
+        150000000, // fill Amount 1.5 WETH
+        { from: matcher }
+      ).should.be.rejected;
+    });
+
+    it("only matcher can fill orders", async () => {
+      await exchange.fillOrders(
+        buyOrder,
+        sellOrder,
+        2100000, //fill Price 0.021
+        150000000, // fill Amount 1.5 WETH
+        { from: user1 }
+      ).should.be.rejected;
+    });
+
     it("matcher can fill orders", async () => {
       await exchange.fillOrders(
         buyOrder,
         sellOrder,
         2100000, //fill Price 0.021
-        150000000, // fill Amount
+        150000000, // fill Amount 1.5 WETH
         { from: matcher }
       ).should.be.fulfilled;
 
@@ -224,6 +244,17 @@ contract("Exchange", ([matcher, user1, user2]) => {
       event.filledPrice.should.be.equal(String(2100000));
     });
 
+    it("trade cannot exceed order amount", async () => {
+      // Calling fillOrders with same params, will cause sell order to exceed
+      await exchange.fillOrders(
+        buyOrder,
+        sellOrder,
+        2100000, //fill Price 0.021
+        150000000, // fill Amount 1.5 WETH
+        { from: matcher }
+      ).should.be.rejected;
+    });
+
     it("correct buyer WETH balance after trade", async () => {
       // WETH received = fill amount (150000000)
       let balance = await exchange.getBalance(weth.address, user1);
@@ -231,10 +262,10 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("correct buyer WBTC balance after trade", async () => {
-      // WBTC deducted = initialbalance - (fillPrice * fillAmount ) - matcherFee
-      // WBTC deducted = 10 WBTC - 0.021 WBTC/WETH * 1.5 WETH - 0.0035 WTBC = 9.965 WBTC
+      // WBTC deducted = initialbalance - (fillPrice * fillAmount ) - matcherFee *  ( fillAmount/orderAmount)
+      // WBTC deducted = 10 WBTC - 0.021 WBTC/WETH * 1.5 WETH - 0.0035 WTBC * (1.5*3.5) = 9.967 WBTC
       let balance = await exchange.getBalance(wbtc.address, user1);
-      balance.toString().should.be.equal(String(9.965e8));
+      balance.toString().should.be.equal(String(9.967e8));
     });
 
     it("correct seller WETH balance after trade", async () => {
@@ -253,9 +284,9 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("correct total exchange balance in WBTC after trade", async () => {
       // WBTC = depositUser1 - feeMatcher
-      // WBTC = 10WBTC - 0.0035 WBTC
+      // WBTC = 10WBTC - 0.0015 WBTC
       let WBTCbalance = await wbtc.balanceOf(exchange.address);
-      WBTCbalance.toString().should.be.equal(String(10e8 - 0.0035e8));
+      WBTCbalance.toString().should.be.equal(String(10e8 - 0.0015e8));
     });
 
     it("correct total exchange balance in WETH after trade", async () => {
@@ -272,7 +303,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("correct matcher fee in WBTC", async () => {
       let WBTCbalance = await wbtc.balanceOf(matcher);
-      WBTCbalance.toString().should.be.equal(String(0.0035e8));
+      WBTCbalance.toString().should.be.equal(String(0.0015e8));
     });
   });
 });

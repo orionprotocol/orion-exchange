@@ -300,12 +300,14 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
   let balances1 = await exchange.methods
     .getBalances([wethAddress, wbtcAddress], buyer.account)
     .call();
+
+  console.log(balances1);
   console.log("\nInitial Balances");
   console.log(
     "BUYER INITIAL BALANCES:\nWETH: ",
-    balances1[0],
+    balances1[0] / 1e8,
     "WBTC: ",
-    balances1[1]
+    balances1[1] / 1e8
   );
 
   let balances2 = await exchange.methods
@@ -313,9 +315,9 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
     .call();
   console.log(
     "SELLER INITIAL BALANCES:\nWETH: ",
-    balances2[0],
+    balances2[0] / 1e8,
     "WBTC: ",
-    balances2[1]
+    balances2[1] / 1e8
   );
 
   // Call FillOrders function in Exchange Contract
@@ -327,9 +329,9 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
     .call();
   console.log(
     "\nBUYER FINAL BALANCES:\nWETH: ",
-    balances1[0],
+    balances1[0] / 1e8,
     "WBTC: ",
-    balances1[1]
+    balances1[1] / 1e8
   );
 
   balances2 = await exchange.methods
@@ -337,9 +339,9 @@ async function mint(wbtcAddress, wethAddress, exchangeAddress, buyer, seller) {
     .call();
   console.log(
     "SELLER FINAL BALANCES:\nWETH: ",
-    balances2[0],
+    balances2[0] / 1e8,
     "WBTC: ",
-    balances2[1]
+    balances2[1] / 1e8
   );
   // ============================= //
 })();

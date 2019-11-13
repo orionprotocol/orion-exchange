@@ -22,8 +22,8 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     event NewAssetDeposit(address indexed user, address indexed assetAddress, uint amount);
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
     event NewTrade(address indexed buyer, address indexed seller, address baseAsset,
-        address quoteAsset, uint filledPrice, uint filledAmount, uint amountToTake);
-    event OrderCancelled(bytes32 indexed orderHash, address user);
+        address quoteAsset, uint filledPrice, uint filledAmount, uint amountQuote);
+    event OrderCancelled(bytes32 indexed orderHash, address cancelledBy);
 
 
     // GLOBAL VARIABLES
@@ -45,9 +45,6 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     // Check if an order was cancelled
     mapping(bytes32 => bool) public cancelledOrders;
 
-    uint public totalOrders;
-    uint public totalTrades;
-
     // Pause or unpause exchangebuyOrderHash
     bool isActive = true;
 
@@ -64,6 +61,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
 
 
     // MAIN FUNCTIONS
+
     /**
      * @dev Deposit WAN or ERC20 tokens to the exchange contract
      * @dev User needs to approve token contract first
@@ -81,7 +79,9 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     }
 
     /**
-     * @dev Deposit WAN to the exchange contract
+     * @notice Deposit WAN to the exchange contract
+     * @dev deposit event will be emitted with the amount in decimal format (10^8)
+     * @dev balance will be stored in decimal format too
      */
     function depositWan() public payable onlyActive{
         require(msg.value > 0, "invalid amount sent");
@@ -95,6 +95,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
 
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
+     * @param assetAddress address of the asset to withdraw
      * @param amount asset amount to withdraw in its base unit
      */
     function withdraw(address assetAddress, uint amount) external nonReentrant {
@@ -111,13 +112,17 @@ contract Exchange is Ownable, Utils, ValidatorV1{
 
     /**
      * @dev Get asset balance for a specific address
+     * @param assetAddress address of the asset to query
+     * @param user user address to query
      */
     function getBalance(address assetAddress, address user) public view returns(uint assetBalance){
         return assetBalances[user][assetAddress];
     }
 
     /**
-     * @dev Batch request of asset balances
+     * @dev Batch query of asset balances for a user
+     * @param assetsAddresses array of addresses of teh assets to query
+     * @param user user address to query
      */
     function getBalances(address[] memory assetsAddresses, address user) public view returns(uint[] memory){
         uint[] memory balances = new uint[](assetsAddresses.length);
@@ -162,27 +167,21 @@ contract Exchange is Ownable, Utils, ValidatorV1{
          // --- VALIDATIONS --- //
 
         // Validate Order Content
-        _validateOrders(buyOrder, sellOrder, filledPrice, filledAmount, amountQuote);
+        _validateOrders(buyOrder, sellOrder, filledPrice, filledAmount);
 
         // Check if orders were not cancelled
         require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
         require(!cancelledOrders[sellOrderHash], "sell order was cancelled");
 
-        // require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
-        // require(_checkAmount(sellOrderHash, sellOrder.amount, filledAmount), "incorrect filled amount");
-
-        // === VALIDATIONS DONE ===
+        // --- UPDATES --- //
 
         // Update User's balances
         updateBuyerBalance(buyOrder, filledAmount, amountQuote);
         updateSellerBalance(sellOrder, filledAmount, amountQuote);
 
-
-        totalTrades = totalTrades.add(1);
-
-        // Store trades
+        // Update trades
         updateTrade(buyOrderHash, buyOrder.amount, filledAmount);
-        updateTrade(sellOrderHash, sellOrder.amount, amountQuote);
+        updateTrade(sellOrderHash, sellOrder.amount, filledAmount);
 
         emit NewTrade(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledPrice, filledAmount, amountQuote);
 
@@ -194,7 +193,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
      */
     function _validateOrders(
         Order memory buyOrder, Order memory sellOrder,
-        uint filledPrice, uint filledAmount, uint amountQuote
+        uint filledPrice, uint filledAmount
     ) internal view{
 
         // Validate signatures using eth typed sign V1
@@ -209,7 +208,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
 
         // Check order amounts
         require(filledAmount <= buyOrder.amount, "incorrect amount for buy order");
-        require(amountQuote <= sellOrder.amount, "incorrect amount for sell order");
+        require(filledAmount <= sellOrder.amount, "incorrect amount for sell order");
 
         // Check Price values
         require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
@@ -220,10 +219,15 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         require(sellOrder.expiration.div(1000) >= now, "sell order expired");
     }
 
+    /**
+     *  @notice Orders values checks
+     *  @dev helper function to validate orders
+     */
     function updateBuyerBalance(Order memory buyOrder, uint filledAmount, uint amountQuote) internal{
         address buyer = buyOrder.senderAddress;
         uint baseBalance = assetBalances[buyer][buyOrder.baseAsset];
         uint quoteBalance = assetBalances[buyer][buyOrder.quoteAsset];
+        uint matcherFee = buyOrder.matcherFee.mul(filledAmount).div(buyOrder.amount);
 
         //Will be updated in this function depending on the asset
         uint feeQuote = 0;
@@ -234,26 +238,34 @@ contract Exchange is Ownable, Utils, ValidatorV1{
             require(baseBalance >= uint(buyOrder.matcherFee), "insufficient buyer's base asset balance");
             require(quoteBalance >= amountQuote, "insufficient buyer's quote asset balance");
 
-            feeBase = buyOrder.matcherFee;
+            feeBase = matcherFee;
         }
         // If not, add amount and fee and check balance
         else{
             require(quoteBalance >= amountQuote.add(uint(buyOrder.matcherFee)), "insufficient buyer's quote asset balance");
-            feeQuote = buyOrder.matcherFee;
+            feeQuote = matcherFee;
         }
 
-        // Transfer Matcher Fee;
-        safeTransfer(buyOrder.matcherAddress, buyOrder.matcherFeeAsset, buyOrder.matcherFee);
+        // Transfer Matcher Fee
+        safeTransfer(buyOrder.matcherAddress, buyOrder.matcherFeeAsset, matcherFee);
 
-        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset (one will be 0))
+        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset )
         assetBalances[buyer][buyOrder.quoteAsset] = quoteBalance.sub(amountQuote).sub(feeQuote);
         assetBalances[buyer][buyOrder.baseAsset] = baseBalance.add(filledAmount).sub(feeBase);
+
+        assert(assetBalances[buyer][buyOrder.quoteAsset] < quoteBalance); // buyer's quote asset balance decreased
+        assert(assetBalances[buyer][buyOrder.baseAsset] > baseBalance); // buyer's base asset balance increased
     }
 
+    /**
+     *  @notice Orders values checks
+     *  @dev helper function to validate orders
+     */
     function updateSellerBalance(Order memory sellOrder, uint filledAmount, uint amountQuote) internal{
         address seller = sellOrder.senderAddress;
         uint baseBalance = assetBalances[sellOrder.senderAddress][sellOrder.baseAsset];
         uint quoteBalance = assetBalances[sellOrder.senderAddress][sellOrder.quoteAsset];
+        uint matcherFee = sellOrder.matcherFee.mul(filledAmount).div(sellOrder.amount);
 
          //Will be updated in this function depending on the asset
         uint feeQuote = 0;
@@ -264,23 +276,30 @@ contract Exchange is Ownable, Utils, ValidatorV1{
             require(quoteBalance >= uint(sellOrder.matcherFee), "insufficient seller's quote asset balance");
             require(baseBalance >= filledAmount, "insufficient seller's base asset balance");
 
-            feeQuote = sellOrder.matcherFee;
+            feeQuote = matcherFee;
         }
         // If not, add amount and fee and check balance
         else{
             require(baseBalance >= filledAmount.add(uint(sellOrder.matcherFee)), "insufficient seller's base asset balance");
-            feeBase = sellOrder.matcherFee;
+            feeBase = matcherFee;
         }
 
         // Transfer Matcher Fee;
-        safeTransfer(sellOrder.matcherAddress, sellOrder.matcherFeeAsset, sellOrder.matcherFee);
+        safeTransfer(sellOrder.matcherAddress, sellOrder.matcherFeeAsset, matcherFee);
 
 
-        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset (one will be 0) )
+        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset  )
         assetBalances[seller][sellOrder.quoteAsset] = quoteBalance.add(amountQuote).sub(feeQuote);
         assetBalances[seller][sellOrder.baseAsset] = baseBalance.sub(filledAmount).sub(feeBase);
+
+        assert(assetBalances[seller][sellOrder.quoteAsset] > quoteBalance); // seller's quote asset balance increased
+        assert(assetBalances[seller][sellOrder.baseAsset] < baseBalance); // seller's base asset balance decreased
     }
 
+    /**
+     *  @notice Orders values checks
+     *  @dev helper function to validate orders
+     */
     function updateTrade(bytes32 orderHash, uint64 orderAmount, uint tradeAmount) internal {
         uint totalFilled;
         for(uint i = 0; i < trades[orderHash].length; i++){
@@ -301,18 +320,25 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         trades[orderHash].push(trade);
     }
 
+
     /**
+     * @notice users can cancel an order
      * @dev write an orderHash in the contract so that such an order cannot be filled (executed)
      */
-    function cancelOrder(Order memory order) public{
-        //TODO: check if order can be cancelled
-
+    function cancelOrder(Order memory order) public nonReentrant{
         bytes32 orderHash = getTypeValueHash(order);
 
+        require(_msgSender() == order.senderAddress, "You are not the owner of this order");
+        require(!cancelledOrders[orderHash], "order is already cancelled");
+
         cancelledOrders[orderHash] = true;
-        emit OrderCancelled(orderHash, order.senderAddress);
+
+        emit OrderCancelled(orderHash, _msgSender());
     }
 
+    /**
+     *  @dev  revert on fallback function
+     */
     function () external{
         revert("Please use depositWan function");
     }
