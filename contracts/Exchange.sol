@@ -46,7 +46,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     mapping(bytes32 => bool) public cancelledOrders;
 
     // Pause or unpause exchangebuyOrderHash
-    bool isActive = true;
+    bool public isActive = true;
 
 
     // MODIFIERS
@@ -63,11 +63,11 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     // MAIN FUNCTIONS
 
     /**
-     * @dev Deposit WAN or ERC20 tokens to the exchange contract
+     * @dev Deposit ERC20 tokens to the exchange contract
      * @dev User needs to approve token contract first
      * @param amount asset amount to deposit in its base unit
      */
-    function depositAsset(address assetAddress, uint amount) public payable onlyActive{
+    function depositAsset(address assetAddress, uint amount) public onlyActive{
         IERC20 asset = IERC20(assetAddress);
         require(asset.transferFrom(_msgSender(), address(this), amount), "error transfering asset to exchange");
 
@@ -167,7 +167,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
          // --- VALIDATIONS --- //
 
         // Validate Order Content
-        _validateOrders(buyOrder, sellOrder, filledPrice, filledAmount);
+        _validateOrdersInfo(buyOrder, sellOrder, filledPrice, filledAmount);
 
         // Check if orders were not cancelled
         require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
@@ -191,7 +191,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         @notice Orders values checks
         @dev helper function to validate orders
      */
-    function _validateOrders(
+    function _validateOrdersInfo(
         Order memory buyOrder, Order memory sellOrder,
         uint filledPrice, uint filledAmount
     ) internal view{

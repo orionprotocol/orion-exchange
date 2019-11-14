@@ -20,6 +20,10 @@ async function getLastTradeEvent(buyer, seller) {
   return events[0].returnValues;
 }
 
+// Used for fillOrders function
+const FILL_AMOUNT = 150000000; // WETH
+const FILL_PRICE = 2100000; // 0.021 WBTC/WETH
+
 contract("Exchange", ([matcher, user1, user2]) => {
   describe("Exchange::instance", async () => {
     exchange = await Exchange.deployed();
@@ -228,8 +232,8 @@ contract("Exchange", ([matcher, user1, user2]) => {
       await exchange.fillOrders(
         buyOrder,
         sellOrder,
-        2100000, //fill Price 0.021
-        150000000, // fill Amount 1.5 WETH
+        FILL_PRICE, //fill Price 0.021
+        FILL_AMOUNT, // fill Amount 1.5 WETH
         { from: matcher }
       ).should.be.fulfilled;
 
@@ -241,16 +245,16 @@ contract("Exchange", ([matcher, user1, user2]) => {
       event.buyer.should.be.equal(buyOrder.senderAddress);
       event.seller.should.be.equal(sellOrder.senderAddress);
       event.baseAsset.should.be.equal(buyOrder.baseAsset);
-      event.filledPrice.should.be.equal(String(2100000));
+      event.filledPrice.should.be.equal(String(FILL_PRICE));
     });
 
     it("trade cannot exceed order amount", async () => {
-      // Calling fillOrders with same params, will cause sell order to exceed
+      // Calling fillOrders with same params, will cause fill amount to exceed sell order amount
       await exchange.fillOrders(
         buyOrder,
         sellOrder,
-        2100000, //fill Price 0.021
-        150000000, // fill Amount 1.5 WETH
+        FILL_PRICE, //fill Price 0.021
+        FILL_AMOUNT, // fill Amount 1.5 WETH
         { from: matcher }
       ).should.be.rejected;
     });
@@ -258,52 +262,106 @@ contract("Exchange", ([matcher, user1, user2]) => {
     it("correct buyer WETH balance after trade", async () => {
       // WETH received = fill amount (150000000)
       let balance = await exchange.getBalance(weth.address, user1);
-      balance.toString().should.be.equal(String(1.5e8));
+      balance.toString().should.be.equal(String(FILL_AMOUNT));
     });
 
     it("correct buyer WBTC balance after trade", async () => {
       // WBTC deducted = initialbalance - (fillPrice * fillAmount ) - matcherFee *  ( fillAmount/orderAmount)
       // WBTC deducted = 10 WBTC - 0.021 WBTC/WETH * 1.5 WETH - 0.0035 WTBC * (1.5*3.5) = 9.967 WBTC
       let balance = await exchange.getBalance(wbtc.address, user1);
-      balance.toString().should.be.equal(String(9.967e8));
+      balance
+        .toString()
+        .should.be.equal(
+          String(
+            10e8 -
+              (FILL_PRICE * FILL_AMOUNT) / 1e8 -
+              buyOrder.matcherFee * (FILL_AMOUNT / buyOrder.amount)
+          )
+        );
     });
 
     it("correct seller WETH balance after trade", async () => {
-      // WETH deducted = initialBalance- fill amount
-      // WETH deducted = 10 WETH - 1.5 WETH - 0.0015 WETH = 8.4985 WETH
+      // WETH deducted = initialBalance- fill amount - matcherFee *  ( fillAmount/sellOrder amount)
+      // WETH deducted = 10 WETH - 1.5 WETH - 0.0015 WETH * (1.5/1.5) = 8.4985 WETH
       let balance = await exchange.getBalance(weth.address, user2);
-      balance.toString().should.be.equal(String(8.4985e8));
+      balance
+        .toString()
+        .should.be.equal(
+          String(
+            10e8 -
+              FILL_AMOUNT -
+              sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount)
+          )
+        );
     });
 
     it("correct seller WBTC balance after trade", async () => {
       // WBTC received = (fillPrice * fillAmount )
       // WBTC received = 0.021 WBTC/WETH * 1.5 WETH = 0.0315 WBTC
       let balance = await exchange.getBalance(wbtc.address, user2);
-      balance.toString().should.be.equal(String(0.0315e8));
+      balance
+        .toString()
+        .should.be.equal(String((FILL_AMOUNT * FILL_PRICE) / 1e8));
     });
 
     it("correct total exchange balance in WBTC after trade", async () => {
-      // WBTC = depositUser1 - feeMatcher
-      // WBTC = 10WBTC - 0.0015 WBTC
+      // WBTC = depositUser1 - feeMatcher(buyOrder) *  ( fillAmount/buyOrderAmount)
+      // WBTC = 10WBTC - 0.0035 WTBC * (1.5*3.5)
       let WBTCbalance = await wbtc.balanceOf(exchange.address);
-      WBTCbalance.toString().should.be.equal(String(10e8 - 0.0015e8));
+      WBTCbalance.toString().should.be.equal(
+        String(10e8 - buyOrder.matcherFee * (FILL_AMOUNT / buyOrder.amount))
+      );
     });
 
     it("correct total exchange balance in WETH after trade", async () => {
-      // WETH = depositUser2 - feeMatcher
+      // WETH = depositUser2 - feeMatcher (sellOrder ) *  ( fillAmount/sellOrderAmount)
       // WETH = 10WETH - 0.0015 WETH
       let WETHbalance = await weth.balanceOf(exchange.address);
-      WETHbalance.toString().should.be.equal(String(10e18 - 0.0015e18));
+      WETHbalance.toString().should.be.equal(
+        String(
+          10e18 - sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount) * 1e10
+        )
+      );
     });
 
     it("correct matcher fee in WETH", async () => {
       let WETHbalance = await weth.balanceOf(matcher);
-      WETHbalance.toString().should.be.equal(String(0.0015e18)); // 0.0015 WETH
+      WETHbalance.toString().should.be.equal(
+        String(sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount) * 1e10)
+      ); // 0.0015 WETH
     });
 
     it("correct matcher fee in WBTC", async () => {
       let WBTCbalance = await wbtc.balanceOf(matcher);
-      WBTCbalance.toString().should.be.equal(String(0.0015e8));
+      WBTCbalance.toString().should.be.equal(
+        String(buyOrder.matcherFee * (FILL_AMOUNT / buyOrder.amount))
+      );
+    });
+  });
+
+  describe("Exchange::cancel orders", () => {
+    it("user can't cancel an order that does not own", async () => {
+      await exchange.cancelOrder(sellOrder, { from: user1 }).should.be.rejected;
+    });
+
+    it("user can cancel an order", async () => {
+      await exchange.cancelOrder(buyOrder, { from: user1 }).should.be.fulfilled;
+    });
+
+    it("order can't be filled after cancelled", async () => {
+      let response = await exchange.fillOrders(
+        buyOrder,
+        sellOrder,
+        2100000, //fill Price 0.021
+        50000000, // fill Amount 0.5 WETH
+        { from: matcher }
+      ).should.be.rejected;
+
+      console.log(response);
+    });
+
+    it("user can't cancel an already cancelled order", async () => {
+      await exchange.cancelOrder(buyOrder, { from: user1 }).should.be.rejected;
     });
   });
 });
