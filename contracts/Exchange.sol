@@ -23,6 +23,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
     event NewTrade(address indexed buyer, address indexed seller, address baseAsset,
         address quoteAsset, uint filledPrice, uint filledAmount, uint amountQuote);
+    event OrderUpdate(bytes32 indexed orderHash, address user, Status orderStatus);
     event OrderCancelled(bytes32 indexed orderHash, address cancelledBy);
 
 
@@ -39,11 +40,11 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     // Get trades by orderHash
     mapping(bytes32 => Trade[]) public trades;
 
-    // Get user balance by address and asset address
-    mapping(address => mapping(address => uint)) public assetBalances;
+    // Get trades by orderHash
+    mapping(bytes32 => Status) public orderStatus;
 
-    // Check if an order was cancelled
-    mapping(bytes32 => bool) public cancelledOrders;
+    // Get user balance by address and asset address
+    mapping(address => mapping(address => uint)) private assetBalances;
 
     // Pause or unpause exchangebuyOrderHash
     bool public isActive = true;
@@ -133,6 +134,22 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     }
 
     /**
+     * @dev get trades for a specific order
+     */
+    function getOrderTrades(Order memory order) public view returns(Trade[] memory){
+        bytes32 orderHash = getTypeValueHash(order);
+        return trades[orderHash];
+    }
+
+    /**
+     * @dev get trades for a specific order
+     */
+    function getOrderStatus(Order memory order) public view returns(Status status){
+        bytes32 orderHash = getTypeValueHash(order);
+        return orderStatus[orderHash];
+    }
+
+    /**
      * @notice Settle a trade with two orders, filled price and amount
      * @dev 2 orders are submitted, it is necessary to match them:
         check conditions in orders for compliance filledPrice, filledAmountbuyOrderHash
@@ -170,8 +187,8 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         _validateOrdersInfo(buyOrder, sellOrder, filledPrice, filledAmount);
 
         // Check if orders were not cancelled
-        require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
-        require(!cancelledOrders[sellOrderHash], "sell order was cancelled");
+        require(orderStatus[buyOrderHash] != Status.CANCELLED, "buy order was cancelled");
+        require(orderStatus[sellOrderHash] != Status.CANCELLED, "sell order was cancelled");
 
         // --- UPDATES --- //
 
@@ -180,8 +197,8 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         updateSellerBalance(sellOrder, filledAmount, amountQuote);
 
         // Update trades
-        updateTrade(buyOrderHash, buyOrder.amount, filledAmount);
-        updateTrade(sellOrderHash, sellOrder.amount, filledAmount);
+        updateTrade(buyOrderHash, buyer, buyOrder.amount, filledAmount);
+        updateTrade(sellOrderHash, seller, sellOrder.amount, filledAmount);
 
         emit NewTrade(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledPrice, filledAmount, amountQuote);
 
@@ -300,7 +317,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
      *  @notice Orders values checks
      *  @dev helper function to validate orders
      */
-    function updateTrade(bytes32 orderHash, uint64 orderAmount, uint tradeAmount) internal {
+    function updateTrade(bytes32 orderHash, address user, uint64 orderAmount, uint tradeAmount) internal {
         uint totalFilled;
         for(uint i = 0; i < trades[orderHash].length; i++){
             totalFilled = totalFilled.add(trades[orderHash][i].amount);
@@ -309,15 +326,18 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         require(totalFilled.add(tradeAmount) <= orderAmount, "trade cannot be processed, exceeds order amount");
 
         uint newTotalFilled = totalFilled.add(tradeAmount);
+        uint amountTrades = trades[orderHash].length;
 
         Status orderStatus = Status.NEW;
 
-        if(newTotalFilled < orderAmount) orderStatus = Status.PARTIALLY_FILLED;
+        if(newTotalFilled < orderAmount && amountTrades > 1) orderStatus = Status.PARTIALLY_FILLED;
         if(newTotalFilled == orderAmount) orderStatus = Status.FILLED;
 
         Trade memory trade = Trade(orderHash, orderStatus, tradeAmount);
 
         trades[orderHash].push(trade);
+
+        emit OrderUpdate(orderHash, user, orderStatus);
     }
 
 
@@ -326,12 +346,13 @@ contract Exchange is Ownable, Utils, ValidatorV1{
      * @dev write an orderHash in the contract so that such an order cannot be filled (executed)
      */
     function cancelOrder(Order memory order) public nonReentrant{
-        bytes32 orderHash = getTypeValueHash(order);
-
+        require(validateV1(order), "Invalid Signature");
         require(_msgSender() == order.senderAddress, "You are not the owner of this order");
-        require(!cancelledOrders[orderHash], "order is already cancelled");
 
-        cancelledOrders[orderHash] = true;
+        bytes32 orderHash = getTypeValueHash(order);
+        require(orderStatus[orderHash] != Status.CANCELLED, "order is already cancelled");
+
+        orderStatus[orderHash] = Status.CANCELLED;
 
         emit OrderCancelled(orderHash, _msgSender());
     }

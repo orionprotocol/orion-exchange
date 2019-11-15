@@ -248,6 +248,17 @@ contract("Exchange", ([matcher, user1, user2]) => {
       event.filledPrice.should.be.equal(String(FILL_PRICE));
     });
 
+    it("can retrieve trades of a specific order", async () => {
+      let trades = await exchange.getOrderTrades(buyOrder, { from: matcher });
+      trades.length.should.be.equal(1);
+      trades[0].amount.should.be.equal(String(FILL_AMOUNT));
+    });
+
+    it("can retrieve trades of a specific order", async () => {
+      let status = await exchange.getOrderStatus(buyOrder, { from: matcher });
+      status.toNumber().should.be.equal(0); // status 0 = NEW 1 = PARTIALLY_FILLED
+    });
+
     it("trade cannot exceed order amount", async () => {
       // Calling fillOrders with same params, will cause fill amount to exceed sell order amount
       await exchange.fillOrders(
@@ -349,15 +360,13 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("order can't be filled after cancelled", async () => {
-      let response = await exchange.fillOrders(
+      await exchange.fillOrders(
         buyOrder,
         sellOrder,
         2100000, //fill Price 0.021
         50000000, // fill Amount 0.5 WETH
         { from: matcher }
       ).should.be.rejected;
-
-      console.log(response);
     });
 
     it("user can't cancel an already cancelled order", async () => {
