@@ -24,7 +24,6 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     event NewTrade(address indexed buyer, address indexed seller, address baseAsset,
         address quoteAsset, uint filledPrice, uint filledAmount, uint amountQuote);
     event OrderUpdate(bytes32 indexed orderHash, address user, Status orderStatus);
-    event OrderCancelled(bytes32 indexed orderHash, address cancelledBy);
 
 
     // GLOBAL VARIABLES
@@ -32,9 +31,9 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     enum Status {NEW, PARTIALLY_FILLED, FILLED, PARTIALLY_CANCELLED, CANCELLED}
 
     struct Trade{
-        bytes32 orderHash;
-        Status orderStatus;
-        uint amount;
+        uint filledPrice;
+        uint filledAmount;
+        uint timestamp;
     }
 
     // Get trades by orderHash
@@ -197,8 +196,8 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         updateSellerBalance(sellOrder, filledAmount, amountQuote);
 
         // Update trades
-        updateTrade(buyOrderHash, buyer, buyOrder.amount, filledAmount);
-        updateTrade(sellOrderHash, seller, sellOrder.amount, filledAmount);
+        updateTrade(buyOrderHash, buyOrder, filledAmount, filledPrice);
+        updateTrade(sellOrderHash, sellOrder, filledAmount, filledPrice);
 
         emit NewTrade(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledPrice, filledAmount, amountQuote);
 
@@ -317,27 +316,32 @@ contract Exchange is Ownable, Utils, ValidatorV1{
      *  @notice Orders values checks
      *  @dev helper function to validate orders
      */
-    function updateTrade(bytes32 orderHash, address user, uint64 orderAmount, uint tradeAmount) internal {
-        uint totalFilled;
+    function updateTrade(bytes32 orderHash, Order memory order, uint filledAmount, uint filledPrice) internal {
+        uint totalFilled = 0;
+        address user = order.senderAddress;
+        uint64 orderAmount = order.amount;
+
         for(uint i = 0; i < trades[orderHash].length; i++){
-            totalFilled = totalFilled.add(trades[orderHash][i].amount);
+            totalFilled = totalFilled.add(trades[orderHash][i].filledAmount);
         }
 
-        require(totalFilled.add(tradeAmount) <= orderAmount, "trade cannot be processed, exceeds order amount");
+        require(totalFilled.add(filledAmount) <= orderAmount, "trade cannot be processed, exceeds order amount");
 
-        uint newTotalFilled = totalFilled.add(tradeAmount);
+        uint newTotalFilled = totalFilled.add(filledAmount);
         uint amountTrades = trades[orderHash].length;
 
-        Status orderStatus = Status.NEW;
+        Status status = Status.NEW;
 
-        if(newTotalFilled < orderAmount && amountTrades > 1) orderStatus = Status.PARTIALLY_FILLED;
-        if(newTotalFilled == orderAmount) orderStatus = Status.FILLED;
+        if(newTotalFilled < orderAmount && amountTrades > 1) status = Status.PARTIALLY_FILLED;
+        if(newTotalFilled == orderAmount) status = Status.FILLED;
 
-        Trade memory trade = Trade(orderHash, orderStatus, tradeAmount);
+        //Update order status in storage
+        orderStatus[orderHash] = status;
 
-        trades[orderHash].push(trade);
+        // Store Trade
+        trades[orderHash].push(Trade(filledPrice, filledAmount, now));
 
-        emit OrderUpdate(orderHash, user, orderStatus);
+        emit OrderUpdate(orderHash, user, status);
     }
 
 
@@ -354,7 +358,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
 
         orderStatus[orderHash] = Status.CANCELLED;
 
-        emit OrderCancelled(orderHash, _msgSender());
+        emit OrderUpdate(orderHash, _msgSender(), Status.CANCELLED);
     }
 
     /**

@@ -251,12 +251,17 @@ contract("Exchange", ([matcher, user1, user2]) => {
     it("can retrieve trades of a specific order", async () => {
       let trades = await exchange.getOrderTrades(buyOrder, { from: matcher });
       trades.length.should.be.equal(1);
-      trades[0].amount.should.be.equal(String(FILL_AMOUNT));
+      trades[0].filledAmount.should.be.equal(String(FILL_AMOUNT));
     });
 
-    it("can retrieve trades of a specific order", async () => {
+    it("correct buy order status", async () => {
       let status = await exchange.getOrderStatus(buyOrder, { from: matcher });
       status.toNumber().should.be.equal(0); // status 0 = NEW 1 = PARTIALLY_FILLED
+    });
+
+    it("correct sell order status", async () => {
+      let status = await exchange.getOrderStatus(sellOrder, { from: matcher });
+      status.toNumber().should.be.equal(2); // status 0 = NEW 1 = PARTIALLY_FILLED
     });
 
     it("trade cannot exceed order amount", async () => {
@@ -357,6 +362,11 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("user can cancel an order", async () => {
       await exchange.cancelOrder(buyOrder, { from: user1 }).should.be.fulfilled;
+    });
+
+    it("correct order status after cancelled", async () => {
+      let status = await exchange.getOrderStatus(buyOrder, { from: matcher });
+      status.toNumber().should.be.equal(4); // status 0 = NEW 1 = PARTIALLY_FILLED 2 = FILLED, 3 = PARTIALLY_CANCELLED, 4 = CANCELLED
     });
 
     it("order can't be filled after cancelled", async () => {
