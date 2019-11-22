@@ -23,7 +23,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
     event NewTrade(address indexed buyer, address indexed seller, address baseAsset,
         address quoteAsset, uint filledPrice, uint filledAmount, uint amountQuote);
-    event OrderUpdate(bytes32 indexed orderHash, address user, Status orderStatus);
+    event OrderUpdate(bytes32 orderHash, address indexed user, Status orderStatus);
 
 
     // GLOBAL VARIABLES
@@ -192,8 +192,8 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         // --- UPDATES --- //
 
         // Update User's balances
-        updateBuyerBalance(buyOrder, filledAmount, amountQuote);
-        updateSellerBalance(sellOrder, filledAmount, amountQuote);
+        updateOrderBalance(buyOrder, filledAmount, amountQuote, true);
+        updateOrderBalance(sellOrder, filledAmount, amountQuote, false);
 
         // Update trades
         updateTrade(buyOrderHash, buyOrder, filledAmount, filledPrice);
@@ -239,78 +239,35 @@ contract Exchange is Ownable, Utils, ValidatorV1{
      *  @notice Orders values checks
      *  @dev helper function to validate orders
      */
-    function updateBuyerBalance(Order memory buyOrder, uint filledAmount, uint amountQuote) internal{
-        address buyer = buyOrder.senderAddress;
-        uint baseBalance = assetBalances[buyer][buyOrder.baseAsset];
-        uint quoteBalance = assetBalances[buyer][buyOrder.quoteAsset];
-        uint matcherFee = buyOrder.matcherFee.mul(filledAmount).div(buyOrder.amount);
+    function updateOrderBalance(Order memory order, uint filledAmount, uint amountQuote, bool isBuyer) internal{
+        address user = order.senderAddress;
+        uint baseBalance = assetBalances[user][order.baseAsset];
+        uint quoteBalance = assetBalances[user][order.quoteAsset];
+        uint matcherFee = order.matcherFee.mul(filledAmount).div(order.amount);
 
-        //Will be updated in this function depending on the asset
-        uint feeQuote = 0;
-        uint feeBase = 0;
-
-        // If matcher fee is paid in base Asset, check if buyer has balance in that asset
-        if(buyOrder.matcherFeeAsset == buyOrder.baseAsset){
-            require(baseBalance >= uint(buyOrder.matcherFee), "insufficient buyer's base asset balance");
+        if(isBuyer){
             require(quoteBalance >= amountQuote, "insufficient buyer's quote asset balance");
 
-            feeBase = matcherFee;
+            // Update Buyer's Balance (- quoteAsset + baseAsset  )
+            assetBalances[user][order.quoteAsset] = quoteBalance.sub(amountQuote);
+            assetBalances[user][order.baseAsset] = baseBalance.add(filledAmount);
         }
-        // If not, add amount and fee and check balance
         else{
-            require(quoteBalance >= amountQuote.add(uint(buyOrder.matcherFee)), "insufficient buyer's quote asset balance");
-            feeQuote = matcherFee;
-        }
-
-        // Transfer Matcher Fee
-        safeTransfer(buyOrder.matcherAddress, buyOrder.matcherFeeAsset, matcherFee);
-
-        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset )
-        assetBalances[buyer][buyOrder.quoteAsset] = quoteBalance.sub(amountQuote).sub(feeQuote);
-        assetBalances[buyer][buyOrder.baseAsset] = baseBalance.add(filledAmount).sub(feeBase);
-
-        assert(assetBalances[buyer][buyOrder.quoteAsset] < quoteBalance); // buyer's quote asset balance decreased
-        assert(assetBalances[buyer][buyOrder.baseAsset] > baseBalance); // buyer's base asset balance increased
-    }
-
-    /**
-     *  @notice Orders values checks
-     *  @dev helper function to validate orders
-     */
-    function updateSellerBalance(Order memory sellOrder, uint filledAmount, uint amountQuote) internal{
-        address seller = sellOrder.senderAddress;
-        uint baseBalance = assetBalances[sellOrder.senderAddress][sellOrder.baseAsset];
-        uint quoteBalance = assetBalances[sellOrder.senderAddress][sellOrder.quoteAsset];
-        uint matcherFee = sellOrder.matcherFee.mul(filledAmount).div(sellOrder.amount);
-
-         //Will be updated in this function depending on the asset
-        uint feeQuote = 0;
-        uint feeBase = 0;
-
-        // If matcher fee is paid in quote Asset, check if seller has balance in that asset
-        if(sellOrder.matcherFeeAsset == sellOrder.quoteAsset){
-            require(quoteBalance >= uint(sellOrder.matcherFee), "insufficient seller's quote asset balance");
             require(baseBalance >= filledAmount, "insufficient seller's base asset balance");
 
-            feeQuote = matcherFee;
-        }
-        // If not, add amount and fee and check balance
-        else{
-            require(baseBalance >= filledAmount.add(uint(sellOrder.matcherFee)), "insufficient seller's base asset balance");
-            feeBase = matcherFee;
+            // Update Seller's Balance  (+ quoteAsset - baseAsset   )
+            assetBalances[user][order.quoteAsset] = quoteBalance.add(amountQuote);
+            assetBalances[user][order.baseAsset] = baseBalance.sub(filledAmount);
         }
 
-        // Transfer Matcher Fee;
-        safeTransfer(sellOrder.matcherAddress, sellOrder.matcherFeeAsset, matcherFee);
+        // User pay for fees
+        require(assetBalances[user][order.matcherFeeAsset] > matcherFee, "insufficient users's asset balance for fees");
+        assetBalances[user][order.matcherFeeAsset] = assetBalances[user][order.matcherFeeAsset].sub(matcherFee);
 
-
-        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset  )
-        assetBalances[seller][sellOrder.quoteAsset] = quoteBalance.add(amountQuote).sub(feeQuote);
-        assetBalances[seller][sellOrder.baseAsset] = baseBalance.sub(filledAmount).sub(feeBase);
-
-        assert(assetBalances[seller][sellOrder.quoteAsset] > quoteBalance); // seller's quote asset balance increased
-        assert(assetBalances[seller][sellOrder.baseAsset] < baseBalance); // seller's base asset balance decreased
+        // Transfer Matcher Fee
+        safeTransfer(order.matcherAddress, order.matcherFeeAsset, matcherFee);
     }
+
 
     /**
      *  @notice Orders values checks
