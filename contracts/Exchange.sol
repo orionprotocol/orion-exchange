@@ -33,6 +33,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     struct Trade{
         uint filledPrice;
         uint filledAmount;
+        uint feePaid;
         uint timestamp;
     }
 
@@ -143,6 +144,19 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     /**
      * @dev get trades for a specific order
      */
+    function getFilledAmounts(Order memory order) public view returns(uint totalFilled, uint totalFeesPaid){
+        bytes32 orderHash = getTypeValueHash(order);
+        Trade[] memory orderTrades = trades[orderHash];
+
+        for(uint i = 0; i < orderTrades.length; i++){
+            totalFilled = totalFilled.add(trades[orderHash][i].filledAmount);
+            totalFeesPaid = totalFeesPaid.add(trades[orderHash][i].feePaid);
+        }
+    }
+
+    /**
+     * @dev get trades for a specific order
+     */
     function getOrderStatus(Order memory order) public view returns(Status status){
         bytes32 orderHash = getTypeValueHash(order);
         return orderStatus[orderHash];
@@ -183,11 +197,11 @@ contract Exchange is Ownable, Utils, ValidatorV1{
          // --- VALIDATIONS --- //
 
         // Validate Order Content
-        _validateOrdersInfo(buyOrder, sellOrder, filledPrice, filledAmount);
+        validateOrdersInfo(buyOrder, sellOrder, filledPrice, filledAmount);
 
         // Check if orders were not cancelled
-        require(orderStatus[buyOrderHash] != Status.CANCELLED, "buy order was cancelled");
-        require(orderStatus[sellOrderHash] != Status.CANCELLED, "sell order was cancelled");
+        require(!isOrderCancelled(buyOrderHash), "buy order is cancelled");
+        require(!isOrderCancelled(sellOrderHash), "sell order is cancelled");
 
         // --- UPDATES --- //
 
@@ -203,11 +217,22 @@ contract Exchange is Ownable, Utils, ValidatorV1{
 
     }
 
+      /**
+     * @notice check if order was cancelled
+     */
+    function isOrderCancelled(bytes32 orderHash) public view returns(bool){
+        // Check if order was not cancelled
+        if(orderStatus[orderHash] == Status.CANCELLED || orderStatus[orderHash] == Status.PARTIALLY_CANCELLED)
+            return true;
+
+        return false;
+    }
+
     /**
         @notice Orders values checks
         @dev helper function to validate orders
      */
-    function _validateOrdersInfo(
+    function validateOrdersInfo(
         Order memory buyOrder, Order memory sellOrder,
         uint filledPrice, uint filledAmount
     ) internal view{
@@ -236,8 +261,8 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     }
 
     /**
-     *  @notice Orders values checks
-     *  @dev helper function to validate orders
+     *  @notice update user balances and send matcher fee
+     *  @param isBuyer boolean, indicating true if the update is for buyer, false for seller
      */
     function updateOrderBalance(Order memory order, uint filledAmount, uint amountQuote, bool isBuyer) internal{
         address user = order.senderAddress;
@@ -270,19 +295,19 @@ contract Exchange is Ownable, Utils, ValidatorV1{
 
 
     /**
-     *  @notice Orders values checks
-     *  @dev helper function to validate orders
+     *  @notice Store trade and update order
      */
     function updateTrade(bytes32 orderHash, Order memory order, uint filledAmount, uint filledPrice) internal {
-        uint totalFilled = 0;
+
         address user = order.senderAddress;
         uint64 orderAmount = order.amount;
 
-        for(uint i = 0; i < trades[orderHash].length; i++){
-            totalFilled = totalFilled.add(trades[orderHash][i].filledAmount);
-        }
+        uint matcherFee = order.matcherFee.mul(filledAmount).div(order.amount);
 
-        require(totalFilled.add(filledAmount) <= orderAmount, "trade cannot be processed, exceeds order amount");
+        (uint totalFilled, uint totalFeesPaid) = getFilledAmounts(order);
+
+        require(totalFilled.add(filledAmount) <= orderAmount, "trade cannot be processed, exceeds total order amount");
+        require(totalFeesPaid.add(matcherFee) <= order.matcherFee, "trade cannot be processed, exceeds total matcher fee");
 
         uint newTotalFilled = totalFilled.add(filledAmount);
         uint amountTrades = trades[orderHash].length;
@@ -296,7 +321,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         orderStatus[orderHash] = status;
 
         // Store Trade
-        trades[orderHash].push(Trade(filledPrice, filledAmount, now));
+        trades[orderHash].push(Trade(filledPrice, filledAmount, matcherFee, now));
 
         emit OrderUpdate(orderHash, user, status);
     }
@@ -311,11 +336,17 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         require(_msgSender() == order.senderAddress, "You are not the owner of this order");
 
         bytes32 orderHash = getTypeValueHash(order);
-        require(orderStatus[orderHash] != Status.CANCELLED, "order is already cancelled");
 
-        orderStatus[orderHash] = Status.CANCELLED;
+        require(!isOrderCancelled(orderHash), "order is cancelled");
 
-        emit OrderUpdate(orderHash, _msgSender(), Status.CANCELLED);
+        (uint totalFilled, /*uint totalFeesPaid*/) = getFilledAmounts(order);
+
+        if(totalFilled > 0) orderStatus[orderHash] = Status.PARTIALLY_CANCELLED;
+        else orderStatus[orderHash] = Status.CANCELLED;
+
+        emit OrderUpdate(orderHash, _msgSender(), orderStatus[orderHash]);
+
+        assert(orderStatus[orderHash] == Status.PARTIALLY_CANCELLED || orderStatus[orderHash] == Status.CANCELLED);
     }
 
     /**

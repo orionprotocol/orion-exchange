@@ -20,6 +20,7 @@ contract OrionProxy is Ownable{
     struct Trade{
         uint filledPrice;
         uint filledAmount;
+        uint feePaid;
         uint timestamp;
     }
 

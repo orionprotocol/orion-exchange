@@ -264,6 +264,19 @@ contract("Exchange", ([matcher, user1, user2]) => {
       event.filledPrice.should.be.equal(String(FILL_PRICE));
     });
 
+    it("trade cannot exceed order amount", async () => {
+      // Calling fillOrders with same params, will cause fill amount to exceed sell order amount
+      await exchange.fillOrders(
+        buyOrder,
+        sellOrder,
+        FILL_PRICE, //fill Price 0.021
+        FILL_AMOUNT, // fill Amount 1.5 WETH
+        { from: matcher }
+      ).should.be.rejected;
+    });
+  });
+
+  describe("Exchange::order info", () => {
     it("can retrieve trades of a specific order", async () => {
       let trades = await exchange.getOrderTrades(buyOrder, { from: matcher });
       trades.length.should.be.equal(1);
@@ -280,17 +293,18 @@ contract("Exchange", ([matcher, user1, user2]) => {
       status.toNumber().should.be.equal(2); // status 0 = NEW 1 = PARTIALLY_FILLED
     });
 
-    it("trade cannot exceed order amount", async () => {
-      // Calling fillOrders with same params, will cause fill amount to exceed sell order amount
-      await exchange.fillOrders(
-        buyOrder,
-        sellOrder,
-        FILL_PRICE, //fill Price 0.021
-        FILL_AMOUNT, // fill Amount 1.5 WETH
-        { from: matcher }
-      ).should.be.rejected;
+    it("correct buy order filled amounts", async () => {
+      let amounts = await exchange.getFilledAmounts(sellOrder, {
+        from: matcher
+      });
+      String(amounts.totalFilled).should.be.equal(String(FILL_AMOUNT));
+      String(amounts.totalFeesPaid).should.be.equal(
+        String((buyOrder.matcherFee * FILL_AMOUNT) / buyOrder.amount)
+      );
     });
+  });
 
+  describe("Exchange::balance check", () => {
     it("correct buyer WETH balance after trade", async () => {
       // WETH received = fill amount (150000000)
       let balance = await exchange.getBalance(weth.address, user1);
@@ -380,6 +394,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
       );
     });
 
+    // Difficult to check exact WAN/ETH balance, as it also contains transactions fees paid
     it.skip("correct matcher fee in WAN", async () => {
       let WANBalance = await web3.eth.getBalance(matcher);
       WANBalance.toString().should.be.equal(
@@ -399,7 +414,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("correct order status after cancelled", async () => {
       let status = await exchange.getOrderStatus(buyOrder, { from: matcher });
-      status.toNumber().should.be.equal(4); // status 0 = NEW 1 = PARTIALLY_FILLED 2 = FILLED, 3 = PARTIALLY_CANCELLED, 4 = CANCELLED
+      status.toNumber().should.be.equal(3); // status 0 = NEW 1 = PARTIALLY_FILLED 2 = FILLED, 3 = PARTIALLY_CANCELLED, 4 = CANCELLED
     });
 
     it("order can't be filled after cancelled", async () => {
