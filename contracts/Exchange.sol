@@ -23,8 +23,7 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
     event NewTrade(address indexed buyer, address indexed seller, address baseAsset,
         address quoteAsset, uint filledPrice, uint filledAmount, uint amountQuote);
-    event OrderUpdate(bytes32 indexed orderHash, address user, Status orderStatus);
-    event OrderCancelled(bytes32 indexed orderHash, address cancelledBy);
+    event OrderUpdate(bytes32 orderHash, address indexed user, Status orderStatus);
 
 
     // GLOBAL VARIABLES
@@ -32,9 +31,10 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     enum Status {NEW, PARTIALLY_FILLED, FILLED, PARTIALLY_CANCELLED, CANCELLED}
 
     struct Trade{
-        bytes32 orderHash;
-        Status orderStatus;
-        uint amount;
+        uint filledPrice;
+        uint filledAmount;
+        uint feePaid;
+        uint timestamp;
     }
 
     // Get trades by orderHash
@@ -144,6 +144,19 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     /**
      * @dev get trades for a specific order
      */
+    function getFilledAmounts(Order memory order) public view returns(uint totalFilled, uint totalFeesPaid){
+        bytes32 orderHash = getTypeValueHash(order);
+        Trade[] memory orderTrades = trades[orderHash];
+
+        for(uint i = 0; i < orderTrades.length; i++){
+            totalFilled = totalFilled.add(trades[orderHash][i].filledAmount);
+            totalFeesPaid = totalFeesPaid.add(trades[orderHash][i].feePaid);
+        }
+    }
+
+    /**
+     * @dev get trades for a specific order
+     */
     function getOrderStatus(Order memory order) public view returns(Status status){
         bytes32 orderHash = getTypeValueHash(order);
         return orderStatus[orderHash];
@@ -184,31 +197,42 @@ contract Exchange is Ownable, Utils, ValidatorV1{
          // --- VALIDATIONS --- //
 
         // Validate Order Content
-        _validateOrdersInfo(buyOrder, sellOrder, filledPrice, filledAmount);
+        validateOrdersInfo(buyOrder, sellOrder, filledPrice, filledAmount);
 
         // Check if orders were not cancelled
-        require(orderStatus[buyOrderHash] != Status.CANCELLED, "buy order was cancelled");
-        require(orderStatus[sellOrderHash] != Status.CANCELLED, "sell order was cancelled");
+        require(!isOrderCancelled(buyOrderHash), "buy order is cancelled");
+        require(!isOrderCancelled(sellOrderHash), "sell order is cancelled");
 
         // --- UPDATES --- //
 
         // Update User's balances
-        updateBuyerBalance(buyOrder, filledAmount, amountQuote);
-        updateSellerBalance(sellOrder, filledAmount, amountQuote);
+        updateOrderBalance(buyOrder, filledAmount, amountQuote, true);
+        updateOrderBalance(sellOrder, filledAmount, amountQuote, false);
 
         // Update trades
-        updateTrade(buyOrderHash, buyer, buyOrder.amount, filledAmount);
-        updateTrade(sellOrderHash, seller, sellOrder.amount, filledAmount);
+        updateTrade(buyOrderHash, buyOrder, filledAmount, filledPrice);
+        updateTrade(sellOrderHash, sellOrder, filledAmount, filledPrice);
 
         emit NewTrade(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledPrice, filledAmount, amountQuote);
 
+    }
+
+      /**
+     * @notice check if order was cancelled
+     */
+    function isOrderCancelled(bytes32 orderHash) public view returns(bool){
+        // Check if order was not cancelled
+        if(orderStatus[orderHash] == Status.CANCELLED || orderStatus[orderHash] == Status.PARTIALLY_CANCELLED)
+            return true;
+
+        return false;
     }
 
     /**
         @notice Orders values checks
         @dev helper function to validate orders
      */
-    function _validateOrdersInfo(
+    function validateOrdersInfo(
         Order memory buyOrder, Order memory sellOrder,
         uint filledPrice, uint filledAmount
     ) internal view{
@@ -237,107 +261,69 @@ contract Exchange is Ownable, Utils, ValidatorV1{
     }
 
     /**
-     *  @notice Orders values checks
-     *  @dev helper function to validate orders
+     *  @notice update user balances and send matcher fee
+     *  @param isBuyer boolean, indicating true if the update is for buyer, false for seller
      */
-    function updateBuyerBalance(Order memory buyOrder, uint filledAmount, uint amountQuote) internal{
-        address buyer = buyOrder.senderAddress;
-        uint baseBalance = assetBalances[buyer][buyOrder.baseAsset];
-        uint quoteBalance = assetBalances[buyer][buyOrder.quoteAsset];
-        uint matcherFee = buyOrder.matcherFee.mul(filledAmount).div(buyOrder.amount);
+    function updateOrderBalance(Order memory order, uint filledAmount, uint amountQuote, bool isBuyer) internal{
+        address user = order.senderAddress;
+        uint baseBalance = assetBalances[user][order.baseAsset];
+        uint quoteBalance = assetBalances[user][order.quoteAsset];
+        uint matcherFee = order.matcherFee.mul(filledAmount).div(order.amount);
 
-        //Will be updated in this function depending on the asset
-        uint feeQuote = 0;
-        uint feeBase = 0;
-
-        // If matcher fee is paid in base Asset, check if buyer has balance in that asset
-        if(buyOrder.matcherFeeAsset == buyOrder.baseAsset){
-            require(baseBalance >= uint(buyOrder.matcherFee), "insufficient buyer's base asset balance");
+        if(isBuyer){
             require(quoteBalance >= amountQuote, "insufficient buyer's quote asset balance");
 
-            feeBase = matcherFee;
+            // Update Buyer's Balance (- quoteAsset + baseAsset  )
+            assetBalances[user][order.quoteAsset] = quoteBalance.sub(amountQuote);
+            assetBalances[user][order.baseAsset] = baseBalance.add(filledAmount);
         }
-        // If not, add amount and fee and check balance
         else{
-            require(quoteBalance >= amountQuote.add(uint(buyOrder.matcherFee)), "insufficient buyer's quote asset balance");
-            feeQuote = matcherFee;
-        }
-
-        // Transfer Matcher Fee
-        safeTransfer(buyOrder.matcherAddress, buyOrder.matcherFeeAsset, matcherFee);
-
-        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset )
-        assetBalances[buyer][buyOrder.quoteAsset] = quoteBalance.sub(amountQuote).sub(feeQuote);
-        assetBalances[buyer][buyOrder.baseAsset] = baseBalance.add(filledAmount).sub(feeBase);
-
-        assert(assetBalances[buyer][buyOrder.quoteAsset] < quoteBalance); // buyer's quote asset balance decreased
-        assert(assetBalances[buyer][buyOrder.baseAsset] > baseBalance); // buyer's base asset balance increased
-    }
-
-    /**
-     *  @notice Orders values checks
-     *  @dev helper function to validate orders
-     */
-    function updateSellerBalance(Order memory sellOrder, uint filledAmount, uint amountQuote) internal{
-        address seller = sellOrder.senderAddress;
-        uint baseBalance = assetBalances[sellOrder.senderAddress][sellOrder.baseAsset];
-        uint quoteBalance = assetBalances[sellOrder.senderAddress][sellOrder.quoteAsset];
-        uint matcherFee = sellOrder.matcherFee.mul(filledAmount).div(sellOrder.amount);
-
-         //Will be updated in this function depending on the asset
-        uint feeQuote = 0;
-        uint feeBase = 0;
-
-        // If matcher fee is paid in quote Asset, check if seller has balance in that asset
-        if(sellOrder.matcherFeeAsset == sellOrder.quoteAsset){
-            require(quoteBalance >= uint(sellOrder.matcherFee), "insufficient seller's quote asset balance");
             require(baseBalance >= filledAmount, "insufficient seller's base asset balance");
 
-            feeQuote = matcherFee;
-        }
-        // If not, add amount and fee and check balance
-        else{
-            require(baseBalance >= filledAmount.add(uint(sellOrder.matcherFee)), "insufficient seller's base asset balance");
-            feeBase = matcherFee;
+            // Update Seller's Balance  (+ quoteAsset - baseAsset   )
+            assetBalances[user][order.quoteAsset] = quoteBalance.add(amountQuote);
+            assetBalances[user][order.baseAsset] = baseBalance.sub(filledAmount);
         }
 
-        // Transfer Matcher Fee;
-        safeTransfer(sellOrder.matcherAddress, sellOrder.matcherFeeAsset, matcherFee);
+        // User pay for fees
+        require(assetBalances[user][order.matcherFeeAsset] > matcherFee, "insufficient users's asset balance for fees");
+        assetBalances[user][order.matcherFeeAsset] = assetBalances[user][order.matcherFeeAsset].sub(matcherFee);
 
-
-        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset  )
-        assetBalances[seller][sellOrder.quoteAsset] = quoteBalance.add(amountQuote).sub(feeQuote);
-        assetBalances[seller][sellOrder.baseAsset] = baseBalance.sub(filledAmount).sub(feeBase);
-
-        assert(assetBalances[seller][sellOrder.quoteAsset] > quoteBalance); // seller's quote asset balance increased
-        assert(assetBalances[seller][sellOrder.baseAsset] < baseBalance); // seller's base asset balance decreased
+        // Transfer Matcher Fee
+        safeTransfer(order.matcherAddress, order.matcherFeeAsset, matcherFee);
     }
 
+
     /**
-     *  @notice Orders values checks
-     *  @dev helper function to validate orders
+     *  @notice Store trade and update order
      */
-    function updateTrade(bytes32 orderHash, address user, uint64 orderAmount, uint tradeAmount) internal {
-        uint totalFilled;
-        for(uint i = 0; i < trades[orderHash].length; i++){
-            totalFilled = totalFilled.add(trades[orderHash][i].amount);
-        }
+    function updateTrade(bytes32 orderHash, Order memory order, uint filledAmount, uint filledPrice) internal {
 
-        require(totalFilled.add(tradeAmount) <= orderAmount, "trade cannot be processed, exceeds order amount");
+        address user = order.senderAddress;
+        uint64 orderAmount = order.amount;
 
-        uint newTotalFilled = totalFilled.add(tradeAmount);
+        uint matcherFee = order.matcherFee.mul(filledAmount).div(order.amount);
+
+        (uint totalFilled, uint totalFeesPaid) = getFilledAmounts(order);
+
+        require(totalFilled.add(filledAmount) <= orderAmount, "trade cannot be processed, exceeds total order amount");
+        require(totalFeesPaid.add(matcherFee) <= order.matcherFee, "trade cannot be processed, exceeds total matcher fee");
+
+        uint newTotalFilled = totalFilled.add(filledAmount);
         uint amountTrades = trades[orderHash].length;
 
-        Status orderStatus = Status.NEW;
+        Status status = Status.NEW;
 
-        if(newTotalFilled < orderAmount && amountTrades > 1) orderStatus = Status.PARTIALLY_FILLED;
-        if(newTotalFilled == orderAmount) orderStatus = Status.FILLED;
+        if(newTotalFilled < orderAmount && amountTrades > 1) status = Status.PARTIALLY_FILLED;
+        if(newTotalFilled == orderAmount) status = Status.FILLED;
 
-        Trade memory trade = Trade(orderHash, orderStatus, tradeAmount);
+        //Update order status in storage
+        orderStatus[orderHash] = status;
 
-        trades[orderHash].push(trade);
+        // Store Trade
+        trades[orderHash].push(Trade(filledPrice, filledAmount, matcherFee, now));
 
-        emit OrderUpdate(orderHash, user, orderStatus);
+        emit OrderUpdate(orderHash, user, status);
     }
 
 
@@ -350,11 +336,17 @@ contract Exchange is Ownable, Utils, ValidatorV1{
         require(_msgSender() == order.senderAddress, "You are not the owner of this order");
 
         bytes32 orderHash = getTypeValueHash(order);
-        require(orderStatus[orderHash] != Status.CANCELLED, "order is already cancelled");
 
-        orderStatus[orderHash] = Status.CANCELLED;
+        require(!isOrderCancelled(orderHash), "order is cancelled");
 
-        emit OrderCancelled(orderHash, _msgSender());
+        (uint totalFilled, /*uint totalFeesPaid*/) = getFilledAmounts(order);
+
+        if(totalFilled > 0) orderStatus[orderHash] = Status.PARTIALLY_CANCELLED;
+        else orderStatus[orderHash] = Status.CANCELLED;
+
+        emit OrderUpdate(orderHash, _msgSender(), orderStatus[orderHash]);
+
+        assert(orderStatus[orderHash] == Status.PARTIALLY_CANCELLED || orderStatus[orderHash] == Status.CANCELLED);
     }
 
     /**

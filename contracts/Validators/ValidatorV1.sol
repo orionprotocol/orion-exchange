@@ -7,7 +7,6 @@ import '@openzeppelin/contracts/cryptography/ECDSA.sol';
 contract ValidatorV1 {
     using ECDSA for bytes32;
 
-
     /*
         keccak256(abi.encodePacked(
             'uint8 version',

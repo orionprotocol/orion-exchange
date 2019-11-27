@@ -9,6 +9,8 @@ const Exchange = artifacts.require("Exchange");
 const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
 
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
+
 let exchange, weth, wbtc, msgParams1, msgParams2, buyOrder, sellOrder;
 
 async function getLastTradeEvent(buyer, seller) {
@@ -23,6 +25,8 @@ async function getLastTradeEvent(buyer, seller) {
 // Used for fillOrders function
 const FILL_AMOUNT = 150000000; // WETH
 const FILL_PRICE = 2100000; // 0.021 WBTC/WETH
+
+const NOW = Date.now();
 
 contract("Exchange", ([matcher, user1, user2]) => {
   describe("Exchange::instance", async () => {
@@ -46,6 +50,13 @@ contract("Exchange", ([matcher, user1, user2]) => {
       balanceAsset.toString().should.be.equal(String(10e8));
     });
 
+    it("user1 deposits 1 WAN to exchange", async () => {
+      exchange.depositWan({ from: user1, value: String(1e18) });
+
+      let balanceAsset = await exchange.getBalance(ZERO_ADDRESS, user1);
+      balanceAsset.toString().should.be.equal(String(1e8));
+    });
+
     it("user2 deposits 10 WETH to exchange", async () => {
       await weth.mint(user2, web3.utils.toWei("10"), { from: matcher }).should
         .be.fulfilled;
@@ -62,13 +73,18 @@ contract("Exchange", ([matcher, user1, user2]) => {
       balanceAsset.toString().should.be.equal(String(10e8));
     });
 
+    it("user2 deposits 1 WAN to exchange", async () => {
+      exchange.depositWan({ from: user2, value: String(1e18) });
+
+      let balanceAsset = await exchange.getBalance(ZERO_ADDRESS, user2);
+      balanceAsset.toString().should.be.equal(String(1e8));
+    });
+
     it("buy order creation and sign", async () => {
       // Ganache user 1 pirvate key using fake mnemonics
       const privKey1 =
         "c09ae3abc13c501fb9ff1c3c8ad3256678416f73a41433411f1714ae7b547fe3";
       const privKey = Buffer.from(privKey1, "hex");
-
-      const nowTimestamp = 1571843003887; //Date.now();
 
       //Client1 Order
       buyOrder = {
@@ -80,8 +96,8 @@ contract("Exchange", ([matcher, user1, user2]) => {
         amount: 350000000, //3.5 ETH * 10^8
         price: 2100000, //0.021 WBTC/WETH * 10^8
         matcherFee: 350000,
-        nonce: nowTimestamp,
-        expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
+        nonce: NOW,
+        expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
         side: "buy"
       };
 
@@ -135,20 +151,20 @@ contract("Exchange", ([matcher, user1, user2]) => {
         "ecbcd49667c96bcf8b30ccb35234a0b217ea039a8e097d3a70de9d28624ba520";
       const privKey = Buffer.from(privKey2, "hex");
 
-      const nowTimestamp = 1571843003887; //Date.now();
-
       //Client2 Order
       sellOrder = {
         senderAddress: user2,
         matcherAddress: matcher,
         baseAsset: weth.address,
         quoteAsset: wbtc.address, // WBTC
-        matcherFeeAsset: weth.address, // WETH
+        // matcherFeeAsset: weth.address, // WETH
+        matcherFeeAsset: "0x0000000000000000000000000000000000000000", // WETH
+
         amount: 150000000,
         price: 2000000,
         matcherFee: 150000,
-        nonce: nowTimestamp,
-        expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
+        nonce: NOW,
+        expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
         side: "buy"
       };
 
@@ -248,17 +264,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
       event.filledPrice.should.be.equal(String(FILL_PRICE));
     });
 
-    it("can retrieve trades of a specific order", async () => {
-      let trades = await exchange.getOrderTrades(buyOrder, { from: matcher });
-      trades.length.should.be.equal(1);
-      trades[0].amount.should.be.equal(String(FILL_AMOUNT));
-    });
-
-    it("can retrieve trades of a specific order", async () => {
-      let status = await exchange.getOrderStatus(buyOrder, { from: matcher });
-      status.toNumber().should.be.equal(0); // status 0 = NEW 1 = PARTIALLY_FILLED
-    });
-
     it("trade cannot exceed order amount", async () => {
       // Calling fillOrders with same params, will cause fill amount to exceed sell order amount
       await exchange.fillOrders(
@@ -269,7 +274,37 @@ contract("Exchange", ([matcher, user1, user2]) => {
         { from: matcher }
       ).should.be.rejected;
     });
+  });
 
+  describe("Exchange::order info", () => {
+    it("can retrieve trades of a specific order", async () => {
+      let trades = await exchange.getOrderTrades(buyOrder, { from: matcher });
+      trades.length.should.be.equal(1);
+      trades[0].filledAmount.should.be.equal(String(FILL_AMOUNT));
+    });
+
+    it("correct buy order status", async () => {
+      let status = await exchange.getOrderStatus(buyOrder, { from: matcher });
+      status.toNumber().should.be.equal(0); // status 0 = NEW 1 = PARTIALLY_FILLED
+    });
+
+    it("correct sell order status", async () => {
+      let status = await exchange.getOrderStatus(sellOrder, { from: matcher });
+      status.toNumber().should.be.equal(2); // status 0 = NEW 1 = PARTIALLY_FILLED
+    });
+
+    it("correct buy order filled amounts", async () => {
+      let amounts = await exchange.getFilledAmounts(sellOrder, {
+        from: matcher
+      });
+      String(amounts.totalFilled).should.be.equal(String(FILL_AMOUNT));
+      String(amounts.totalFeesPaid).should.be.equal(
+        String((buyOrder.matcherFee * FILL_AMOUNT) / buyOrder.amount)
+      );
+    });
+  });
+
+  describe("Exchange::balance check", () => {
     it("correct buyer WETH balance after trade", async () => {
       // WETH received = fill amount (150000000)
       let balance = await exchange.getBalance(weth.address, user1);
@@ -292,17 +327,20 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("correct seller WETH balance after trade", async () => {
-      // WETH deducted = initialBalance- fill amount - matcherFee *  ( fillAmount/sellOrder amount)
-      // WETH deducted = 10 WETH - 1.5 WETH - 0.0015 WETH * (1.5/1.5) = 8.4985 WETH
+      // WETH deducted = initialBalance- fill amount
+      // WETH deducted = 10 WETH - 1.5 WETH = 8.5 WETH
       let balance = await exchange.getBalance(weth.address, user2);
+      balance.toString().should.be.equal(String(10e8 - FILL_AMOUNT));
+    });
+
+    it("correct seller WAN balance after trade", async () => {
+      // WAN deducted = matcherFee *  ( fillAmount/sellOrder amount)
+      // WAN deducted = 1 WAN 0.0015 - WAN * (1.5/1.5) = 8.4985 WETH
+      let balance = await exchange.getBalance(ZERO_ADDRESS, user2);
       balance
         .toString()
         .should.be.equal(
-          String(
-            10e8 -
-              FILL_AMOUNT -
-              sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount)
-          )
+          String(1e8 - sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount))
         );
     });
 
@@ -325,27 +363,42 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("correct total exchange balance in WETH after trade", async () => {
-      // WETH = depositUser2 - feeMatcher (sellOrder ) *  ( fillAmount/sellOrderAmount)
-      // WETH = 10WETH - 0.0015 WETH
+      // WETH = depositUser2
+      // WETH = 10WETH
       let WETHbalance = await weth.balanceOf(exchange.address);
+      WETHbalance.toString().should.be.equal(String(10e18));
+    });
+
+    it("correct total exchange balance in WAN after trade", async () => {
+      // WAN = depositUser1 + depositUser2 - feeMatcher (sellOrder ) *  ( fillAmount/sellOrderAmount)
+      // WAN = 1 WAN + 1 WAN - 0.0015 WAN
+      let WETHbalance = await web3.eth.getBalance(exchange.address);
       WETHbalance.toString().should.be.equal(
         String(
-          10e18 - sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount) * 1e10
+          1e18 +
+            1e18 -
+            sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount) * 1e10
         )
       );
     });
 
     it("correct matcher fee in WETH", async () => {
       let WETHbalance = await weth.balanceOf(matcher);
-      WETHbalance.toString().should.be.equal(
-        String(sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount) * 1e10)
-      ); // 0.0015 WETH
+      WETHbalance.toString().should.be.equal(String(0));
     });
 
     it("correct matcher fee in WBTC", async () => {
       let WBTCbalance = await wbtc.balanceOf(matcher);
       WBTCbalance.toString().should.be.equal(
         String(buyOrder.matcherFee * (FILL_AMOUNT / buyOrder.amount))
+      );
+    });
+
+    // Difficult to check exact WAN/ETH balance, as it also contains transactions fees paid
+    it.skip("correct matcher fee in WAN", async () => {
+      let WANBalance = await web3.eth.getBalance(matcher);
+      WANBalance.toString().should.be.equal(
+        String(sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount) * 1e10)
       );
     });
   });
@@ -357,6 +410,11 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("user can cancel an order", async () => {
       await exchange.cancelOrder(buyOrder, { from: user1 }).should.be.fulfilled;
+    });
+
+    it("correct order status after cancelled", async () => {
+      let status = await exchange.getOrderStatus(buyOrder, { from: matcher });
+      status.toNumber().should.be.equal(3); // status 0 = NEW 1 = PARTIALLY_FILLED 2 = FILLED, 3 = PARTIALLY_CANCELLED, 4 = CANCELLED
     });
 
     it("order can't be filled after cancelled", async () => {
