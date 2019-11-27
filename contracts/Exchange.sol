@@ -1,10 +1,11 @@
-pragma solidity ^0.5.10;
+pragma solidity 0.5.10;
 pragma experimental ABIEncoderV2;
 
 import '@openzeppelin/contracts/math/SafeMath.sol';
 import '@openzeppelin/contracts/ownership/Ownable.sol';
 import '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 import './Utils.sol';
+import './Validators/ValidatorV1.sol';
 
 
 /**
@@ -12,63 +13,41 @@ import './Utils.sol';
  * @dev Exchange contract for the Orion Protocol
  * @author @wafflemakr
  */
-contract Exchange is Ownable, Utils{
+contract Exchange is Ownable, Utils, ValidatorV1{
 
-    using SafeMath for uint;
+    // using SafeMath for uint;
     using SafeMath for uint64;
 
     // EVENTS
     event NewAssetDeposit(address indexed user, address indexed assetAddress, uint amount);
     event NewAssetWithdrawl(address indexed user, address indexed assetAddress, uint amount);
-    event NewTrade(bytes32 buyOrderHash, bytes32 sellOrderHash, uint filledPrice, uint filledAmount, uint amountToTake);
-    event OrderCancelled(bytes32 indexed orderHash);
+    event NewTrade(address indexed buyer, address indexed seller, address baseAsset,
+        address quoteAsset, uint filledPrice, uint filledAmount, uint amountQuote);
+    event OrderUpdate(bytes32 orderHash, address indexed user, Status orderStatus);
 
 
     // GLOBAL VARIABLES
 
-    IERC20 public orion;
-
     enum Status {NEW, PARTIALLY_FILLED, FILLED, PARTIALLY_CANCELLED, CANCELLED}
 
-    struct Order{
-        address senderAddress;
-        address matcherAddress;
-        address baseAsset;
-        address quoteAsset;
-        address matcherFeeAsset;
-        uint64 amount;
-        uint64 price;
-        uint64 matcherFee;
-        uint64 nonce;
-        uint64 expiration;
-        string side; // true = buy false = sell
-    }
-
     struct Trade{
-        bytes32 orderHash;
-        Status orderStatus;
+        uint filledPrice;
         uint filledAmount;
-    }
-
-    struct Signature{
-        bytes32 r;
-        bytes32 s;
-        uint8 v ;
+        uint feePaid;
+        uint timestamp;
     }
 
     // Get trades by orderHash
     mapping(bytes32 => Trade[]) public trades;
 
+    // Get trades by orderHash
+    mapping(bytes32 => Status) public orderStatus;
+
     // Get user balance by address and asset address
-    mapping(address => mapping(address => uint)) public assetBalances;
+    mapping(address => mapping(address => uint)) private assetBalances;
 
-    // Check if an order was cancelled
-    mapping(bytes32 => bool) public cancelledOrders;
-
-    uint public totalOrders;
-    uint public totalTrades;
     // Pause or unpause exchangebuyOrderHash
-    bool isActive = true;
+    bool public isActive = true;
 
 
     // MODIFIERS
@@ -83,66 +62,68 @@ contract Exchange is Ownable, Utils{
 
 
     // MAIN FUNCTIONS
+
     /**
-     * @dev Deposit WAN or ERC20 tokens to the exchange contract
+     * @dev Deposit ERC20 tokens to the exchange contract
      * @dev User needs to approve token contract first
      * @param amount asset amount to deposit in its base unit
      */
-    function depositAsset(address assetAddress, uint amount) public payable onlyActive{
+    function depositAsset(address assetAddress, uint amount) public onlyActive{
         IERC20 asset = IERC20(assetAddress);
-        require(asset.transferFrom(msg.sender, address(this), amount), "error transfering asset to exchange");
+        require(asset.transferFrom(_msgSender(), address(this), amount), "error transfering asset to exchange");
 
         uint amountDecimal = baseUnitToDecimal(assetAddress, amount);
 
-        assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].add(amountDecimal);
+        assetBalances[_msgSender()][assetAddress] = assetBalances[_msgSender()][assetAddress].add(amountDecimal);
 
-        emit NewAssetDeposit(msg.sender, assetAddress, amountDecimal);
+        emit NewAssetDeposit(_msgSender(), assetAddress, amountDecimal);
     }
 
     /**
-     * @dev Deposit WAN to the exchange contract
+     * @notice Deposit WAN to the exchange contract
+     * @dev deposit event will be emitted with the amount in decimal format (10^8)
+     * @dev balance will be stored in decimal format too
      */
     function depositWan() public payable onlyActive{
         require(msg.value > 0, "invalid amount sent");
 
         uint amountDecimal = baseUnitToDecimal(address(0), msg.value);
 
-        assetBalances[msg.sender][address(0)] = assetBalances[msg.sender][address(0)].add(amountDecimal);
+        assetBalances[_msgSender()][address(0)] = assetBalances[_msgSender()][address(0)].add(amountDecimal);
 
-        emit NewAssetDeposit(msg.sender, address(0), amountDecimal);
+        emit NewAssetDeposit(_msgSender(), address(0), amountDecimal);
     }
 
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
+     * @param assetAddress address of the asset to withdraw
      * @param amount asset amount to withdraw in its base unit
      */
-    function withdraw(address assetAddress, uint amount) public{
+    function withdraw(address assetAddress, uint amount) external nonReentrant {
         uint amountDecimal = baseUnitToDecimal(assetAddress, amount);
+        require(assetBalances[_msgSender()][assetAddress] >= amountDecimal, "not enough funds to withdraw");
 
-        require(assetBalances[msg.sender][assetAddress] >= amountDecimal, "not enough funds to withdraw");
+        assetBalances[_msgSender()][assetAddress] = assetBalances[_msgSender()][assetAddress].sub(amountDecimal);
 
-        assetBalances[msg.sender][assetAddress] = assetBalances[msg.sender][assetAddress].sub(amountDecimal);
+        safeTransfer(_msgSender(), assetAddress, amountDecimal);
 
-        if(assetAddress == address(0))
-            msg.sender.transfer(amount);
-        else{
-            IERC20 asset = IERC20(assetAddress);
-            require(asset.transfer(msg.sender, amount), "error transfering funds to user");
-        }
-
-        emit NewAssetWithdrawl(msg.sender, assetAddress, amountDecimal);
+        emit NewAssetWithdrawl(_msgSender(), assetAddress, amountDecimal);
     }
 
 
     /**
-     * @dev Asset balance for a specific address
+     * @dev Get asset balance for a specific address
+     * @param assetAddress address of the asset to query
+     * @param user user address to query
      */
     function getBalance(address assetAddress, address user) public view returns(uint assetBalance){
         return assetBalances[user][assetAddress];
     }
 
     /**
-     * @dev Batch request of asset balances
+     * @dev Batch query of asset balances for a user
+     * @param assetsAddresses array of addresses of teh assets to query
+     * @param user user address to query
      */
     function getBalances(address[] memory assetsAddresses, address user) public view returns(uint[] memory){
         uint[] memory balances = new uint[](assetsAddresses.length);
@@ -150,6 +131,35 @@ contract Exchange is Ownable, Utils{
             balances[i] = assetBalances[user][assetsAddresses[i]];
         }
         return balances;
+    }
+
+    /**
+     * @dev get trades for a specific order
+     */
+    function getOrderTrades(Order memory order) public view returns(Trade[] memory){
+        bytes32 orderHash = getTypeValueHash(order);
+        return trades[orderHash];
+    }
+
+    /**
+     * @dev get trades for a specific order
+     */
+    function getFilledAmounts(Order memory order) public view returns(uint totalFilled, uint totalFeesPaid){
+        bytes32 orderHash = getTypeValueHash(order);
+        Trade[] memory orderTrades = trades[orderHash];
+
+        for(uint i = 0; i < orderTrades.length; i++){
+            totalFilled = totalFilled.add(trades[orderHash][i].filledAmount);
+            totalFeesPaid = totalFeesPaid.add(trades[orderHash][i].feePaid);
+        }
+    }
+
+    /**
+     * @dev get trades for a specific order
+     */
+    function getOrderStatus(Order memory order) public view returns(Status status){
+        bytes32 orderHash = getTypeValueHash(order);
+        return orderStatus[orderHash];
     }
 
     /**
@@ -164,135 +174,186 @@ contract Exchange is Ownable, Utils{
      */
     function fillOrders(
         Order memory buyOrder, Order memory sellOrder,
-        Signature memory buySig, Signature memory sellSig,
         uint filledPrice, uint filledAmount
     )
-        public onlyActive
+        public
+        onlyActive
+        nonReentrant
     {
 
-        // VALIDATE SIGNATURES
-        require(isValidSignature(buyOrder, buySig), "Invalid signature for Buy order");
-        require(isValidSignature(sellOrder, sellSig), "Invalid signature for Sell order");
-
-        // VERIFICATIONS
-
-        // Check matching assets
-        require(buyOrder.matcherAddress == msg.sender && sellOrder.matcherAddress == msg.sender, "incorrect matcher address");
-        require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quoteAsset == sellOrder.quoteAsset, "assets do not match");
-
-        // Check Price
-        require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
-        require(filledPrice >= sellOrder.price, "incorrect filled price for sell order");
-
-        // Check Expiration Time
-        require(buyOrder.expiration.div(1000) >= now, "buy order expired");
-        require(sellOrder.expiration.div(1000) >= now, "sell order expired");
+        // --- VARIABLES --- //
 
         // Amount of quote asset
-        uint amountToTake = filledAmount.mul(filledPrice).div(10**8);
+        uint amountQuote = filledAmount.mul(filledPrice).div(10**8);
+
+        // Parties
         address buyer = buyOrder.senderAddress;
         address seller = sellOrder.senderAddress;
 
-        // BUY SIDE CHECK
+        // Order Hashes
+        bytes32 buyOrderHash = getTypeValueHash(buyOrder);
+        bytes32 sellOrderHash = getTypeValueHash(sellOrder);
 
-        require(assetBalances[buyer][buyOrder.quoteAsset] >= amountToTake, "insufficient buyer's balance");
-        bytes32 buyOrderHash = _getOrderhash(buyOrder);
-        require(!cancelledOrders[buyOrderHash], "buy order was cancelled");
-        // require(_checkAmount(buyOrderHash, buyOrder.amount, filledAmount), "incorrect filled amount");
+         // --- VALIDATIONS --- //
 
-        // SELL SIDE CHECK
-        require(assetBalances[seller][sellOrder.baseAsset] >= filledAmount, "insufficient seller's balance");
-        bytes32 sellOrderHash = _getOrderhash(sellOrder);
-        require(!cancelledOrders[sellOrderHash], "buy order was cancelled");
-        // require(_checkAmount(sellOrderHash, sellOrder.amount, filledAmount), "incorrect filled amount");
+        // Validate Order Content
+        validateOrdersInfo(buyOrder, sellOrder, filledPrice, filledAmount);
 
-        // === VERIFICATIONS DONE ===
+        // Check if orders were not cancelled
+        require(!isOrderCancelled(buyOrderHash), "buy order is cancelled");
+        require(!isOrderCancelled(sellOrderHash), "sell order is cancelled");
 
-        _updateBalances(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledAmount, amountToTake);
+        // --- UPDATES --- //
 
-        totalTrades = totalTrades.add(1);
+        // Update User's balances
+        updateOrderBalance(buyOrder, filledAmount, amountQuote, true);
+        updateOrderBalance(sellOrder, filledAmount, amountQuote, false);
 
-        // Store trades
-        Trade memory buyTrade = Trade(buyOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
-        trades[buyOrderHash].push(buyTrade);
-        Trade memory sellTrade = Trade(sellOrderHash, Status.NEW, filledAmount); //temporary set 0 for orderStatus until logic implemented
-        trades[sellOrderHash].push(sellTrade);
+        // Update trades
+        updateTrade(buyOrderHash, buyOrder, filledAmount, filledPrice);
+        updateTrade(sellOrderHash, sellOrder, filledAmount, filledPrice);
 
-        emit NewTrade(buyOrderHash, sellOrderHash, filledPrice, filledAmount, amountToTake);
+        emit NewTrade(buyer, seller, buyOrder.baseAsset, buyOrder.quoteAsset, filledPrice, filledAmount, amountQuote);
 
     }
 
-    function _updateBalances(
-        address buyer, address seller, address baseAsset,
-        address quoteAsset, uint filledAmount, uint amountToTake
-    ) internal{
-        // Update Buyer's Balance (- quoteAsset + baseAsset - matcherFeeAsset)
-        assetBalances[buyer][quoteAsset] = assetBalances[buyer][quoteAsset].sub(amountToTake);
-        assetBalances[buyer][baseAsset] = assetBalances[buyer][baseAsset].add(filledAmount);
-
-        // Update Seller's Balance  (+ quoteAsset - baseAsset - matcherFeeAsset)
-        assetBalances[seller][quoteAsset] = assetBalances[seller][quoteAsset].add(amountToTake);
-        assetBalances[seller][baseAsset] = assetBalances[seller][baseAsset].sub(filledAmount);
-
-    }
-
-    function _checkAmount(bytes32 orderHash, uint orderAmount, uint newTradeAmount) internal view returns(bool){
-        uint totalTradeAmount;
-        for(uint i = 0; i < trades[orderHash].length; i++){
-            totalTradeAmount = totalTradeAmount.add(trades[orderHash][i].filledAmount);
-        }
-        return (totalTradeAmount.add(newTradeAmount) <= orderAmount);
-    }
-
-    function _getOrderhash(Order memory _order) internal pure returns(bytes32){
-        bytes32 buySide = keccak256(abi.encodePacked("buy"));
-
-        return keccak256(abi.encodePacked(
-            bytes1(0x03),
-            _order.senderAddress,
-            _order.matcherAddress,
-            _order.baseAsset,
-            _order.quoteAsset,
-            _order.matcherFeeAsset,
-            bytes8(_order.amount),
-            bytes8(_order.price),
-            bytes8(_order.matcherFee),
-            bytes8(_order.nonce),
-            bytes8(_order.expiration),
-            keccak256(abi.encodePacked(_order.side)) == buySide ? bytes1(0x00):bytes1(0x01)
-        ));
-    }
-
-    /**
-     *  @dev Performs an `ecrecover` operation for signed message hashes
+      /**
+     * @notice check if order was cancelled
      */
-    function _recoverAddress(bytes32 _hash, uint8 _v, bytes32 _r, bytes32 _s)
-        internal
-        pure
-        returns (address)
-    {
-        bytes memory prefix = "\x19Ethereum Signed Message:\n32";
-        bytes32 prefixedHash = keccak256(abi.encodePacked(prefix, _hash));
-        return ecrecover(prefixedHash, _v, _r, _s);
+    function isOrderCancelled(bytes32 orderHash) public view returns(bool){
+        // Check if order was not cancelled
+        if(orderStatus[orderHash] == Status.CANCELLED || orderStatus[orderHash] == Status.PARTIALLY_CANCELLED)
+            return true;
+
+        return false;
     }
 
-    function isValidSignature(Order memory order, Signature memory sig) public returns(bool) {
-        bytes32 orderHash = _getOrderhash(order);
-        address recovered = _recoverAddress(orderHash, sig.v, sig.r, sig.s);
-        return recovered == order.senderAddress;
+    /**
+        @notice Orders values checks
+        @dev helper function to validate orders
+     */
+    function validateOrdersInfo(
+        Order memory buyOrder, Order memory sellOrder,
+        uint filledPrice, uint filledAmount
+    ) internal view{
+
+        // Validate signatures using eth typed sign V1
+        require(validateV1(buyOrder), "Invalid signature for Buy order");
+        require(validateV1(sellOrder), "Invalid signature for Sell order");
+
+        // Same matcher address
+        require(buyOrder.matcherAddress == _msgSender() && sellOrder.matcherAddress == _msgSender(), "incorrect matcher address");
+
+        // Check matching assets
+        require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quoteAsset == sellOrder.quoteAsset, "assets do not match");
+
+        // Check order amounts
+        require(filledAmount <= buyOrder.amount, "incorrect amount for buy order");
+        require(filledAmount <= sellOrder.amount, "incorrect amount for sell order");
+
+        // Check Price values
+        require(filledPrice <= buyOrder.price, "incorrect filled price for buy order");
+        require(filledPrice >= sellOrder.price, "incorrect filled price for sell order");
+
+        // Check Expiration Time. Convert to seconds first
+        require(buyOrder.expiration.div(1000) >= now, "buy order expired");
+        require(sellOrder.expiration.div(1000) >= now, "sell order expired");
+    }
+
+    /**
+     *  @notice update user balances and send matcher fee
+     *  @param isBuyer boolean, indicating true if the update is for buyer, false for seller
+     */
+    function updateOrderBalance(Order memory order, uint filledAmount, uint amountQuote, bool isBuyer) internal{
+        address user = order.senderAddress;
+        uint baseBalance = assetBalances[user][order.baseAsset];
+        uint quoteBalance = assetBalances[user][order.quoteAsset];
+        uint matcherFee = order.matcherFee.mul(filledAmount).div(order.amount);
+
+        if(isBuyer){
+            require(quoteBalance >= amountQuote, "insufficient buyer's quote asset balance");
+
+            // Update Buyer's Balance (- quoteAsset + baseAsset  )
+            assetBalances[user][order.quoteAsset] = quoteBalance.sub(amountQuote);
+            assetBalances[user][order.baseAsset] = baseBalance.add(filledAmount);
+        }
+        else{
+            require(baseBalance >= filledAmount, "insufficient seller's base asset balance");
+
+            // Update Seller's Balance  (+ quoteAsset - baseAsset   )
+            assetBalances[user][order.quoteAsset] = quoteBalance.add(amountQuote);
+            assetBalances[user][order.baseAsset] = baseBalance.sub(filledAmount);
+        }
+
+        // User pay for fees
+        require(assetBalances[user][order.matcherFeeAsset] > matcherFee, "insufficient users's asset balance for fees");
+        assetBalances[user][order.matcherFeeAsset] = assetBalances[user][order.matcherFeeAsset].sub(matcherFee);
+
+        // Transfer Matcher Fee
+        safeTransfer(order.matcherAddress, order.matcherFeeAsset, matcherFee);
     }
 
 
     /**
+     *  @notice Store trade and update order
+     */
+    function updateTrade(bytes32 orderHash, Order memory order, uint filledAmount, uint filledPrice) internal {
+
+        address user = order.senderAddress;
+        uint64 orderAmount = order.amount;
+
+        uint matcherFee = order.matcherFee.mul(filledAmount).div(order.amount);
+
+        (uint totalFilled, uint totalFeesPaid) = getFilledAmounts(order);
+
+        require(totalFilled.add(filledAmount) <= orderAmount, "trade cannot be processed, exceeds total order amount");
+        require(totalFeesPaid.add(matcherFee) <= order.matcherFee, "trade cannot be processed, exceeds total matcher fee");
+
+        uint newTotalFilled = totalFilled.add(filledAmount);
+        uint amountTrades = trades[orderHash].length;
+
+        Status status = Status.NEW;
+
+        if(newTotalFilled < orderAmount && amountTrades > 1) status = Status.PARTIALLY_FILLED;
+        if(newTotalFilled == orderAmount) status = Status.FILLED;
+
+        //Update order status in storage
+        orderStatus[orderHash] = status;
+
+        // Store Trade
+        trades[orderHash].push(Trade(filledPrice, filledAmount, matcherFee, now));
+
+        emit OrderUpdate(orderHash, user, status);
+    }
+
+
+    /**
+     * @notice users can cancel an order
      * @dev write an orderHash in the contract so that such an order cannot be filled (executed)
      */
-    function cancelOrder(Order memory order) public{
-        //TODO: check if order can be cancelled
+    function cancelOrder(Order memory order) public nonReentrant{
+        require(validateV1(order), "Invalid Signature");
+        require(_msgSender() == order.senderAddress, "You are not the owner of this order");
 
-        bytes32 orderHash = _getOrderhash(order);
+        bytes32 orderHash = getTypeValueHash(order);
 
-        cancelledOrders[orderHash] = true;
-        emit OrderCancelled(orderHash);
+        require(!isOrderCancelled(orderHash), "order is cancelled");
+
+        (uint totalFilled, /*uint totalFeesPaid*/) = getFilledAmounts(order);
+
+        if(totalFilled > 0) orderStatus[orderHash] = Status.PARTIALLY_CANCELLED;
+        else orderStatus[orderHash] = Status.CANCELLED;
+
+        emit OrderUpdate(orderHash, _msgSender(), orderStatus[orderHash]);
+
+        assert(orderStatus[orderHash] == Status.PARTIALLY_CANCELLED || orderStatus[orderHash] == Status.CANCELLED);
+    }
+
+    /**
+     *  @dev  revert on fallback function
+     */
+    function () external{
+        revert("Please use depositWan function");
     }
 
     // OWNER FUNCTIONS

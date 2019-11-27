@@ -1,7 +1,7 @@
 module.exports = {
   compilers: {
     solc: {
-      version: "^0.5.10",
+      version: "0.5.10",
       // evmVersion: "byzantium",
       optimizer: {
         enabled: true,
