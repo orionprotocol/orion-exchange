@@ -3,9 +3,13 @@ pragma experimental ABIEncoderV2;
 
 
 import '@openzeppelin/contracts/cryptography/ECDSA.sol';
+import '@openzeppelin/contracts/math/SafeMath.sol';
 
-library ValidatorV1 {
+
+library LibValidator {
     using ECDSA for bytes32;
+    using SafeMath for uint256;
+    using SafeMath for uint64;
 
     /*
         keccak256(abi.encodePacked(
@@ -48,7 +52,6 @@ library ValidatorV1 {
         address recovered = orderHash.recover(order.signature);
         return recovered == order.senderAddress;
     }
-    
 
     function getTypeValueHash(Order memory _order) public pure returns (bytes32) {
         return keccak256(abi.encodePacked(
@@ -65,5 +68,36 @@ library ValidatorV1 {
             _order.expiration,
             _order.side
         ));
+    }
+
+    function checkOrdersInfo(
+        Order memory buyOrder, Order memory sellOrder, address sender,
+        uint filledAmount, uint filledPrice, uint currentTime
+    )
+        public pure
+        returns (bool success)
+    {
+        require(validateV1(buyOrder), "E2");
+        require(validateV1(sellOrder), "E2");
+
+        // Same matcher address
+        require(buyOrder.matcherAddress == sender && sellOrder.matcherAddress == sender, "E3");
+
+        // Check matching assets
+        require(buyOrder.baseAsset == sellOrder.baseAsset && buyOrder.quoteAsset == sellOrder.quoteAsset, "E3");
+
+        // Check order amounts
+        require(filledAmount <= buyOrder.amount, "E3");
+        require(filledAmount <= sellOrder.amount, "E3");
+
+        // Check Price values
+        require(filledPrice <= buyOrder.price, "E3");
+        require(filledPrice >= sellOrder.price, "E3");
+
+        // Check Expiration Time. Convert to seconds first
+        require(buyOrder.expiration.div(1000) >= currentTime, "E4");
+        require(sellOrder.expiration.div(1000) >= currentTime, "E4");
+
+        success = true;
     }
 }

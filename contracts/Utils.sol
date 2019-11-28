@@ -2,6 +2,7 @@ pragma solidity 0.5.10;
 
 import '@openzeppelin/contracts/token/ERC20/ERC20Detailed.sol';
 import '@openzeppelin/contracts/math/SafeMath.sol';
+import './Lib/LibUnitConverter.sol';
 
 contract Utils {
 
@@ -27,38 +28,7 @@ contract Utils {
         _guardCounter += 1;
         uint256 localCounter = _guardCounter;
         _;
-        require(localCounter == _guardCounter, "ReentrancyGuard: reentrant call");
-    }
-
-    /**
-        @notice convert asset amount from8 decimals (10^8) to its base unit
-     */
-    function decimalToBaseUnit(address assetAddress, uint amount) public view returns(uint){
-        // uint amount = uint(_amount); // conver to uint256
-
-        if(assetAddress == address(0)){
-            return amount.mul(1 ether).div(10**8); // 18 decimals
-        }
-
-        ERC20Detailed asset = ERC20Detailed(assetAddress);
-        uint decimals = asset.decimals();
-
-        return amount.mul(10**decimals).div(10**8);
-    }
-
-    /**
-        @notice convert asset amount from its base unit to 8 decimals (10^8)
-     */
-    function baseUnitToDecimal(address assetAddress, uint amount) public view returns(uint64){
-
-        if(assetAddress == address(0)){
-            return uint64(amount.mul(10**8).div(1 ether));
-        }
-
-        ERC20Detailed asset = ERC20Detailed(assetAddress);
-        uint decimals = asset.decimals();
-
-        return uint64(amount.mul(10**8).div(10**decimals));
+        require(localCounter == _guardCounter, "reentrant call");
     }
 
     /**
@@ -70,25 +40,25 @@ contract Utils {
         paying for execution may not be the actual sender (as far as an application
         is concerned).
      */
-    function _msgSender() internal view returns (address payable) {
+     function _msgSender() internal view returns (address payable) {
         return msg.sender;
     }
 
     function safeTransfer(address to, address assetAddress, uint _amount) internal {
 
-        uint amount = decimalToBaseUnit(assetAddress, _amount);
+        uint amount = LibUnitConverter.decimalToBaseUnit(assetAddress, _amount);
 
         if(assetAddress == address(0)){
             uint balanceBeforeTransfer = address(this).balance;
             // solhint-disable-next-line
             (bool success, ) = to.call.value(amount)("");
-            require(success, "transfer was not successful");
+            require(success, "E6");
             assert(address(this).balance == balanceBeforeTransfer.sub(amount));
         }
         else{
             ERC20Detailed asset = ERC20Detailed(assetAddress);
             uint balanceBeforeTransfer = asset.balanceOf(address(this));
-            require(asset.transfer(_msgSender(), amount), "error transfering funds to user");
+            require(asset.transfer(_msgSender(), amount), "E6");
             assert(asset.balanceOf(address(this)) == balanceBeforeTransfer.sub(amount));
         }
     }

@@ -8,10 +8,11 @@ const sigUtil = require("eth-sig-util");
 const Exchange = artifacts.require("Exchange");
 const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
+const LibValidator = artifacts.require("LibValidator");
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
 
-let exchange, weth, wbtc, msgParams1, msgParams2, buyOrder, sellOrder;
+let exchange, weth, wbtc, lib, msgParams1, msgParams2, buyOrder, sellOrder;
 
 async function getLastTradeEvent(buyer, seller) {
   let events = await exchange.getPastEvents("NewTrade", {
@@ -33,6 +34,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
     exchange = await Exchange.deployed();
     weth = await WETH.deployed();
     wbtc = await WBTC.deployed();
+    lib = await LibValidator.deployed();
   });
 
   describe("Exchange::orders creation", () => {
@@ -215,12 +217,12 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
   describe("Exchange::fill orders", () => {
     it("validate buy order in exchange contract", async () => {
-      let isValid = await exchange.validateV1(buyOrder, { from: matcher });
+      let isValid = await exchange.validateOrder(buyOrder, { from: matcher });
       isValid.should.be.true;
     });
 
     it("validate sell order in exchange contract", async () => {
-      let isValid = await exchange.validateV1(sellOrder, { from: matcher });
+      let isValid = await exchange.validateOrder(sellOrder, { from: matcher });
       isValid.should.be.true;
     });
 
@@ -391,14 +393,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
       let WBTCbalance = await wbtc.balanceOf(matcher);
       WBTCbalance.toString().should.be.equal(
         String(buyOrder.matcherFee * (FILL_AMOUNT / buyOrder.amount))
-      );
-    });
-
-    // Difficult to check exact WAN/ETH balance, as it also contains transactions fees paid
-    it.skip("correct matcher fee in WAN", async () => {
-      let WANBalance = await web3.eth.getBalance(matcher);
-      WANBalance.toString().should.be.equal(
-        String(sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount) * 1e10)
       );
     });
   });
