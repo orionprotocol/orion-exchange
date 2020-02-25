@@ -1,3 +1,6 @@
+require('dotenv').config();
+const HDWalletProvider = require('truffle-hdwallet-provider');
+
 module.exports = {
   compilers: {
     solc: {
@@ -13,16 +16,27 @@ module.exports = {
     gwan: {
       host: "localhost",
       port: 8545,
-      network_id: "*",
+      network_id: "3",
       gas: 4700000,
       gasPrice: 180e9,
-      from: "0xb35d39bb41c69e4377a16c08eda54999175c1cdd" // change this to the unlocked account in your gwan node
+      from: "0xae549def8e6637e0e61973b8fefb46428890f13f" // change this to the unlocked account in your gwan node
     },
     development: {
       host: "127.0.0.1",
-      port: 8544,
-      network_id: "999",
-      gas: 6000000
+      port: 7545,
+      network_id: "5777",
+      gas: 6721975
+    },
+    testnet: {
+      provider: () => {
+        return new HDWalletProvider(
+            process.env.MNEMOMIC,
+            `https://ropsten.infura.io/v3/${process.env.INFURA_API_KEY}`
+        );
+      },
+      network_id: "3",
+      gasPrice: 25e9,
+      gas: 6721975
     }
   },
   mocha: {

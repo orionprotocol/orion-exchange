@@ -12,40 +12,42 @@ let accounts, netId, exchange;
 //Input same timestamp as the one created order in client
 nowTimestamp = 1571843003887;
 
-const buyOrder = {
-  "senderAddress": "0xb7744e270d1d64a85e8db9cf62e130ed389af2b6",
-  "matcherAddress": "0x861a7e6904e0ac2717a4e3b7a9f815279fce3a21",
-  "baseAsset": "0xb4a3f5b8d096aa03808853db807f1233a2515df2",
-  "quoteAsset": "0xe5af2cd77ba717055df4a59921c809ab2cd891c3",
-  "matcherFeeAsset": "0xe5af2cd77ba717055df4a59921c809ab2cd891c3",
-  "amount": 91000000,
-  "price": 2017979,
-  "matcherFee": 300000,
-  "nonce": 1572449890043,
-  "expiration": 1574955490043,
-  "side": "buy"
-};
+const buyOrder =
+{
+  "senderAddress": "0x01b13ee728ea9cf4a3f1fc2a62bae08c9c9c63a9",
+    "matcherAddress": "0xae549def8e6637e0e61973b8fefb46428890f13f",
+    "baseAsset": "0xb4a3f5b8d096aa03808853db807f1233a2515df2",
+    "quoteAsset": "0xe5af2cd77ba717055df4a59921c809ab2cd891c3",
+    "matcherFeeAsset": "0xe5af2cd77ba717055df4a59921c809ab2cd891c3",
+    "amount": 86000000,
+    "price": 2013637,
+    "matcherFee": 300000,
+    "nonce": 1572462958378,
+    "expiration": 1574968558378,
+    "side": "buy"
+}
 //Result from client script
 const signature1 =
-    "0xb7ef1c81ae3978824e97802f39eb6219c26ca97f35568c8f5a0c3c162bd7a03802ec006c3dd0621756751d692ca735c223cae69cafcaad366a11b6112a83545b1c";
+    "0x67d274923e4c71d349847ef2ef60c3f42b89c79eb6c370acc8fe22f2d6df697f28e84107b5493384017e8f19dae1b21c42bc0a8d6d3e4992b1be87a9aecbd5c41b";
 
-const sellOrder =  {
+const sellOrder =
+{
   "senderAddress": "0x01b13ee728ea9cf4a3f1fc2a62bae08c9c9c63a9",
-  "matcherAddress": "0x861a7e6904e0ac2717a4e3b7a9f815279fce3a21",
-  "baseAsset": "0xb4a3f5b8d096aa03808853db807f1233a2515df2",
-  "quoteAsset": "0xe5af2cd77ba717055df4a59921c809ab2cd891c3",
-  "matcherFeeAsset": "0xe5af2cd77ba717055df4a59921c809ab2cd891c3",
-  "amount": 91000000,
-  "price": 1998000,
-  "matcherFee": 300000,
-  "nonce": 1572449894349,
-  "expiration": 1574955494349,
-  "side": "sell"
+    "matcherAddress": "0xae549def8e6637e0e61973b8fefb46428890f13f",
+    "baseAsset": "0xb4a3f5b8d096aa03808853db807f1233a2515df2",
+    "quoteAsset": "0xe5af2cd77ba717055df4a59921c809ab2cd891c3",
+    "matcherFeeAsset": "0xe5af2cd77ba717055df4a59921c809ab2cd891c3",
+    "amount": 86000000,
+    "price": 1993500,
+    "matcherFee": 300000,
+    "nonce": 1572462965839,
+    "expiration": 1574968565839,
+    "side": "sell"
 };
 
 //Result from client script
 signature2 =
-    "0x0be7d49a79e4a893c53da2d3d76852074312b166ff4743b50d2b859a04e85203557d51634a0fe73e008011904a805ba29671dfe6bf80044e1714ecccd8dce9c31b";
+    "0x38aa86acbda6d37f0ea3c4e3d8c1a1be6af053d68fe4e812b33b226becc22be64c4400d1923838fc5a61f56acf84a196481eeda8e545d58237bc8a8beac7d2b11c";
 
 
 // === CONTRACT INSTANCE === //
@@ -138,7 +140,7 @@ async function fillOrdersByMatcher(
     .send({ from: accounts[0], gas: 1e6 }); //matcher address is accounts 0
 
   console.log("\nTransaction successful? ", response.status);
-  console.log("New Trade Event:\n", response.events.NewTrade.returnValues);
+  //console.log("New Trade Event:\n", response.events.NewTrade.returnValues);
 }
 
 // // === MAIN FLOW === //
@@ -192,14 +194,14 @@ async function fillOrdersByMatcher(
   );
 
   // *** ==== FILL ORDER ==== *** //
-  await fillOrdersByMatcher(
+  /*await fillOrdersByMatcher(
     buyOrder,
     sellOrder,
     signature1,
     signature2,
-    sellOrder.price,
-    Math.min(buyOrder.amount, sellOrder.amount)
-  );
+      2013637,
+      85999960
+  );*/
   // ============================= //
 
   //Final Balances

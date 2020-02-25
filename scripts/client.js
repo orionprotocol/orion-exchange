@@ -1,6 +1,5 @@
 const Web3 = require("web3");
-const web3 = new Web3("http://localhost:8544"); // ganache
-// const web3 = new Web3("http://localhost:8545"); // gwan
+const web3 = new Web3("http://localhost:7545"); // ganache
 const Long = require("long");
 
 const WETHArtifact = require("../build/contracts/WETH.json");
@@ -67,6 +66,7 @@ async function signOrder(orderInfo) {
   //   );
 
   //Web3 v1
+  //0xC19D917a88e07e5040cD2443FB3a026838C3b852
   let signedMessage = await web3.eth.sign(message, orderInfo.senderAddress);
 
   //Web3 v0.2

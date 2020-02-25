@@ -1,6 +1,5 @@
 const Web3 = require("web3");
-const web3 = new Web3("http://localhost:8544"); // ganache
-// const web3 = new Web3("http://localhost:8545"); // gwan
+const web3 = new Web3("http://localhost:7545"); // ganache
 const Long = require("long");
 
 const exchangeArtifact = require("../build/contracts/Exchange.json");
@@ -102,6 +101,12 @@ async function fillOrdersByMatcher(
   console.log("New Trade Event:\n", response.events.NewTrade.returnValues);
 }
 
+// === SIGN ORDER === //
+async function signOrder(orderInfo) {
+  let message = hashOrder(orderInfo);
+  return await web3.eth.sign(message, orderInfo.senderAddress);
+}
+
 // // === MAIN FLOW === //
 
 (async function main() {
@@ -111,7 +116,7 @@ async function fillOrdersByMatcher(
   let wethAddress = WETHArtifact.networks[netId].address;
 
   //Input same timestamp as the one created order in client
-  nowTimestamp = 1571843003887;
+  nowTimestamp = Date.now();
 
   const buyOrder = {
     senderAddress: accounts[1],
@@ -128,8 +133,7 @@ async function fillOrdersByMatcher(
   };
 
   //Result from client script
-  signature1 =
-    "0x30dab39a24e354e458d39c27d6a6c9f20e25216a3234ee04033a9aef173b7df2363efa8d4c03a767323a6beff718c04b6b91288693e6047581ba6d0a75d1f7c301";
+  signature1 = await signOrder(buyOrder);
 
   const sellOrder = {
     senderAddress: accounts[2],
@@ -146,8 +150,7 @@ async function fillOrdersByMatcher(
   };
 
   //Result from client script
-  signature2 =
-    "0x5bd6cfcbb1042ff9800bf2891128394e70c4d1f2a510ee8f9f1a5629bba2b434218fc63da88ec2377fb7b3029c29955757f1b3ad73c38ed4c8cd3de88fc4c51100";
+  signature2 = await signOrder(sellOrder);
 
   //Matcher validates orders
   let sender1 = await validateSignature(signature1, buyOrder);
