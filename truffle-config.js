@@ -4,7 +4,7 @@ const HDWalletProvider = require('truffle-hdwallet-provider');
 module.exports = {
   compilers: {
     solc: {
-      version: "^0.5.10",
+      version: "0.5.10",
       // evmVersion: "byzantium",
       optimizer: {
         enabled: true,
@@ -17,9 +17,15 @@ module.exports = {
       host: "localhost",
       port: 8545,
       network_id: "3",
-      gas: 4700000,
+      gas: 4712388,
       gasPrice: 180e9,
       from: "0xae549def8e6637e0e61973b8fefb46428890f13f" // change this to the unlocked account in your gwan node
+    },
+    wanache: {
+      host: "127.0.0.1",
+      port: 7545,
+      network_id: "5777",
+      gas: 6721975
     },
     development: {
       host: "127.0.0.1",
