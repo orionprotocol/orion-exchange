@@ -1,35 +1,32 @@
-window.onload = function(e) {
-  const myWeb3 = window.Web3;
-
-  const mywan3 = new myWeb3(window.wan3.currentProvider); // wanmask
-  // const mywan3 = new myWeb3(window.web3.currentProvider); // metamask
-  // console.log(mywan3);
-
-  // const wan3 = window.web3;
-  // const wan3 = new Web3(window.web3.currentProvider); // metamask
+window.onload = function (e) {
+  const Web3 = window.Web3;
+  const web3 = new Web3(window.ethereum);
+  window.web3 = web3;
 
   const signBtn = document.getElementById("signBtn");
   const signBtn2 = document.getElementById("signBtn2");
   const signBtn3 = document.getElementById("signBtn3");
 
   var res = document.getElementById("response");
-  res.style.display = "none";
+  var res2 = document.getElementById("response2");
+  var res3 = document.getElementById("response3");
+  // res.style.display = "none";
+
+  let from;
+
+  (async function connect() {
+    await ethereum.enable();
+    const accounts = await web3.eth.getAccounts();
+    from = accounts[0];
+    console.log(from);
+  })();
 
   // Personal Sign
   signBtn.onclick = async () => {
-    // const accounts = await wan3.eth.getAccounts();
-
-    const accounts = wan3.eth.accounts;
-
-    if (accounts[0] == null) {
-      alert("Connect to web3 Wallet");
-      return;
-    }
-
     // === Hash Order=== //
 
     function hashOrder(orderInfo) {
-      let message = mywan3.utils.soliditySha3(
+      let message = web3.utils.soliditySha3(
         "0x03",
         orderInfo.senderAddress,
         orderInfo.matcherAddress,
@@ -50,7 +47,7 @@ window.onload = function(e) {
     nowTimestamp = 1571843003887; //Date.now();
 
     const orderInfo = {
-      senderAddress: accounts[0],
+      senderAddress: from,
       matcherAddress: "0xFF800d38664b546E9a0b7a72af802137629d4f11",
       baseAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
       quoteAsset: "0x8f07FA50C14ed117771e6959f2265881bB919e00", // WBTC
@@ -60,36 +57,26 @@ window.onload = function(e) {
       matcherFee: 350000,
       nonce: nowTimestamp,
       expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
-      side: "buy"
+      side: "buy",
     };
 
     let message = hashOrder(orderInfo);
 
-    console.log("Message signed: ", message);
+    console.log("Message to sign: ", message);
 
-    wan3.eth.sign(orderInfo.senderAddress, message, (e, r) => {
+    web3.eth.personal.sign(message, orderInfo.senderAddress, (e, r) => {
       console.log(r);
-      res.style.display = "block";
-      res.value = "\nPersonal Signature: " + r;
+      res.value = "Personal Signature:\n" + r;
     });
   };
 
   // eth_signTypedData
   signBtn2.onclick = async () => {
-    // const accounts = await wan3.eth.getAccounts();
-    // const accounts = wan3.eth.accounts;
-
-    const accounts = await mywan3.eth.getAccounts();
-
-    if (accounts[0] == null) {
-      alert("Connect to web3 Wallet");
-      return;
-    }
     nowTimestamp = 1571843003887; //Date.now();
 
     const message = {
       version: 3,
-      senderAddress: accounts[0],
+      senderAddress: from,
       matcherAddress: "0xB35d39BB41C69E4377A16C08EDA54999175c1cdD",
       baseAsset: "0x16D0770f8Dd8B3F3Ce75f39ce6A7626EDf7c2af4", // WETH
       quoteAsset: "0x092Ca292Ba7b104c551c89013F10e366203a4E5e", // WBTC
@@ -99,10 +86,10 @@ window.onload = function(e) {
       matcherFee: 350000,
       nonce: nowTimestamp,
       expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
-      side: "buy"
+      side: "buy",
     };
 
-    console.log([
+    console.log("Message to sign: ", [
       message.senderAddress,
       message.matcherAddress,
       message.baseAsset,
@@ -113,7 +100,7 @@ window.onload = function(e) {
       message.matcherFee,
       message.nonce,
       message.expiration,
-      message.side
+      message.side,
     ]);
 
     const msgParams = [
@@ -122,68 +109,53 @@ window.onload = function(e) {
       {
         type: "address",
         name: "matcherAddress",
-        value: message.matcherAddress
+        value: message.matcherAddress,
       },
       { type: "address", name: "baseAsset", value: message.baseAsset },
       { type: "address", name: "quoteAsset", value: message.quoteAsset },
       {
         type: "address",
         name: "matcherFeeAsset",
-        value: message.matcherFeeAsset
+        value: message.matcherFeeAsset,
       },
       { type: "uint64", name: "amount", value: message.amount },
       { type: "uint64", name: "price", value: message.price },
       { type: "uint64", name: "matcherFee", value: message.matcherFee },
       { type: "uint64", name: "nonce", value: message.nonce },
       { type: "uint64", name: "expiration", value: message.expiration },
-      { type: "string", name: "side", value: message.side }
+      { type: "string", name: "side", value: message.side },
     ];
-
-    // const from = wan3.utils.toChecksumAddress(wan3.eth.accounts[0]); v 1.0
-    // const from = wan3.toChecksumAddress(wan3.eth.accounts[0]); // v 0.2
-    const from = wan3.toChecksumAddress(accounts[0]); // v 0.2
 
     const params = [msgParams, from];
     const method = "eth_signTypedData";
 
-    // window.web3.currentProvider.sendAsync(
-    wan3.currentProvider.sendAsync(
+    web3.currentProvider.sendAsync(
       {
         method,
         params,
-        from
+        from,
       },
-      function(err, result) {
+      function (err, result) {
         if (err) return console.dir(err);
         if (result.error) {
           alert(result.error.message);
         }
         let sign = result.result;
-        response = "\nEthSignTyped:" + JSON.stringify(sign);
+        response = "EthSignTyped:\n" + sign;
         console.log(response);
-
-        res.style.display = "block";
-        res.value = response;
+        res2.value = response;
       }
     );
   };
 
   // eth_signTypedData_v3
   signBtn3.onclick = async () => {
-    const accounts = wan3.eth.accounts;
-    // const accounts = await wan3.eth.getAccounts();
-
-    if (accounts[0] == null) {
-      alert("Connect to web3 Wallet");
-      return;
-    }
-
     const domain = [
       { name: "name", type: "string" },
       { name: "version", type: "string" },
       { name: "chainId", type: "uint256" },
       { name: "verifyingContract", type: "address" },
-      { name: "salt", type: "bytes32" }
+      { name: "salt", type: "bytes32" },
     ];
     const order = [
       { name: "senderAddress", type: "address" },
@@ -196,22 +168,25 @@ window.onload = function(e) {
       { name: "matcherFee", type: "uint64" },
       { name: "nonce", type: "uint64" },
       { name: "expiration", type: "uint64" },
-      { name: "version", type: "string" }
+      { name: "version", type: "string" },
     ];
+
+    console.log(Number(web3.givenProvider.networkVersion));
 
     // Get domain data from contract called
     const domainData = {
       name: "Orion Exchange",
       version: "1",
-      chainId: Number(wan3.version.network),
+      chainId: Number(web3.givenProvider.networkVersion),
       verifyingContract: "0xb4a3f5b8d096aa03808853db807f1233a2515df2", // Update to exchange Contract
-      salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557"
+      salt:
+        "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
     };
 
     nowTimestamp = 1571843003887; //Date.now();
 
     const message = {
-      senderAddress: accounts[0],
+      senderAddress: from,
       matcherAddress: "0xFF800d38664b546E9a0b7a72af802137629d4f11",
       baseAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
       quoteAsset: "0x8f07FA50C14ed117771e6959f2265881bB919e00", // WBTC
@@ -221,29 +196,29 @@ window.onload = function(e) {
       matcherFee: 350000,
       nonce: nowTimestamp,
       expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
-      side: "buy"
+      side: "buy",
     };
 
     const data = JSON.stringify({
       types: {
         EIP712Domain: domain,
-        Order: order
+        Order: order,
       },
       domain: domainData,
       primaryType: "Order",
-      message: message
+      message: message,
     });
 
-    const signer = wan3.toChecksumAddress(wan3.eth.accounts[0]);
+    const signer = web3.utils.toChecksumAddress(from);
 
-    wan3.currentProvider.sendAsync(
+    web3.currentProvider.sendAsync(
       // wan3.currentProvider.send(
       {
         method: "eth_signTypedData_v3",
         params: [signer, data],
-        from: signer
+        from: signer,
       },
-      function(err, result) {
+      function (err, result) {
         if (err || result.error) {
           return console.error(result);
         }
@@ -251,9 +226,8 @@ window.onload = function(e) {
         const r = "0x" + signature.substring(0, 64);
         const s = "0x" + signature.substring(64, 128);
         const v = parseInt(signature.substring(128, 130), 16);
-        res.style.display = "block";
         console.log(`Signature: \nr:${r}\ns:${s}\nv:${v}`);
-        res.value = `\neth_signTypedData_v3: \n0x${signature}`;
+        res3.value = `EthSignTypedV3: \n0x${signature}`;
       }
     );
   };
