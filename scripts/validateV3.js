@@ -1,17 +1,48 @@
+require("dotenv").config();
+
 const Web3 = require("web3");
-const web3 = new Web3(
-  `https://rinkeby.infura.io/v3/${process.env.INFURA_API_KEY}`
-);
+// const web3 = new Web3(`https://rinkeby.infura.io/v3/${process.env.INFURA_KEY}`);
+const web3 = new Web3(`http://localhost:8545`);
 
 const sigUtil = require("eth-sig-util");
 
-require("dotenv").config();
+const abi = require("./validateAbi");
+const validateAddress = "0x7a361D11309CaC6B804F83e9b45bAeC9b34F6275";
 
 function compare(address1, address2) {
   return (
     web3.utils.toChecksumAddress(address1) ===
     web3.utils.toChecksumAddress(address2)
   );
+}
+
+function getSignatureObj(signature) {
+  signature = signature.substr(2); //remove 0x
+  const r = "0x" + signature.slice(0, 64);
+  const s = "0x" + signature.slice(64, 128);
+  let v = web3.utils.hexToNumber("0x" + signature.slice(128, 130));
+  // v += 4 * 2;
+  console.log(v, r, s);
+  return { v, r, s };
+}
+
+async function validateSigSolidity(orderInfo, signature) {
+  const contract = new web3.eth.Contract(abi, validateAddress);
+
+  // getSignatureObj(signature);
+
+  // const domain = await contract.methods.DOMAIN_SALT().call();
+  // console.log(domain);
+
+  // console.log(sig);
+
+  const signer = await contract.methods
+    .signerOfOrder(orderInfo, signature)
+    .call();
+
+  console.log(signer);
+
+  return signer;
 }
 
 async function validateSigJS(signature, orderInfo) {
@@ -43,15 +74,15 @@ function getMsgParams(orderInfo) {
     { name: "matcherFee", type: "uint64" },
     { name: "nonce", type: "uint64" },
     { name: "expiration", type: "uint64" },
-    { name: "version", type: "string" },
+    { name: "side", type: "string" },
   ];
 
   // Get domain data from contract called
   const domainData = {
     name: "Orion Exchange",
     version: "1",
-    chainId: 4,
-    verifyingContract: "0xb4a3f5b8d096aa03808853db807f1233a2515df2", // Update to exchange Contract
+    chainId: 666,
+    verifyingContract: validateAddress,
     salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
   };
 
@@ -72,7 +103,7 @@ function getMsgParams(orderInfo) {
   nowTimestamp = 1571843003887; //Date.now();
 
   const order = {
-    senderAddress: "0x72D103691E468C34830550544fbf5276Ee812118",
+    senderAddress: "0x9FACFdE386Ea45040EA88f1387Df9656aAd7d04a",
     matcherAddress: "0xFF800d38664b546E9a0b7a72af802137629d4f11",
     baseAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
     quoteAsset: "0x8f07FA50C14ed117771e6959f2265881bB919e00", // WBTC
@@ -83,13 +114,20 @@ function getMsgParams(orderInfo) {
     nonce: nowTimestamp,
     expiration: nowTimestamp + 29 * 24 * 60 * 60 * 1000, // milliseconds
     side: "buy",
-    signature:
-      "0x70e582953913b514ec7acd24f1970dcb07535bc985069110b1b98203c0cc750543c423b4c1a928abbf7a518b8132c120c6394dc66a0ba7494937e6b2f64b66651c",
   };
 
-  const sender = await validateSigJS(order.signature, order);
+  const signature =
+    "0xa1538e08559fe54b7636308672368fa6759df047e0ae7ae086b4f325587850ac1ea18234c7aa26a5afdb0cf7b96105ed9c1d47a72f2cf6508adfe239c4a4ab041b";
+
+  const sender = await validateSigJS(signature, order);
   console.log(
     "\nValid Signature for Order using JS? ",
     compare(sender, order.senderAddress)
+  );
+
+  const sender2 = await validateSigSolidity(order, signature);
+  console.log(
+    "\nValid Signature for Order using Solidity? ",
+    compare(sender2, order.senderAddress)
   );
 })();

@@ -168,17 +168,17 @@ window.onload = function (e) {
       { name: "matcherFee", type: "uint64" },
       { name: "nonce", type: "uint64" },
       { name: "expiration", type: "uint64" },
-      { name: "version", type: "string" },
+      { name: "side", type: "string" },
     ];
 
-    console.log(Number(web3.givenProvider.networkVersion));
+    console.log("Chain ID: ", Number(web3.givenProvider.networkVersion));
 
     // Get domain data from contract called
     const domainData = {
       name: "Orion Exchange",
       version: "1",
       chainId: Number(web3.givenProvider.networkVersion),
-      verifyingContract: "0xb4a3f5b8d096aa03808853db807f1233a2515df2", // Update to exchange Contract
+      verifyingContract: "0x7a361D11309CaC6B804F83e9b45bAeC9b34F6275",
       salt:
         "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
     };
@@ -186,7 +186,7 @@ window.onload = function (e) {
     nowTimestamp = 1571843003887; //Date.now();
 
     const message = {
-      senderAddress: from,
+      senderAddress: web3.utils.toChecksumAddress(from),
       matcherAddress: "0xFF800d38664b546E9a0b7a72af802137629d4f11",
       baseAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
       quoteAsset: "0x8f07FA50C14ed117771e6959f2265881bB919e00", // WBTC
@@ -199,6 +199,20 @@ window.onload = function (e) {
       side: "buy",
     };
 
+    console.log("Order: ", [
+      message.senderAddress,
+      message.matcherAddress,
+      message.baseAsset,
+      message.quoteAsset,
+      message.matcherFeeAsset,
+      message.amount,
+      message.price,
+      message.matcherFee,
+      message.nonce,
+      message.expiration,
+      message.side,
+    ]);
+
     const data = JSON.stringify({
       types: {
         EIP712Domain: domain,
@@ -209,10 +223,10 @@ window.onload = function (e) {
       message: message,
     });
 
-    const signer = web3.utils.toChecksumAddress(from);
+    // const signer = web3.utils.toChecksumAddress(from);
+    const signer = from;
 
     web3.currentProvider.sendAsync(
-      // wan3.currentProvider.send(
       {
         method: "eth_signTypedData_v3",
         params: [signer, data],
