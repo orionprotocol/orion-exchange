@@ -7,7 +7,7 @@ const web3 = new Web3(`http://localhost:8545`);
 const sigUtil = require("eth-sig-util");
 
 const abi = require("./validateAbi");
-const validateAddress = "0x7a361D11309CaC6B804F83e9b45bAeC9b34F6275";
+const validateAddress = "0xA75F9416F8Cbe4c45f85eD45B6dD85a66B69Ec7b";
 
 function compare(address1, address2) {
   return (
@@ -82,7 +82,7 @@ function getMsgParams(orderInfo) {
     name: "Orion Exchange",
     version: "1",
     chainId: 666,
-    verifyingContract: validateAddress,
+    verifyingContract: "0x1C56346CD2A2Bf3202F771f50d3D14a367B48070",
     salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
   };
 
@@ -103,7 +103,7 @@ function getMsgParams(orderInfo) {
   nowTimestamp = 1571843003887; //Date.now();
 
   const order = {
-    senderAddress: "0x9FACFdE386Ea45040EA88f1387Df9656aAd7d04a",
+    senderAddress: "0x606BB818AC81a2e96Eca87EbfAfBcEFbF2Ee6D34",
     matcherAddress: "0xFF800d38664b546E9a0b7a72af802137629d4f11",
     baseAsset: "0xCcC7e9b85eA98AC308E14Bef1396ea848AA3fc2C", // WETH
     quoteAsset: "0x8f07FA50C14ed117771e6959f2265881bB919e00", // WBTC
@@ -117,7 +117,7 @@ function getMsgParams(orderInfo) {
   };
 
   const signature =
-    "0xa1538e08559fe54b7636308672368fa6759df047e0ae7ae086b4f325587850ac1ea18234c7aa26a5afdb0cf7b96105ed9c1d47a72f2cf6508adfe239c4a4ab041b";
+    "0xc5a48720278b8c8501374a3d61b7517b23e60f6863b44bc38bec120bf94375340fe7d7ca66c6304b44cd3b65262b02dbcc88e15f14edce9527c517ccfb4acecf1c";
 
   const sender = await validateSigJS(signature, order);
   console.log(

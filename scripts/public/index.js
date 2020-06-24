@@ -75,7 +75,6 @@ window.onload = function (e) {
     nowTimestamp = 1571843003887; //Date.now();
 
     const message = {
-      version: 3,
       senderAddress: from,
       matcherAddress: "0xB35d39BB41C69E4377A16C08EDA54999175c1cdD",
       baseAsset: "0x16D0770f8Dd8B3F3Ce75f39ce6A7626EDf7c2af4", // WETH
@@ -104,7 +103,6 @@ window.onload = function (e) {
     ]);
 
     const msgParams = [
-      { type: "uint8", name: "version", value: message.version },
       { type: "address", name: "senderAddress", value: message.senderAddress },
       {
         type: "address",
@@ -178,7 +176,7 @@ window.onload = function (e) {
       name: "Orion Exchange",
       version: "1",
       chainId: Number(web3.givenProvider.networkVersion),
-      verifyingContract: "0x7a361D11309CaC6B804F83e9b45bAeC9b34F6275",
+      verifyingContract: "0x1C56346CD2A2Bf3202F771f50d3D14a367B48070",
       salt:
         "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
     };
