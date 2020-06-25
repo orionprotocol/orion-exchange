@@ -6,8 +6,8 @@ const web3 = new Web3(`http://localhost:8545`);
 
 const sigUtil = require("eth-sig-util");
 
-const abi = require("./validateAbi");
-const validateAddress = "0xA75F9416F8Cbe4c45f85eD45B6dD85a66B69Ec7b";
+const abi = require("./abiV3");
+const validateAddress = "0x669647820e3699A4117394feC14741940ABcb82C";
 
 function compare(address1, address2) {
   return (
@@ -21,7 +21,7 @@ function getSignatureObj(signature) {
   const r = "0x" + signature.slice(0, 64);
   const s = "0x" + signature.slice(64, 128);
   let v = web3.utils.hexToNumber("0x" + signature.slice(128, 130));
-  // v += 4 * 2;
+  v += 4 * 2;
   console.log(v, r, s);
   return { v, r, s };
 }
@@ -29,7 +29,7 @@ function getSignatureObj(signature) {
 async function validateSigSolidity(orderInfo, signature) {
   const contract = new web3.eth.Contract(abi, validateAddress);
 
-  // getSignatureObj(signature);
+  // const sig = getSignatureObj(signature);
 
   // const domain = await contract.methods.DOMAIN_SALT().call();
   // console.log(domain);
@@ -40,7 +40,7 @@ async function validateSigSolidity(orderInfo, signature) {
     .signerOfOrder(orderInfo, signature)
     .call();
 
-  console.log(signer);
+  // console.log(signer);
 
   return signer;
 }
@@ -82,7 +82,7 @@ function getMsgParams(orderInfo) {
     name: "Orion Exchange",
     version: "1",
     chainId: 666,
-    verifyingContract: "0x1C56346CD2A2Bf3202F771f50d3D14a367B48070",
+    verifyingContract: validateAddress,
     salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
   };
 
@@ -117,7 +117,7 @@ function getMsgParams(orderInfo) {
   };
 
   const signature =
-    "0xc5a48720278b8c8501374a3d61b7517b23e60f6863b44bc38bec120bf94375340fe7d7ca66c6304b44cd3b65262b02dbcc88e15f14edce9527c517ccfb4acecf1c";
+    "0x0d05643a09b09cea7c1424a747632ff03b1a0ef48b7c6c3fb89648d91e15e98a133347551b3022609cf2200b0998173d79b552f363243f9b0db0c2ac277534c01b";
 
   const sender = await validateSigJS(signature, order);
   console.log(
