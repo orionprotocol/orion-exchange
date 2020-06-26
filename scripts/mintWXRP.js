@@ -1,13 +1,13 @@
-const WETH = artifacts.require("WETH");
+const WXRP = artifacts.require("WXRP");
 
 // =================================================== //
 
-// truffle exec scripts/mintWETH.js <addressTo> <amount> --network gwan
+// truffle exec scripts/mintWXRP.js <addressTo> <amount> --network gwan
 // accounts 0 must be unlocked in gwan node
 
-module.exports = async callback => {
+module.exports = async (callback) => {
   try {
-    let token = await WETH.deployed();
+    let token = await WXRP.deployed();
     let to = process.argv[4];
     let amount = process.argv[5];
 
@@ -20,7 +20,7 @@ module.exports = async callback => {
     console.log(
       `New Balance for account ${to} is ${web3.utils.fromWei(
         balance.toString()
-      )} WETH`
+      )} WXRP`
     );
 
     callback();
