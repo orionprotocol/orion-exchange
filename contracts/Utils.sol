@@ -1,16 +1,15 @@
 pragma solidity 0.5.10;
 
-import '@openzeppelin/contracts/token/ERC20/ERC20Detailed.sol';
-import '@openzeppelin/contracts/math/SafeMath.sol';
-import './Lib/LibUnitConverter.sol';
+import "@openzeppelin/contracts/token/ERC20/ERC20Detailed.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
+import "./libs/LibUnitConverter.sol";
 
 contract Utils {
-
-    using SafeMath for uint;
+    using SafeMath for uint256;
 
     uint256 private _guardCounter;
 
-    constructor () internal {
+    constructor() internal {
         // The counter starts at one to prevent changing it from zero to a non-zero
         // value, which is a more expensive operation.
         _guardCounter = 1;
@@ -40,26 +39,34 @@ contract Utils {
         paying for execution may not be the actual sender (as far as an application
         is concerned).
      */
-     function _msgSender() internal view returns (address payable) {
+    function _msgSender() internal view returns (address payable) {
         return msg.sender;
     }
 
-    function safeTransfer(address to, address assetAddress, uint _amount) internal {
+    function safeTransfer(
+        address to,
+        address assetAddress,
+        uint256 _amount
+    ) internal {
+        uint256 amount = LibUnitConverter.decimalToBaseUnit(
+            assetAddress,
+            _amount
+        );
 
-        uint amount = LibUnitConverter.decimalToBaseUnit(assetAddress, _amount);
-
-        if(assetAddress == address(0)){
-            uint balanceBeforeTransfer = address(this).balance;
+        if (assetAddress == address(0)) {
+            uint256 balanceBeforeTransfer = address(this).balance;
             // solhint-disable-next-line
             (bool success, ) = to.call.value(amount)("");
             require(success, "E6");
             assert(address(this).balance == balanceBeforeTransfer.sub(amount));
-        }
-        else{
+        } else {
             ERC20Detailed asset = ERC20Detailed(assetAddress);
-            uint balanceBeforeTransfer = asset.balanceOf(address(this));
+            uint256 balanceBeforeTransfer = asset.balanceOf(address(this));
             require(asset.transfer(_msgSender(), amount), "E6");
-            assert(asset.balanceOf(address(this)) == balanceBeforeTransfer.sub(amount));
+            assert(
+                asset.balanceOf(address(this)) ==
+                    balanceBeforeTransfer.sub(amount)
+            );
         }
     }
 }
