@@ -9,6 +9,31 @@ const Exchange = artifacts.require("Exchange");
 const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
 const LibValidator = artifacts.require("LibValidator");
+const domain = [
+                 { name: "name", type: "string" },
+                 { name: "version", type: "string" },
+                 { name: "chainId", type: "uint256" },
+                 { name: "salt", type: "bytes32" },
+               ];
+const domainData = {
+          name: "Orion Exchange",
+          version: "1",
+          chainId: 666,
+          salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
+};
+const orderTypes =  [
+            { name: "senderAddress", type: "address" },
+            { name: "matcherAddress", type: "address" },
+            { name: "baseAsset", type: "address" },
+            { name: "quoteAsset", type: "address" },
+            { name: "matcherFeeAsset", type: "address" },
+            { name: "amount", type: "uint64" },
+            { name: "price", type: "uint64" },
+            { name: "matcherFee", type: "uint64" },
+            { name: "nonce", type: "uint64" },
+            { name: "expiration", type: "uint64" },
+            { name: "side", type: "string" },
+];
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
 
@@ -52,8 +77,8 @@ contract("Exchange", ([matcher, user1, user2]) => {
       balanceAsset.toString().should.be.equal(String(10e8));
     });
 
-    it("user1 deposits 1 WAN to exchange", async () => {
-      exchange.depositWan({ from: user1, value: String(1e18) });
+    it("user1 deposits 1 ETH to exchange", async () => {
+      exchange.deposit({ from: user1, value: String(1e18) });
 
       let balanceAsset = await exchange.getBalance(ZERO_ADDRESS, user1);
       balanceAsset.toString().should.be.equal(String(1e8));
@@ -75,8 +100,8 @@ contract("Exchange", ([matcher, user1, user2]) => {
       balanceAsset.toString().should.be.equal(String(10e8));
     });
 
-    it("user2 deposits 1 WAN to exchange", async () => {
-      exchange.depositWan({ from: user2, value: String(1e18) });
+    it("user2 deposits 1 ETH to exchange", async () => {
+      exchange.deposit({ from: user2, value: String(1e18) });
 
       let balanceAsset = await exchange.getBalance(ZERO_ADDRESS, user2);
       balanceAsset.toString().should.be.equal(String(1e8));
@@ -103,43 +128,25 @@ contract("Exchange", ([matcher, user1, user2]) => {
         side: "buy"
       };
 
-      let msgParams = [
-        { type: "uint8", name: "version", value: 3 },
-        {
-          name: "senderAddress",
-          type: "address",
-          value: buyOrder.senderAddress
-        },
-        {
-          name: "matcherAddress",
-          type: "address",
-          value: buyOrder.matcherAddress
-        },
-        { name: "baseAsset", type: "address", value: buyOrder.baseAsset },
-        { name: "quoteAsset", type: "address", value: buyOrder.quoteAsset },
-        {
-          name: "matcherFeeAsset",
-          type: "address",
-          value: buyOrder.matcherFeeAsset
-        },
-        { name: "amount", type: "uint64", value: buyOrder.amount },
-        { name: "price", type: "uint64", value: buyOrder.price },
-        { name: "matcherFee", type: "uint64", value: buyOrder.matcherFee },
-        { name: "nonce", type: "uint64", value: buyOrder.nonce },
-        { name: "expiration", type: "uint64", value: buyOrder.expiration },
-        { name: "side", type: "string", value: buyOrder.side }
-      ];
+      let msgParams = {
+             types: {
+               EIP712Domain: domain,
+               Order: orderTypes,
+             },
+             domain: domainData,
+             primaryType: "Order",
+             message: buyOrder,
+           };
 
       msgParams1 = { data: msgParams };
-
       // User 1 signs buy Order
-      signature1 = sigUtil.signTypedDataLegacy(privKey, msgParams1);
+      signature1 = sigUtil.signTypedData_v4(privKey, msgParams1);
 
       buyOrder.signature = signature1;
     });
 
     it("buy order validation in js", async () => {
-      const recovered = sigUtil.recoverTypedSignatureLegacy({
+      const recovered = sigUtil.recoverTypedSignature_v4({
         data: msgParams1.data,
         sig: buyOrder.signature
       });
@@ -170,43 +177,26 @@ contract("Exchange", ([matcher, user1, user2]) => {
         side: "buy"
       };
 
-      let msgParams = [
-        { type: "uint8", name: "version", value: 3 },
-        {
-          name: "senderAddress",
-          type: "address",
-          value: sellOrder.senderAddress
-        },
-        {
-          name: "matcherAddress",
-          type: "address",
-          value: sellOrder.matcherAddress
-        },
-        { name: "baseAsset", type: "address", value: sellOrder.baseAsset },
-        { name: "quoteAsset", type: "address", value: sellOrder.quoteAsset },
-        {
-          name: "matcherFeeAsset",
-          type: "address",
-          value: sellOrder.matcherFeeAsset
-        },
-        { name: "amount", type: "uint64", value: sellOrder.amount },
-        { name: "price", type: "uint64", value: sellOrder.price },
-        { name: "matcherFee", type: "uint64", value: sellOrder.matcherFee },
-        { name: "nonce", type: "uint64", value: sellOrder.nonce },
-        { name: "expiration", type: "uint64", value: sellOrder.expiration },
-        { name: "side", type: "string", value: sellOrder.side }
-      ];
+      let msgParams = {
+             types: {
+               EIP712Domain: domain,
+               Order: orderTypes,
+             },
+             domain: domainData,
+             primaryType: "Order",
+             message: sellOrder,
+           };
 
       msgParams2 = { data: msgParams };
 
       // User 2 signs sell Order
-      signature2 = sigUtil.signTypedDataLegacy(privKey, msgParams2);
+      signature2 = sigUtil.signTypedData_v4(privKey, msgParams2);
 
       sellOrder.signature = signature2;
     });
 
     it("sell order validation in js", async () => {
-      const recovered = sigUtil.recoverTypedSignatureLegacy({
+      const recovered = sigUtil.recoverTypedSignature_v4({
         data: msgParams2.data,
         sig: sellOrder.signature
       });
@@ -335,9 +325,9 @@ contract("Exchange", ([matcher, user1, user2]) => {
       balance.toString().should.be.equal(String(10e8 - FILL_AMOUNT));
     });
 
-    it("correct seller WAN balance after trade", async () => {
-      // WAN deducted = matcherFee *  ( fillAmount/sellOrder amount)
-      // WAN deducted = 1 WAN 0.0015 - WAN * (1.5/1.5) = 8.4985 WETH
+    it("correct seller ETH balance after trade", async () => {
+      // ETH deducted = matcherFee *  ( fillAmount/sellOrder amount)
+      // ETH deducted = 1 ETH 0.0015 - ETH * (1.5/1.5) = 8.4985 WETH
       let balance = await exchange.getBalance(ZERO_ADDRESS, user2);
       balance
         .toString()
@@ -371,9 +361,9 @@ contract("Exchange", ([matcher, user1, user2]) => {
       WETHbalance.toString().should.be.equal(String(10e18));
     });
 
-    it("correct total exchange balance in WAN after trade", async () => {
-      // WAN = depositUser1 + depositUser2 - feeMatcher (sellOrder ) *  ( fillAmount/sellOrderAmount)
-      // WAN = 1 WAN + 1 WAN - 0.0015 WAN
+    it("correct total exchange balance in ETH after trade", async () => {
+      // ETH = depositUser1 + depositUser2 - feeMatcher (sellOrder ) *  ( fillAmount/sellOrderAmount)
+      // ETH = 1 ETH + 1 ETH - 0.0015 ETH
       let WETHbalance = await web3.eth.getBalance(exchange.address);
       WETHbalance.toString().should.be.equal(
         String(

@@ -31,13 +31,13 @@ contract("Exchange", ([owner, user1, user2]) => {
   });
 
   describe("Exchange::deposit", () => {
-    it("user can deposit wan to exchange", async () => {
-      await proxy.depositWan({ from: user1, value: web3.utils.toWei("0.1") })
+    it("user can deposit eth to exchange", async () => {
+      await proxy.deposit({ from: user1, value: web3.utils.toWei("0.1") })
         .should.be.fulfilled;
-      let balanceWan = await proxy.getBalance(ZERO_ADDRESS, user1);
+      let balance = await proxy.getBalance(ZERO_ADDRESS, user1);
 
       // Balance responses are in 10^8 format
-      balanceWan.toString().should.be.equal(String(0.1e8));
+      balance.toString().should.be.equal(String(0.1e8));
     });
 
     it("proxy contract holds funds", async () => {
@@ -46,9 +46,9 @@ contract("Exchange", ([owner, user1, user2]) => {
     });
 
     it("logic contract does not hold user funds", async () => {
-      let balanceWan = await exchange.getBalance(ZERO_ADDRESS, user1);
+      let balance = await exchange.getBalance(ZERO_ADDRESS, user1);
       // Balance responses are in 10^8 format
-      balanceWan.toString().should.be.equal("0");
+      balance.toString().should.be.equal("0");
 
       let contractBalance = await web3.eth.getBalance(Exchange.address);
       contractBalance.toString().should.be.equal("0");
@@ -56,18 +56,18 @@ contract("Exchange", ([owner, user1, user2]) => {
   });
 
   describe("Exchange::withdraw", () => {
-    it("user can't withdraw wan from exchange directly", async () => {
+    it("user can't withdraw eth from exchange directly", async () => {
       await exchange.withdraw(ZERO_ADDRESS, web3.utils.toWei("0.1"), {
         from: user1
       }).should.be.rejected;
     });
 
-    it("user can withdraw wan to exchange using proxy", async () => {
+    it("user can withdraw eth to exchange using proxy", async () => {
       await proxy.withdraw(ZERO_ADDRESS, web3.utils.toWei("0.1"), {
         from: user1
       }).should.be.fulfilled;
-      let balanceWan = await proxy.getBalance(ZERO_ADDRESS, user1);
-      balanceWan.toString().should.be.equal(String(web3.utils.toWei("0")));
+      let balance = await proxy.getBalance(ZERO_ADDRESS, user1);
+      balance.toString().should.be.equal(String(web3.utils.toWei("0")));
     });
   });
 });
