@@ -16,7 +16,7 @@ truffle compile
 ## Testing
 Adjust `truffle-config.js`: update ip and port of testing network node (ganache is recommended).
 
-Note, order tests are now imply that second and third accounts have private keys `0x4f1c10dbf5a4c833e0f1e091ce06ba339c3194d249de8906a2b2ca642be07966` and `0x4f1c10dbf5a4c833e0f1e091ce06ba339c3194d249de8906a2b2ca642be07966` correspondignly.
+Note, order tests are now imply that second and third accounts have private keys `0xc09ae3abc13c501fb9ff1c3c8ad3256678416f73a41433411f1714ae7b547fe3` and `ecbcd49667c96bcf8b30ccb35234a0b217ea039a8e097d3a70de9d28624ba520` correspondignly.
 
 Tests can be run with:
 ```
