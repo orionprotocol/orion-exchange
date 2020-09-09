@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./Utils.sol";
 import "./Staking.sol";
+import "./PriceOracle.sol";
 import "./libs/LibValidator.sol";
 
 /**
@@ -12,7 +13,7 @@ import "./libs/LibValidator.sol";
  * @dev Exchange contract for the Orion Protocol
  * @author @wafflemakr
  */
-contract Exchange is Utils, Staking {
+contract Exchange is Utils, Staking, PriceOracle {
     using SafeMath for uint64;
     using LibValidator for LibValidator.Order;
 
@@ -64,7 +65,7 @@ contract Exchange is Utils, Staking {
 
     // MAIN FUNCTIONS
 
-    constructor(address orionTokenAddress) public Staking(orionTokenAddress) {}
+    constructor(address orionTokenAddress, address oraclePublicKey) public Staking(orionTokenAddress) PriceOracle(oraclePublicKey) {}
 
     /**
      * @dev Deposit ERC20 tokens to the exchange contract

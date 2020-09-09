@@ -8,6 +8,8 @@ const SafeMath = artifacts.require("SafeMath");
 const LibValidator = artifacts.require("LibValidator");
 const LibUnitConverter = artifacts.require("LibUnitConverter");
 
+const oraclePubkey = "0xDc966DCB447004dF677c8A509dd24A070AE93Bf2";
+
 module.exports = async (deployer, network) => {
   if (network === "development") {
     await deployer.deploy(WXRP);
@@ -24,7 +26,7 @@ module.exports = async (deployer, network) => {
     await deployer.link(LibValidator, Exchange);
     await deployer.link(LibUnitConverter, Exchange);
 
-    await deployer.deploy(Exchange, Orion.address);
+    await deployer.deploy(Exchange, Orion.address, oraclePubkey);
     await deployer.deploy(OrionProxy, Exchange.address);
   }
 };
