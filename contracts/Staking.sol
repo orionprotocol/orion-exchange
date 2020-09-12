@@ -1,5 +1,7 @@
 pragma solidity 0.5.10;
+pragma experimental ABIEncoderV2;
 import "@openzeppelin/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/math/SafeMath.sol";
 
 /**
  * @title Staking
@@ -7,6 +9,8 @@ import "@openzeppelin/contracts/ownership/Ownable.sol";
  * @author @EmelyanenkoK
  */
 contract Staking is Ownable {
+
+    using SafeMath for uint256;
 
     enum StakePhase{ NOTSTAKED, LOCKING, LOCKED, RELEASING, READYTORELEASE, FROZEN }
 
@@ -50,7 +54,7 @@ contract Staking is Ownable {
         moveFromBalance(amount);
         Stake storage stake = stakingData[_msgSender()];
         stake.phase = StakePhase.LOCKING;
-        stake.lastActionTimestamp = now;
+        stake.lastActionTimestamp = uint64(now);
     }
 
     function requestReleaseStake() external {
@@ -62,7 +66,7 @@ contract Staking is Ownable {
         } else if (currentPhase == StakePhase.LOCKED) {
           Stake storage stake = stakingData[_msgSender()];
           stake.phase = StakePhase.RELEASING;
-          stake.lastActionTimestamp = now;
+          stake.lastActionTimestamp = uint64(now);
         } else {
           revert("Can not release funds from this phase");
         }
@@ -82,7 +86,7 @@ contract Staking is Ownable {
     function seize(address user, address receiver) external {
     }
 
-    function getStake(address user) public view {
+    function getStake(address user) public view returns (Stake memory){
         Stake memory stake = stakingData[user];
         if(stake.phase == StakePhase.LOCKING && (now - stake.lastActionTimestamp) > lockingDuration) {
           stake.phase = StakePhase.LOCKED;
