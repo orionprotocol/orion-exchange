@@ -28,7 +28,7 @@ contract Staking is Ownable {
 
     // Get user balance by address and asset address
     mapping(address => Stake) private stakingData;
-    mapping(address => mapping(address => uint256)) virtual assetBalances;
+    //mapping(address => mapping(address => uint256)) virtual assetBalances;
 
 
     constructor(address orionTokenAddress) internal {
@@ -36,16 +36,16 @@ contract Staking is Ownable {
     }
 
     function moveFromBalance(uint256 amount) internal {
-        assetBalances[_msgSender()][baseAssetAddress] = assetBalances[_msgSender()][baseAssetAddress]
-            .sub(amount);
+        //assetBalances[_msgSender()][baseAssetAddress] = assetBalances[_msgSender()][baseAssetAddress]
+        //    .sub(amount);
         Stake storage stake = stakingData[_msgSender()];
         stake.amount = stake.amount.add(amount);            
     }
 
     function moveToBalance() internal {
         Stake storage stake = stakingData[_msgSender()];
-        assetBalances[_msgSender()][baseAssetAddress] = assetBalances[_msgSender()][baseAssetAddress]
-            .add(stake.amount);
+        //assetBalances[_msgSender()][baseAssetAddress] = assetBalances[_msgSender()][baseAssetAddress]
+        //    .add(stake.amount);
         stake.amount = 0;     
     }
 
@@ -74,12 +74,12 @@ contract Staking is Ownable {
     }
 
     function postponeStakeRelease(address user) external onlyOwner{
-        Stake storage stake = stakingData[_msgSender()];
+        Stake storage stake = stakingData[user];
         stake.phase = StakePhase.FROZEN;        
     }
 
     function allowStakeRelease(address user) external onlyOwner {
-        Stake storage stake = stakingData[_msgSender()];
+        Stake storage stake = stakingData[user];
         stake.phase = StakePhase.READYTORELEASE;        
     }
 
