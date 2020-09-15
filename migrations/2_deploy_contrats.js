@@ -2,6 +2,7 @@ const WXRP = artifacts.require("WXRP");
 const WBTC = artifacts.require("WBTC");
 const WETH = artifacts.require("WETH");
 const Orion = artifacts.require("Orion");
+const Staking = artifacts.require("Staking");
 const Exchange = artifacts.require("Exchange");
 const OrionProxy = artifacts.require("OrionProxy");
 const SafeMath = artifacts.require("SafeMath");
@@ -26,7 +27,9 @@ module.exports = async (deployer, network) => {
     await deployer.link(LibValidator, Exchange);
     await deployer.link(LibUnitConverter, Exchange);
 
-    await deployer.deploy(Exchange, Orion.address, oraclePubkey);
+    await deployer.deploy(Staking, Orion.address);
+    await deployer.deploy(Exchange, Staking.address, Orion.address, oraclePubkey);
+
     await deployer.deploy(OrionProxy, Exchange.address);
   }
 };

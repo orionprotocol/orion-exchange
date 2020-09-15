@@ -3,8 +3,8 @@ pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/ownership/Ownable.sol";
 import "./Utils.sol";
-import "./Staking.sol";
 import "./PriceOracle.sol";
 import "./libs/LibValidator.sol";
 
@@ -13,7 +13,7 @@ import "./libs/LibValidator.sol";
  * @dev Exchange contract for the Orion Protocol
  * @author @wafflemakr
  */
-contract Exchange is Utils, Staking, PriceOracle {
+contract Exchange is Utils, Ownable, PriceOracle {
     using SafeMath for uint64;
     using LibValidator for LibValidator.Order;
 
@@ -63,9 +63,16 @@ contract Exchange is Utils, Staking, PriceOracle {
     // Get user balance by address and asset address
     mapping(address => mapping(address => uint256)) private assetBalances;
 
+    address _stakingContractAddress;
+    IERC20 _orionToken;
+
     // MAIN FUNCTIONS
 
-    constructor(address orionTokenAddress, address oraclePublicKey) public Staking(orionTokenAddress) PriceOracle(oraclePublicKey) {}
+    constructor(address stakingContractAddress, address orionToken, address oraclePublicKey) public PriceOracle(oraclePublicKey) {
+      _stakingContractAddress = stakingContractAddress;
+      _orionToken = IERC20(orionToken);
+      _orionToken.approve(_stakingContractAddress, 2**256-1);
+    }
 
     /**
      * @dev Deposit ERC20 tokens to the exchange contract
@@ -127,6 +134,19 @@ contract Exchange is Utils, Staking, PriceOracle {
         safeTransfer(_msgSender(), assetAddress, amountDecimal);
 
         emit NewAssetWithdrawl(_msgSender(), assetAddress, amountDecimal);
+    }
+
+
+    function moveToStake(address user, uint256 amount) public {
+      require(_msgSender() == _stakingContractAddress, "Unauthorized moveToStake");
+      assetBalances[user][address(_orionToken)] = assetBalances[user][address(_orionToken)]
+            .sub(amount);
+    }
+
+    function moveFromStake(address user, uint256 amount) public {
+      require(_msgSender() == _stakingContractAddress, "Unauthorized moveFromStake");
+      assetBalances[user][address(_orionToken)] = assetBalances[user][address(_orionToken)]
+            .add(amount);
     }
 
     /**

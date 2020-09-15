@@ -2,6 +2,8 @@ pragma solidity 0.5.10;
 pragma experimental ABIEncoderV2;
 import "@openzeppelin/contracts/ownership/Ownable.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "./StakingAccessInterface.sol";
 
 /**
  * @title Staking
@@ -24,28 +26,34 @@ contract Staking is Ownable {
     uint64 constant releasingDuration = 3600*24;
 
     //Asset for staking
-    address baseAssetAddress;
+    IERC20 baseAsset;
+    StakingAccessInterface _exchange;
 
     // Get user balance by address and asset address
     mapping(address => Stake) private stakingData;
     //mapping(address => mapping(address => uint256)) virtual assetBalances;
 
 
-    constructor(address orionTokenAddress) internal {
-        baseAssetAddress = orionTokenAddress;
+    constructor(address orionTokenAddress) public {
+        baseAsset = IERC20(orionTokenAddress);
     }
 
+    function setExchangeAddress(address exchange) external onlyOwner {
+        _exchange = StakingAccessInterface(exchange);
+    }
+
+
     function moveFromBalance(uint256 amount) internal {
-        //assetBalances[_msgSender()][baseAssetAddress] = assetBalances[_msgSender()][baseAssetAddress]
-        //    .sub(amount);
+        require(baseAsset.transferFrom(address(_exchange), address(this), amount), "E6");
+        _exchange.moveToStake(_msgSender(),amount);
         Stake storage stake = stakingData[_msgSender()];
         stake.amount = stake.amount.add(amount);            
     }
 
     function moveToBalance() internal {
         Stake storage stake = stakingData[_msgSender()];
-        //assetBalances[_msgSender()][baseAssetAddress] = assetBalances[_msgSender()][baseAssetAddress]
-        //    .add(stake.amount);
+        require(baseAsset.transfer(address(_exchange), stake.amount), "E6");
+        _exchange.moveFromStake(_msgSender(), stake.amount);
         stake.amount = 0;     
     }
 
