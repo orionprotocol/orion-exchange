@@ -5,11 +5,13 @@ require("chai")
 
 let Exchange = artifacts.require("Exchange");
 const Orion = artifacts.require("Orion");
+const Staking = artifacts.require("Staking");
+const LibValidator = artifacts.require("LibValidator");
 
 const depositedBalance = 10e8, stakedBalance = 8e8;
 const NOTSTAKED='0', LOCKING='1', LOCKED='2', RELEASING='3', READYTORELEASE='4', FROZEN='5';
 const lockingDuration = 3600*24, releasingDuration = 3600*24;
-let exchange, orion;
+let exchange, orion, staking;
 
 async function getLastEvent(eventName, user) {
   let events = await exchange.getPastEvents(eventName, {
@@ -19,77 +21,110 @@ async function getLastEvent(eventName, user) {
   return events[0].returnValues;
 }
 
-const setBlockchainTime = async function(from_snapshot, time) {
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 0});
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_revert", params: [from_snapshot], id: 0});
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_snapshot", params: [], id: 0});
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 0});
-  bn = await web3.eth.blockNumber;
-  bl = await web3.eth.getBlock(bn);
-  tm = bl.timestamp;
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_increaseTime", params: [time-tm], id: 0});  
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 0});
+
+const revertToSnapshot = (snapshot_id) => {
+  return new Promise((resolve, reject) => {
+    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_revert', params: [snapshot_id], id: new Date().getTime()},
+                              (err, result) => {
+                                if (err) { return reject(err); }
+                                return resolve(result);
+                              });
+    });
 };
 
-const revertToSnapshot = async function(initial_snapshot) {
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_revert", params: [initial_snapshot], id: 0});
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_snapshot", params: [], id: 0});
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 0});
+const getSnapshot = () => {
+  return new Promise((resolve, reject) => {
+    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_snapshot', id: new Date().getTime()},
+                              (err, result) => {
+                                 if (err) { return reject(err); }
+                                 return resolve(result);
+                              })
+    });
+};
+
+const advanceTime = (time) => {
+  return new Promise((resolve, reject) => {
+    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_increaseTime', params: [time], id: new Date().getTime()}, 
+                              (err, result) => {
+                                 if (err) { return reject(err); }
+                                 return resolve(result);
+                              });
+    });
+};
+
+const advanceBlock = () => {
+  return new Promise((resolve, reject) => {
+    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_mine', id: new Date().getTime()}, 
+                              (err, result) => {
+                                if (err) { return reject(err); }
+                                return resolve(result);
+                              });
+    });
+};
+
+const setBlockchainTime = async function(from_snapshot, time) {
+  time = Math.ceil(time);
+  await revertToSnapshot(from_snapshot);
+  await getSnapshot();
+  let bn = await web3.eth.getBlockNumber();
+  let bl = await web3.eth.getBlock(bn);
+  let tm = bl.timestamp;
+  console.log(tm, time, new Date().getTime(), Date.now()/1e3);
+  await advanceTime(time-tm);
+  await advanceBlock();
 }
 
-const getSnapshot = async function() {
-      return parseInt((await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_snapshot", params: [], id: 0}))["result"]);
-}
-contract("Exchange", ([owner, user1]) => {
-  let just_staked_snapshot=0,
-      requested_stake_snapshot = 0;
+contract("Staking", ([owner, user1, user2, user3]) => {
 
-  describe("Exchange::instance", async () => {
+  describe("Staking::instance", async () => {
     orion = await Orion.deployed();
-    exchange = await Exchange.deployed(orion.address);
+    staking = await Staking.deployed(orion.address);
+    exchange = await Exchange.deployed(staking.address, orion.address);
+    await staking.setExchangeAddress(exchange.address, {from:owner});
     lib = await LibValidator.deployed();
   });
 
-  describe("Exchange::staking", () => {
-    it("user1 deposits ORN to exchange", async () => {
-      await orion.mint(user1, String(depositedBalance), { from: owner }).should.be
-        .fulfilled;
-      await orion.approve(exchange.address, String(depositedBalance), {
-        from: user1
-      });
-      await exchange.depositAsset(orion.address, String(depositedBalance), {
-        from: user1
-      }).should.be.fulfilled;
+  describe("Staking::basic", () => {
+    it("users deposit ORN to exchange", async () => {
+      for (let user of [user1, user2, user3]) {
+        await orion.mint(user, String(depositedBalance), { from: owner }).should.be
+          .fulfilled;
+        await orion.approve(exchange.address, String(depositedBalance), {
+          from: user
+        });
+        await exchange.depositAsset(orion.address, String(depositedBalance), {
+          from: user
+        }).should.be.fulfilled;
+      }
 
       let orionBalance = await exchange.getBalance(orion.address, user1);
       orionBalance.toString().should.be.equal(String(depositedBalance));
-      let stakeBalance = await exchange.getStakeBalance(user1);
-      let stakePhase = await exchange.getStakePhase(user1);
+      let stakeBalance = await staking.getStakeBalance(user1);
+      let stakePhase = await staking.getStakePhase(user1);
       stakeBalance.toString().should.be.equal(String(0));
       stakePhase.toString().should.be.equal(NOTSTAKED);
     });
 
     it("user1 try stake more than (s)he has", async () => {
-      await exchange.lockStake(depositedBalance+1, {from:user1}).should.be.rejected;
+      await staking.lockStake(depositedBalance+1, {from:user1}).should.be.rejected;
     });
-    
+
 
     it("user1 lock ORN for staking", async () => {
-      await exchange.lockStake(stakedBalance, {from:user1}).should.be.fulfilled;
+      await staking.lockStake(stakedBalance, {from:user1}).should.be.fulfilled;
       let orionBalance = await exchange.getBalance(orion.address, user1);
       orionBalance.toString()
               .should.be.equal(String(depositedBalance-stakedBalance));
-      let stakeBalance = await exchange.getStakeBalance(user1);
-      let stakePhase = await exchange.getStakePhase(user1);
+      let stakeBalance = await staking.getStakeBalance(user1);
+      let stakePhase = await staking.getStakePhase(user1);
       stakeBalance.toString().should.be.equal(String(stakedBalance));
       stakePhase.toString().should.be.equal(String(LOCKING));
-      just_staked_snapshot = getSnapshot();
     });
 
     it("user1 unlock recently (before lock period) staked ORN", async () => {
-      await exchange.requestReleaseStake({from:user1}).should.be.fulfilled;
-      let stakeBalance = await exchange.getStakeBalance(user1);
-      let stakePhase = await exchange.getStakePhase(user1);
+      await staking.requestReleaseStake({from:user1}).should.be.fulfilled;
+      let stakeBalance = await staking.getStakeBalance(user1);
+      let stakePhase = await staking.getStakePhase(user1);
       stakeBalance.toString().should.be.equal(String(0));
       stakePhase.toString().should.be.equal(NOTSTAKED);
       let orionBalance = await exchange.getBalance(orion.address, user1);
@@ -97,63 +132,65 @@ contract("Exchange", ([owner, user1]) => {
               .should.be.equal(String(depositedBalance));
     });
 
-    it("user1 start unlocking staked ORN after lock period", async () => {
-      await setBlockchainTime(just_staked_snapshot, 
-                              Date.now()/1e3+lockingDuration);
-      (await exchange.getStakePhase(user1)).toString()
-              .should.be.equal(String(RELEASED));
-      
-      await exchange.requestReleaseStake({from:user1}).should.be.fulfilled;
-      let stakeBalance = await exchange.getStakeBalance(user1);
-      let stakePhase = await exchange.getStakePhase(user1);
-      stakeBalance.toString().should.be.equal(stakedBalance);
+    it("user2 start unlocking staked ORN after lock period", async () => {
+      await staking.lockStake(stakedBalance, {from:user2}).should.be.fulfilled;
+      await advanceTime(lockingDuration+1);
+      await advanceBlock();
+      let stakePhase = await staking.getStakePhase(user2);
+      stakePhase.toString().should.be.equal(String(LOCKED));
+
+      await staking.requestReleaseStake({from:user2}).should.be.fulfilled;
+      let stakeBalance = await staking.getStakeBalance(user2);
+      stakePhase = await staking.getStakePhase(user2);
+      stakeBalance.toString().should.be.equal(String(stakedBalance));
       stakePhase.toString().should.be.equal(RELEASING);
-      let orionBalance = await exchange.getBalance(orion.address, user1);
+      let orionBalance = await exchange.getBalance(orion.address, user2);
       orionBalance.toString().
               should.be.equal(String(depositedBalance-stakedBalance));
-      requested_stake_snapshot = getSnapshot();
     });
 
-    it("user1 try finish unlocking staked ORN before date", async () => {
-      await exchange.requestReleaseStake({from:user1}).should.be.rejected;
+    it("user2 try finish unlocking staked ORN before date", async () => {
+      await staking.requestReleaseStake({from:user2}).should.be.rejected;
     });
 
-    it("user1 finish unlocking staked ORN", async () => {
-      await setBlockchainTime(requested_stake_snapshot, 
-                              Date.now()/1e3+releasingDuration);
-      await exchange.getStakePhase(user1).toString()
-              .should.be.equal(READYTORELEASE);
-      
-      await exchange.requestReleaseStake({from:user1}).should.be.fulfilled;
-      let stakeBalance = await exchange.getStakeBalance(user1);
-      let stakePhase = await exchange.getStakePhase(user1);
+    it("user2 finish unlocking staked ORN", async () => {
+      await advanceTime(releasingDuration+1);
+      await advanceBlock();
+      let stakePhase = await staking.getStakePhase(user2);
+      stakePhase.toString().should.be.equal(String(READYTORELEASE));
+
+      await staking.requestReleaseStake({from:user2}).should.be.fulfilled;
+      let stakeBalance = await staking.getStakeBalance(user2);
+      stakePhase = await staking.getStakePhase(user2);
       stakeBalance.toString().should.be.equal(String(0));
       stakePhase.toString().should.be.equal(NOTSTAKED);
-      let orionBalance = await exchange.getBalance(orion.address, user1);
+      let orionBalance = await exchange.getBalance(orion.address, user2);
       orionBalance.toString()
               .should.be.equal(String(depositedBalance));
     });
 
-    it("user1 try postpone Stake Release", async () => {
-      await revertToSnapshot(requested_stake_snapshot);
-      await exchange.postponeStakeRelease(user1, {from:user1}).should.be.rejected;
+    it("user1 try postpone user3 Stake Release", async () => {
+      await staking.lockStake(stakedBalance, {from:user3}).should.be.fulfilled;
+      await advanceTime(lockingDuration+1);
+      await advanceBlock();
+      await staking.requestReleaseStake({from:user3}).should.be.fulfilled;
+      await staking.postponeStakeRelease(user3, {from:user1}).should.be.rejected;
     });
 
-    it("owner postpone Stake Release", async () => {
-      await revertToSnapshot(requested_stake_snapshot);
-      await exchange.postponeStakeRelease(user1, {from:owner}).should.be.fulfilled;
-      let stakePhase = await exchange.getStakePhase(user1);
+    it("owner postpone user3 Stake Release", async () => {
+      await staking.postponeStakeRelease(user3, {from:owner}).should.be.fulfilled;
+      let stakePhase = await staking.getStakePhase(user3);
       stakePhase.toString().should.be.equal(FROZEN);
     });
 
     it("user1 try allow Stake Release", async () => {
-      await exchange.allowStakeRelease(user1, {from:user1}).should.be.rejected;
+      await staking.allowStakeRelease(user3, {from:user1}).should.be.rejected;
     });
 
-    it("owner allow Stake Release", async () => {
-      await exchange.allowStakeRelease(user1, {from:owner}).should.be.fulfilled;
-      let stakePhase = await exchange.getStakePhase(user1);
-      stakePhase.toString().should.be.equal(FROZEN);
+    it("owner allow user3 Stake Release", async () => {
+      await staking.allowStakeRelease(user3, {from:owner}).should.be.fulfilled;
+      let stakePhase = await staking.getStakePhase(user3);
+      stakePhase.toString().should.be.equal(READYTORELEASE);
     });
 
 
