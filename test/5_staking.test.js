@@ -69,7 +69,6 @@ const setBlockchainTime = async function(from_snapshot, time) {
   let bn = await web3.eth.getBlockNumber();
   let bl = await web3.eth.getBlock(bn);
   let tm = bl.timestamp;
-  console.log(tm, time, new Date().getTime(), Date.now()/1e3);
   await advanceTime(time-tm);
   await advanceBlock();
 }
