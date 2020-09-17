@@ -79,7 +79,8 @@ contract("Staking", ([owner, user1, user2, user3]) => {
     orion = await Orion.deployed();
     staking = await Staking.deployed(orion.address);
     exchange = await Exchange.deployed(staking.address, orion.address);
-    await staking.setExchangeAddress(exchange.address, {from:owner});
+    await staking.setExchangeAddress(exchange.address, {from:owner}).should.be
+          .fulfilled;;
     lib = await LibValidator.deployed();
   });
 
