@@ -1,7 +1,6 @@
 pragma solidity 0.5.10;
 pragma experimental ABIEncoderV2;
 
-import {Memory} from "./libs/Memory.sol";
 /**
  * @title PriceOracle
  * @dev Contract for storing and providing price data for the Orion Protocol
@@ -52,7 +51,7 @@ contract PriceOracle {
     address public oraclePublicKey;
     mapping(address => PriceDataOut) public assetPrices;
 
-    constructor(address publicKey) internal {
+    constructor(address publicKey) public {
         oraclePublicKey = publicKey;
     }
 
