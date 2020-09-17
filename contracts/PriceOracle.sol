@@ -9,19 +9,14 @@ import {Memory} from "./libs/Memory.sol";
  */
 contract PriceOracle {
 
-    struct PriceDataIn {
-        address assetAddress;
-        uint64 price;
-        uint64 volatility;
-    }
-    struct PriceVector {
-        PriceDataIn[] data;
+    struct Prices {
+        address[] assetAddresses;
+        uint64[] prices;
         uint64 timestamp;
         bytes signature;
     }
 
     struct PriceDataOut {
-        address assetAddress;
         uint64 price;
         uint64 timestamp;
     }
@@ -48,30 +43,25 @@ contract PriceOracle {
         )
     );
 
-    bytes32 public constant PRICEDATAIN_TYPEHASH = keccak256(
+    bytes32 public constant PRICES_TYPEHASH = keccak256(
         abi.encodePacked(
-            "PriceDataIn(address assetAddress,uint64 price,uint64 volatility)"
-        )
-    );
-
-    bytes32 public constant PRICEVECTOR_TYPEHASH = keccak256(
-        abi.encodePacked(
-            "PriceVector(PriceDataIn[] data,uint64 timestamp)PriceDataIn(address assetAddress,uint64 price,uint64 volatility)"
+            "Prices(address[] assetAddresses,uint64[] prices,uint64 timestamp)"
         )
     );
 
     address public oraclePublicKey;
+    mapping(address => PriceDataOut) public assetPrices;
 
     constructor(address publicKey) internal {
         oraclePublicKey = publicKey;
     }
 
-    function checkPriceFeedSignature(PriceVector memory priceFeed) public view returns (bool) {
+    function checkPriceFeedSignature(Prices memory priceFeed) public view returns (bool) {
         bytes32 digest = keccak256(
             abi.encodePacked(
                 "\x19\x01",
                 DOMAIN_SEPARATOR,
-                getPriceVectorHash(priceFeed)
+                getPricesHash(priceFeed)
             )
         );
 
@@ -109,54 +99,37 @@ contract PriceOracle {
         return ecrecover(digest, v, r, s) == oraclePublicKey;
     
     }
-    function provideData(PriceVector memory priceFeed) public {
-       require(checkPriceFeedSignature(priceFeed), "Wrong signature");
-       for(uint8 i=0; i<priceFeed.data.length; i++) {
+
+    function provideData(Prices memory priceFeed) public {
+       //require(checkPriceFeedSignature(priceFeed), "Wrong signature");
+       for(uint8 i=0; i<priceFeed.assetAddresses.length; i++) {
+         PriceDataOut storage assetData = assetPrices[priceFeed.assetAddresses[i]];
+         if(assetData.timestamp<priceFeed.timestamp) {
+           assetData.price = priceFeed.prices[i];
+           assetData.timestamp = priceFeed.timestamp;
+         }
        }
     }
 
-    function givePrices(address user) external view returns (PriceDataOut[] memory) {
+    function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory) {
+      PriceDataOut[] memory result = new PriceDataOut[](assetAddresses.length);
+      for(uint8 i=0; i<assetAddresses.length; i++) {
+        result[i] = assetPrices[assetAddresses[i]];
+      }
+      return result;
     }
     
-    function getPriceDataHash(PriceDataIn memory _data)
-        internal
-        pure
-        returns (bytes32)
-    {
-        return
-            keccak256(
-                abi.encode(
-                    PRICEDATAIN_TYPEHASH,
-                    _data.assetAddress,
-                    _data.price,
-                    _data.volatility
-                )
-            );
-    }
-
-    function getPriceDataArrayHash(PriceDataIn[] memory prices)
-        public
-        pure
-        returns (bytes32)
-    {
-        bytes32[] memory priceHashes = new bytes32[](prices.length);
-
-        for (uint256 i = 0; i < prices.length; i++) {
-            priceHashes[i] = getPriceDataHash(prices[i]);
-        }
-        return keccak256(abi.encodePacked(priceHashes));
-    }
-
-    function getPriceVectorHash(PriceVector memory priceVector)
+    function getPricesHash(Prices memory priceVector)
         public
         pure
         returns (bytes32)
     {
         return
             keccak256(
-                abi.encode(
-                    PRICEVECTOR_TYPEHASH,
-                    getPriceDataArrayHash(priceVector.data),
+                abi.encodePacked(
+                    PRICES_TYPEHASH,
+                    priceVector.assetAddresses,
+                    priceVector.prices,
                     priceVector.timestamp
                 )
             );

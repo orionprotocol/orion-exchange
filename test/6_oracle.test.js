@@ -15,7 +15,7 @@ let exchange, orion;
 const asset0="0x0000000000000000000000000000000000000000", 
       asset1="0x0000000000000000000000000000000000000001", 
       asset2="0x0000000000000000000000000000000000000002";
-let priceVector, msgParams1, msgParams2;
+let prices, msgParams1, msgParams2;
 
 const privKey2 =
         "ecbcd49667c96bcf8b30ccb35234a0b217ea039a8e097d3a70de9d28624ba520";
@@ -58,13 +58,9 @@ const domainData = {
           chainId: 666,
           salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
 };
-const priceDataType =  [
-            { name: "assetAddress", type: "address" },
-            { name: "price", type: "uint64" },
-            { name: "volatility", type: "uint64" }
-];
-const priceVectorType =  [
-            { name: "data", type: "PriceData[]" },
+const pricesType =  [
+            { name: "assetAddresses", type: "address[]" },
+            { name: "prices", type: "uint64[]" },
             { name: "timestamp", type: "uint64" },
 ];
 
@@ -86,88 +82,86 @@ contract("Exchange", ([owner, user1, oracle]) => {
     });
 
     it("Oracle sign price feed", async () => {
-      priceVector = {
-        data: [
-          {
-            assetAddress: asset0,
-            price: "0xfffff",
-            volatility: "0x0"
-          },
-          {
-            assetAddress: asset1,
-            price: "0xfffff1",
-            volatility: "0x0"
-          },
-          {
-            assetAddress: asset2,
-            price: "0xfffff2",
-            volatility: "0x0"
-          },
-        ],
+      prices= {
+        assetAddresses: [asset0,asset1,asset2],
+        prices: [1,2,3],
         timestamp: Date.now()
       };
       let msgParams = {
              types: {
                EIP712Domain: domain,
-               PriceVector: priceVectorType,
-               PriceData: priceDataType
+               Prices: pricesType,
              },
              domain: domainData,
-             primaryType: "PriceVector",
-             message: priceVector,
+             primaryType: "Prices",
+             message: prices,
       };
       msgParams1 = { data: msgParams };
       signature1 = sigUtil.signTypedData_v4(privKey, msgParams1);
-      priceVector.signature = signature1;
-      console.log(priceVector.data);
-      //console.log("eth", sigUtil.typedSignatureHash(priceVectorType));
-      console.log("solidity", await exchange.getPriceVectorHash(priceVector));
-      console.log(await exchange.checkPriceFeedSignature(priceVector));
-      console.log("sig", signature1);
+      prices.signature = signature1;
+      //console.log("eth", sigUtil.typedSignatureHash(prices));
+      //console.log("solidity", await exchange.getPricesHash(prices));
+      //console.log(await exchange.checkPriceFeedSignature(prices));
+      //console.log("sig", signature1);
       const recovered = sigUtil.recoverTypedSignature_v4({
         data: msgParams,
         sig: signature1
       });
       web3.utils.toChecksumAddress(recovered).should.be.equal(oracle);
+      const checkSignatureResult = await exchange.checkPriceFeedSignature(prices);
+      checkSignatureResult.should.be.equal(true);
     });
-
+    
     it("User1 send signed price feed", async () => {
-      await exchange.provideData(priceVector, { from: user1, gas:6000000 }
+      await exchange.provideData(prices, { from: user1 }
                                 ).should.be.fulfilled;
-      let prices = await exchange.givePrices([asset0, asset1,asset2]);
-      let calculatedPrices = [];
-      for (priceData of priceVector.data) {
-        calculatedPrices.push([priceData.price, priceData.volatility, priceVector.timestamp]);
+      let data = await exchange.givePrices([asset0, asset2, asset1, owner]);
+      let _returnedPrices = [];
+      let _returnedTS = [];
+      for (let i of data) {
+        _returnedPrices.push(parseInt(i.price));
+        _returnedTS.push(parseInt(i.timestamp));
       }
-      JSON.stringify(calculatedPrices).should.be.equal(JSON.stringify(priceVector.data));
+      JSON.stringify(_returnedPrices).should.be.equal(JSON.stringify([1,3,2,0]));
+      let t = prices.timestamp;
+      JSON.stringify(_returnedTS).should.be.equal(JSON.stringify([t,t,t,0]));
     });
-
+    
     it("Oracle sign and send next feed", async () => {
-      delete priceVector.signature;
-      priceVector.data[0].price="0x3";
+      let oldTS = prices.timestamp;
+      prices= {
+        assetAddresses: [asset2],
+        prices: [7],
+        timestamp: Date.now()
+      };
       let msgParams = {
              types: {
                EIP712Domain: domain,
-               PriceVector: priceVectorType,
-               PriceData: priceDataType
+               Prices: pricesType,
              },
              domain: domainData,
-             primaryType: "PriceVector",
-             message: priceVector,
+             primaryType: "Prices",
+             message: prices,
       };
       msgParams2 = { data: msgParams };
-      signature2 = sigUtil.signTypedData_v4(privKey, msgParams2);
-      priceVector.signature = signature2;        
-      await exchange.provideData(priceVector, { from: user1 }
-                                ).should.be.fulfilled;
-      let prices = await exchange.givePrices([asset0, asset1,asset2]);
-      let calculatedPrices = [];
-      for (priceData of priceVector.data) {
-        calculatedPrices.push([priceData.price, priceData.volatility, priceVector.timestamp]);
-      }
-      JSON.stringify(calculatedPrices).should.be.equal(JSON.stringify(priceVector.data));
-    });
+      signature2 = sigUtil.signTypedData_v4(privKey, msgParams1);
+      prices.signature = signature2;
 
+      await exchange.provideData(prices, { from: user1 }
+                                ).should.be.fulfilled;
+      let data = await exchange.givePrices([asset0, asset2, asset1, owner]);
+      let _returnedPrices = [];
+      let _returnedTS = [];
+      for (let i of data) {
+        _returnedPrices.push(parseInt(i.price));
+        _returnedTS.push(parseInt(i.timestamp));
+      }
+      JSON.stringify(_returnedPrices).should.be.equal(JSON.stringify([1,7,2,0]));
+      let t = prices.timestamp;
+      JSON.stringify(_returnedTS).should.be.equal(JSON.stringify([oldTS,t,oldTS,0]));
+
+    });
+    //TODO test timestamp ranges: too early, too late, etc
     
   });
 
