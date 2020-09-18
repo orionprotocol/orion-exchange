@@ -44,7 +44,7 @@ const getSnapshot = () => {
 
 const advanceTime = (time) => {
   return new Promise((resolve, reject) => {
-    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_increaseTime', params: [time], id: new Date().getTime()}, 
+    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_increaseTime', params: [time], id: new Date().getTime()},
                               (err, result) => {
                                  if (err) { return reject(err); }
                                  return resolve(result);
@@ -54,7 +54,7 @@ const advanceTime = (time) => {
 
 const advanceBlock = () => {
   return new Promise((resolve, reject) => {
-    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_mine', id: new Date().getTime()}, 
+    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_mine', id: new Date().getTime()},
                               (err, result) => {
                                 if (err) { return reject(err); }
                                 return resolve(result);
@@ -87,7 +87,7 @@ contract("Staking", ([owner, user1, user2, user3]) => {
             .fulfilled;
     });
   });
-  
+
 
   describe("Staking::basic", () => {
     it("users deposit ORN to exchange", async () => {
@@ -128,6 +128,10 @@ contract("Staking", ([owner, user1, user2, user3]) => {
       stakeBalance.toString().should.be.equal(String(stakedBalance));
       stakePhase.toString().should.be.equal(String(LOCKING));
     });
+    it("locked stake value should be 0 for LOCKING phase", async () => {
+      let lockedBalance = await staking.getLockedStakeBalance(user1);
+      lockedBalance.toString().should.be.equal(0);
+    });
 
     it("user1 unlock recently (before lock period) staked ORN", async () => {
       await staking.requestReleaseStake({from:user1}).should.be.fulfilled;
@@ -140,13 +144,17 @@ contract("Staking", ([owner, user1, user2, user3]) => {
               .should.be.equal(String(depositedBalance));
     });
 
-    it("user2 start unlocking staked ORN after lock period", async () => {
+    it("locked stake value = staked value in LOCKED phase", async () => {
       await staking.lockStake(stakedBalance, {from:user2}).should.be.fulfilled;
       await advanceTime(lockingDuration+1);
       await advanceBlock();
       let stakePhase = await staking.getStakePhase(user2);
       stakePhase.toString().should.be.equal(String(LOCKED));
+      let lockedBalance = await staking.getLockedStakeBalance(user2);
+      lockedBalance.toString().should.be.equal(String(stakedBalance));
+    });
 
+    it("user2 start unlocking staked ORN after lock period", async () => {
       await staking.requestReleaseStake({from:user2}).should.be.fulfilled;
       let stakeBalance = await staking.getStakeBalance(user2);
       stakePhase = await staking.getStakePhase(user2);
@@ -155,6 +163,11 @@ contract("Staking", ([owner, user1, user2, user3]) => {
       let orionBalance = await exchange.getBalance(orion.address, user2);
       orionBalance.toString().
               should.be.equal(String(depositedBalance-stakedBalance));
+    });
+
+    it("locked stake value should be 0 for RELEASING phase", async () => {
+      let lockedBalance = await staking.getLockedStakeBalance(user2);
+      lockedBalance.toString().should.be.equal(0);
     });
 
     it("user2 try finish unlocking staked ORN before date", async () => {
@@ -182,7 +195,7 @@ contract("Staking", ([owner, user1, user2, user3]) => {
     });
 
   });
-  describe("Staking::admin", () => { 
+  describe("Staking::admin", () => {
     it("user1 try postpone user3 Stake Release", async () => {
       await staking.lockStake(stakedBalance, {from:user3}).should.be.fulfilled;
       await advanceTime(lockingDuration+1);
@@ -197,13 +210,24 @@ contract("Staking", ([owner, user1, user2, user3]) => {
       stakePhase.toString().should.be.equal(FROZEN);
     });
 
-    it("user3 release frozen stake", async () => {
+    it("locked stake value = staked value in FROZEN phase", async () => {
+      let lockedBalance = await staking.getLockedStakeBalance(user3);
+      lockedBalance.toString().should.be.equal(String(stakedBalance));
+    });
+
+
+    it("user3 try release frozen stake", async () => {
       await staking.requestReleaseStake({from:user3}).should.be.rejected;
     });
 
     it("non-admin users try allow Stake Release", async () => {
       await staking.allowStakeRelease(user3, {from:user1}).should.be.rejected;
       await staking.allowStakeRelease(user3, {from:user3}).should.be.rejected;
+    });
+
+    it("user3 try release frozen stake after release periods", async () => {
+      await advanceTime(lockingDuration+releasingDuration+1);
+      await staking.requestReleaseStake({from:user3}).should.be.rejected;
     });
 
     it("owner allow user3 Stake Release", async () => {
