@@ -130,7 +130,7 @@ contract("Staking", ([owner, user1, user2, user3]) => {
     });
     it("locked stake value should be 0 for LOCKING phase", async () => {
       let lockedBalance = await staking.getLockedStakeBalance(user1);
-      lockedBalance.toString().should.be.equal(0);
+      lockedBalance.toString().should.be.equal(String(0));
     });
 
     it("user1 unlock recently (before lock period) staked ORN", async () => {
@@ -167,7 +167,7 @@ contract("Staking", ([owner, user1, user2, user3]) => {
 
     it("locked stake value should be 0 for RELEASING phase", async () => {
       let lockedBalance = await staking.getLockedStakeBalance(user2);
-      lockedBalance.toString().should.be.equal(0);
+      lockedBalance.toString().should.be.equal(String(0));
     });
 
     it("user2 try finish unlocking staked ORN before date", async () => {
