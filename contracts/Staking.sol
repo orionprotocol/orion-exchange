@@ -91,7 +91,7 @@ contract Staking is Ownable {
         stake.phase = StakePhase.READYTORELEASE;        
     }
 
-    function seize(address user, address receiver) external {
+    function seize(address user, address receiver) external onlyOwner {
     }
 
     function getStake(address user) public view returns (Stake memory){
@@ -110,5 +110,12 @@ contract Staking is Ownable {
 
     function getStakePhase(address user) public view returns (StakePhase) {
         return getStake(user).phase;
+    }
+
+    function getLockedStakeBalance(address user) public view returns (uint256) {
+      Stake memory stake = getStake(user);
+      if(stake.phase == StakePhase.LOCKED || stake.phase == StakePhase.FROZEN)
+        return stake.amount;
+      return 0;
     }
 }
