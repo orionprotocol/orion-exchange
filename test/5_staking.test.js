@@ -75,14 +75,19 @@ const setBlockchainTime = async function(from_snapshot, time) {
 
 contract("Staking", ([owner, user1, user2, user3]) => {
 
-  describe("Staking::instance", async () => {
-    orion = await Orion.deployed();
-    staking = await Staking.deployed(orion.address);
-    exchange = await Exchange.deployed(staking.address, orion.address);
-    await staking.setExchangeAddress(exchange.address, {from:owner}).should.be
-          .fulfilled;;
-    lib = await LibValidator.deployed();
+  describe("Staking::instance", () => {
+    it("deploy", async () => {
+      orion = await Orion.deployed();
+      staking = await Staking.deployed(orion.address);
+      exchange = await Exchange.deployed(staking.address, orion.address);
+      lib = await LibValidator.deployed();
+    });
+    it("set params", async () => {
+      await staking.setExchangeAddress(exchange.address, {from:owner}).should.be
+            .fulfilled;
+    });
   });
+  
 
   describe("Staking::basic", () => {
     it("users deposit ORN to exchange", async () => {
@@ -109,6 +114,9 @@ contract("Staking", ([owner, user1, user2, user3]) => {
       await staking.lockStake(depositedBalance+1, {from:user1}).should.be.rejected;
     });
 
+    it("use1 try unlocking before locking", async () => {
+      await staking.requestReleaseStake({from:user1}).should.be.rejected;
+    });
 
     it("user1 lock ORN for staking", async () => {
       await staking.lockStake(stakedBalance, {from:user1}).should.be.fulfilled;
@@ -169,6 +177,12 @@ contract("Staking", ([owner, user1, user2, user3]) => {
               .should.be.equal(String(depositedBalance));
     });
 
+    it("user2 try unlock stake after successful unlocking", async () => {
+      await staking.requestReleaseStake({from:user2}).should.be.rejected;
+    });
+
+  });
+  describe("Staking::admin", () => { 
     it("user1 try postpone user3 Stake Release", async () => {
       await staking.lockStake(stakedBalance, {from:user3}).should.be.fulfilled;
       await advanceTime(lockingDuration+1);
@@ -183,8 +197,13 @@ contract("Staking", ([owner, user1, user2, user3]) => {
       stakePhase.toString().should.be.equal(FROZEN);
     });
 
-    it("user1 try allow Stake Release", async () => {
+    it("user3 release frozen stake", async () => {
+      await staking.requestReleaseStake({from:user3}).should.be.rejected;
+    });
+
+    it("non-admin users try allow Stake Release", async () => {
       await staking.allowStakeRelease(user3, {from:user1}).should.be.rejected;
+      await staking.allowStakeRelease(user3, {from:user3}).should.be.rejected;
     });
 
     it("owner allow user3 Stake Release", async () => {
@@ -193,6 +212,11 @@ contract("Staking", ([owner, user1, user2, user3]) => {
       stakePhase.toString().should.be.equal(READYTORELEASE);
     });
 
+
+    it("non-admin user try set exchange", async () => {
+      await staking.setExchangeAddress(user1, {from:user1}).should.be
+            .rejected;
+    });
 
   });
 
