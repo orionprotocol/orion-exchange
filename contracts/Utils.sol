@@ -1,10 +1,11 @@
-pragma solidity 0.5.10;
+pragma solidity ^0.6.0;
 
-import "@openzeppelin/contracts/token/ERC20/ERC20Detailed.sol";
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/GSN/Context.sol";
 import "./libs/LibUnitConverter.sol";
 
-contract Utils {
+contract Utils is Context {
     using SafeMath for uint256;
 
     uint256 private _guardCounter;
@@ -39,9 +40,11 @@ contract Utils {
         paying for execution may not be the actual sender (as far as an application
         is concerned).
      */
+    /* Defined in GSN
     function _msgSender() internal view returns (address payable) {
         return msg.sender;
     }
+    */
 
     function safeTransfer(
         address to,
@@ -60,7 +63,7 @@ contract Utils {
             require(success, "E6");
             assert(address(this).balance == balanceBeforeTransfer.sub(amount));
         } else {
-            ERC20Detailed asset = ERC20Detailed(assetAddress);
+            ERC20 asset = ERC20(assetAddress);
             uint256 balanceBeforeTransfer = asset.balanceOf(address(this));
             require(asset.transfer(_msgSender(), amount), "E6");
             assert(

@@ -1,6 +1,6 @@
-pragma solidity 0.5.10;
+pragma solidity ^0.6.0;
 
-import '@openzeppelin/contracts/token/ERC20/ERC20Detailed.sol';
+import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
 import '@openzeppelin/contracts/math/SafeMath.sol';
 
 
@@ -18,7 +18,7 @@ library LibUnitConverter {
             return amount.mul(1 ether).div(10**8); // 18 decimals
         }
 
-        ERC20Detailed asset = ERC20Detailed(assetAddress);
+        ERC20 asset = ERC20(assetAddress);
         uint decimals = asset.decimals();
 
         return amount.mul(10**decimals).div(10**8);
@@ -33,7 +33,7 @@ library LibUnitConverter {
             return uint64(amount.mul(10**8).div(1 ether));
         }
 
-        ERC20Detailed asset = ERC20Detailed(assetAddress);
+        ERC20 asset = ERC20(assetAddress);
         uint decimals = asset.decimals();
 
         return uint64(amount.mul(10**8).div(10**decimals));

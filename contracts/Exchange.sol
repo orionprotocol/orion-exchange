@@ -1,9 +1,10 @@
-pragma solidity 0.5.10;
+pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
+import "@openzeppelin/contracts/math/SignedSafeMath.sol";
 import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Utils.sol";
 import "./libs/LibValidator.sol";
 import "./PriceOracleInterface.sol";
@@ -15,7 +16,9 @@ import "./StakingInterface.sol";
  * @author @wafflemakr
  */
 contract Exchange is Utils, Ownable {
+    using SignedSafeMath for int256;
     using SafeMath for uint64;
+
     using LibValidator for LibValidator.Order;
 
     // EVENTS
@@ -421,7 +424,7 @@ contract Exchange is Utils, Ownable {
     /**
      *  @dev  revert on fallback function
      */
-    function() external {
+    fallback() external {
         revert("E6");
     }
 
