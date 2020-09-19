@@ -47,15 +47,24 @@ contract Staking is Ownable {
         require(baseAsset.transferFrom(address(_exchange), address(this), amount), "E6");
         _exchange.moveToStake(_msgSender(),amount);
         Stake storage stake = stakingData[_msgSender()];
-        stake.amount = stake.amount.add(amount);            
+        stake.amount = stake.amount.add(amount);
     }
 
     function moveToBalance() internal {
         Stake storage stake = stakingData[_msgSender()];
         require(baseAsset.transfer(address(_exchange), stake.amount), "E6");
         _exchange.moveFromStake(_msgSender(), stake.amount);
-        stake.amount = 0;     
+        stake.amount = 0;
     }
+
+    function seizeFromStake(address user, address receiver, uint256 amount) external {
+        require(_msgSender() == address(_exchange), "Unauthorized seizeFromStake");
+        Stake storage stake = stakingData[user];
+        stake.amount = stake.amount.sub(amount);
+        require(baseAsset.transfer(address(_exchange), amount), "E6");
+        _exchange.moveFromStake(receiver, amount);
+    }
+
 
     function lockStake(uint256 amount) external {
         assert(getStakePhase(_msgSender()) == StakePhase.NOTSTAKED); // TODO do we need this?
@@ -83,12 +92,12 @@ contract Staking is Ownable {
 
     function postponeStakeRelease(address user) external onlyOwner{
         Stake storage stake = stakingData[user];
-        stake.phase = StakePhase.FROZEN;        
+        stake.phase = StakePhase.FROZEN;
     }
 
     function allowStakeRelease(address user) external onlyOwner {
         Stake storage stake = stakingData[user];
-        stake.phase = StakePhase.READYTORELEASE;        
+        stake.phase = StakePhase.READYTORELEASE;
     }
 
     function seize(address user, address receiver) external onlyOwner {

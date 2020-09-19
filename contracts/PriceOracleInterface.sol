@@ -5,6 +5,7 @@ contract PriceOracleInterface {
         uint64 price;
         uint64 timestamp;
     }
-  function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory) {
-  }
+    mapping(address => PriceDataOut) public assetPrices;
+    function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory) {
+    }
 }

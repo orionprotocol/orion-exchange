@@ -58,6 +58,24 @@ contract Exchange is Utils, Ownable {
         uint256 timestamp;
     }
 
+    enum PositionState {
+        POSITIVE,
+        NEGATIVE, // weighted position below 0
+        OVERDUE,  // liability is not returned for too long
+        NOPRICE,  // some assets has no price or expired
+        INCORRECT // some of the basic requirements are not met:
+                  // too many liabilities, no locked stake, etc
+    }
+    struct Position {
+        PositionState state;
+        int256 weightedPosition;
+        int256 totalPosition;
+    }
+
+    struct Liability {
+        address asset;
+        uint64 timestamp;
+    }
     // Get trades by orderHash
     mapping(bytes32 => Trade[]) public trades;
 
@@ -66,6 +84,18 @@ contract Exchange is Utils, Ownable {
 
     // Get user balance by address and asset address
     mapping(address => mapping(address => uint256)) private assetBalances;
+    // List of assets with negative balance for each user
+    mapping(address => Liability[]) public liabilities;
+    // List of assets which can be used as collateral and risk coefficients for them
+    address[] public collateralAssets;
+    mapping(address => uint8) public assetRisks;
+    // Risk coefficient for locked ORN
+    uint8 public stakeRisk;
+    // Liquidation premium
+    uint8 public liquidationPremium;
+    // Delays after which price and position become outdated
+    uint64 public priceOverdue;
+    uint64 public positionOverdue;
 
     StakingInterface _stakingContract;
     IERC20 _orionToken;
@@ -78,6 +108,10 @@ contract Exchange is Utils, Ownable {
       _orionToken = IERC20(orionToken);
       _orionToken.approve(address(_stakingContract), 2**256-1);
       _oracle = PriceOracleInterface(priceOracleAddress);
+      stakeRisk = 242; // 242.25/255 = 0.9;
+      priceOverdue = 3 * 3600;
+      positionOverdue = 24 * 3600;
+      liquidationPremium = 12; // 12.75/255 = 0.05
     }
 
     /**
@@ -275,6 +309,8 @@ contract Exchange is Utils, Ownable {
         // Update User's balances
         updateOrderBalance(buyOrder, filledAmount, amountQuote, true);
         updateOrderBalance(sellOrder, filledAmount, amountQuote, false);
+        require(checkPosition(buyOrder.senderAddress), "Incorrect margin position for buyer");
+        require(checkPosition(sellOrder.senderAddress), "Incorrect margin position for seller");
 
         // Update trades
         updateTrade(buyOrderHash, buyOrder, filledAmount, filledPrice);
@@ -328,6 +364,9 @@ contract Exchange is Utils, Ownable {
         uint256 matcherFee = order.matcherFee.mul(filledAmount).div(
             order.amount
         );
+        bool quoteInLiabilities = assetBalances[user][order.quoteAsset]<0;
+        bool baseInLiabilities  = assetBalances[user][order.baseAsset]<0;
+        bool feeAssetInLiabilities  = assetBalances[user][order.matcherFeeAsset]<0;
 
         if (isBuyer) {
             // Update Buyer's Balance (- quoteAsset + baseAsset  )
@@ -337,6 +376,12 @@ contract Exchange is Utils, Ownable {
             assetBalances[user][order.baseAsset] = baseBalance.add(
                 filledAmount
             );
+            if(!quoteInLiabilities && (assetBalances[user][order.quoteAsset]<0)){
+              setLiability(user, order.quoteAsset);
+            }
+            if(baseInLiabilities && (assetBalances[user][order.baseAsset]>0)) {
+              removeLiability(user, order.baseAsset);
+            }
         } else {
             // Update Seller's Balance  (+ quoteAsset - baseAsset   )
             assetBalances[user][order.quoteAsset] = quoteBalance.add(
@@ -345,12 +390,21 @@ contract Exchange is Utils, Ownable {
             assetBalances[user][order.baseAsset] = baseBalance.sub(
                 filledAmount
             );
+            if(quoteInLiabilities && (assetBalances[user][order.quoteAsset]>0)){
+              removeLiability(user, order.quoteAsset);
+            }
+            if(!baseInLiabilities && (assetBalances[user][order.baseAsset]<0)) {
+              setLiability(user, order.baseAsset);
+            }
         }
 
         // User pay for fees
         assetBalances[user][order.matcherFeeAsset] = assetBalances[user][order
             .matcherFeeAsset]
             .sub(matcherFee);
+        if(!feeAssetInLiabilities && (assetBalances[user][order.matcherFeeAsset]<0)) {
+            setLiability(user, order.matcherFeeAsset);
+        }
         safeTransfer(order.matcherAddress, order.matcherFeeAsset, matcherFee);
     }
 
@@ -419,6 +473,111 @@ contract Exchange is Utils, Ownable {
             orderStatus[orderHash] == Status.PARTIALLY_CANCELLED ||
                 orderStatus[orderHash] == Status.CANCELLED
         );
+    }
+
+    function checkPosition(address user) public view returns (bool) {
+        if(liabilities[user].length == 0)
+          return true;
+        return calcPosition(user).state == PositionState.POSITIVE;
+    }
+
+    function calcAssets(address user) internal view returns
+        (bool outdated, int256 weightedPosition, int256 totalPosition) {
+        for(uint8 i = 0; i < collateralAssets.length; i++) {
+          (uint64 price, uint64 timestamp) = _oracle.assetPrices(collateralAssets[i]);//TODO givePrices
+          uint256 assetValue = assetBalances[user][collateralAssets[i]] *
+                               price;
+          weightedPosition += int256(assetValue.mul(assetRisks[collateralAssets[i]]).div(256)); //TODO unsafe
+          totalPosition += int256(assetValue); //TODO unsafe
+          outdated = outdated ||
+                          ((timestamp + priceOverdue) < now);
+        }
+        return (outdated, weightedPosition, totalPosition);
+    }
+    function calcLiabilities(address user) internal view returns
+        (bool outdated, bool overdue, int256 weightedPosition, int256 totalPosition) {
+        for(uint8 i = 0; i < liabilities[user].length; i++) {
+          Liability storage liability = liabilities[user][i];
+          (uint64 price, uint64 timestamp) = _oracle.assetPrices(liability.asset);//TODO givePrices
+          int256 liabilityValue = int256(assetBalances[user][liability.asset].mul(price)); //TODO unsafe
+          weightedPosition -= liabilityValue;
+          totalPosition -= liabilityValue;
+          overdue = overdue || ((liability.timestamp + positionOverdue) < now);
+          outdated = outdated ||
+                          ((timestamp + priceOverdue) < now);
+        }
+
+        return (outdated, overdue, weightedPosition, totalPosition);
+    }
+    function calcPosition(address user) public view returns (Position memory) {
+        uint256 lockedAmount = _stakingContract.getLockedStakeBalance(user);
+        (bool outdatedPrice, int256 weightedPosition, int256 totalPosition) = calcAssets(user);
+        weightedPosition += int256(lockedAmount.mul(stakeRisk).div(256));//TODO unsafe
+        totalPosition += int256(stakeRisk);
+        (bool _outdatedPrice, bool overdue, int256 _weightedPosition, int256 _totalPosition) =
+           calcLiabilities(user);
+        weightedPosition =weightedPosition.add(_weightedPosition);
+        totalPosition = totalPosition.add(_totalPosition);
+        outdatedPrice = outdatedPrice || _outdatedPrice;
+        bool incorrect = (liabilities[user].length > 3) ||
+                         ((liabilities[user].length>0) && (lockedAmount==0));
+        Position memory result;
+        if(weightedPosition<0) {
+          result.state = PositionState.NEGATIVE;
+        }
+        if(outdatedPrice) {
+          result.state = PositionState.NOPRICE;
+        }
+        if(overdue) {
+          result.state = PositionState.OVERDUE;
+        }
+        if(incorrect) {
+          result.state = PositionState.INCORRECT;
+        }
+        result.weightedPosition = weightedPosition;
+        result.totalPosition = totalPosition;
+
+    }
+
+    function partiallyLiquidate(address broker, address redeemedAsset, uint256 amount) public {
+        Position memory initialPosition = calcPosition(broker);
+        require(initialPosition.state == PositionState.NEGATIVE,
+                "Can not liquidate in this position");
+        address user = _msgSender();
+        require(assetBalances[user][redeemedAsset]>amount,
+                "It is forbidden to redistribute liabilities");
+        assetBalances[user][redeemedAsset] = assetBalances[user][redeemedAsset]
+                                             .sub(amount);
+        assetBalances[broker][redeemedAsset] = assetBalances[broker][redeemedAsset]
+                                             .add(amount);
+        (uint64 price, uint64 timestamp) = _oracle.assetPrices(redeemedAsset);
+        require((timestamp + priceOverdue) < now, "Price is outdated");
+        uint256 orionAmount = amount.mul(price).div(255).mul(255+liquidationPremium);
+        _stakingContract.seizeFromStake(broker, user, orionAmount);
+        Position memory finalPosition = calcPosition(broker);
+        require( (finalPosition.state == PositionState.NEGATIVE) ||
+                 (finalPosition.state == PositionState.POSITIVE),
+                 "Incorrect state position after liquidation");
+        require(finalPosition.weightedPosition>initialPosition.weightedPosition,
+                "Liquidation should not aggravate margin position");
+    }
+
+    function setLiability(address user, address asset) internal {
+        Liability memory newLiability = Liability({asset: asset, timestamp: uint64(now)});
+        liabilities[user].push(newLiability);
+    }
+
+    function removeLiability(address user, address asset) internal {
+        bool shift = false;
+        for(uint8 i=0; i<liabilities[user].length-1; i++) {
+          if(liabilities[user][i].asset == asset) {
+            shift = true;
+          }
+          if(shift)
+            liabilities[user][i] = liabilities[user][i+1];
+        }
+        if(shift)
+          liabilities[user].pop();
     }
 
     /**
