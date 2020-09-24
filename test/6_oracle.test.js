@@ -95,19 +95,15 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
       msgParams1 = { data: msgParams };
       signature1 = sigUtil.signTypedData_v4(privKey, msgParams1);
       prices.signature = signature1;
-      //console.log("eth", sigUtil.typedSignatureHash(prices));
-      //console.log("solidity", await priceOracle.getPricesHash(prices));
-      //console.log(await priceOracle.checkPriceFeedSignature(prices));
-      //console.log("sig", signature1);
       const recovered = sigUtil.recoverTypedSignature_v4({
         data: msgParams,
         sig: signature1
       });
       web3.utils.toChecksumAddress(recovered).should.be.equal(oracle);
       const checkSignatureResult = await priceOracle.checkPriceFeedSignature(prices);
-      //checkSignatureResult.should.be.equal(true); //TODO
+      checkSignatureResult.should.be.equal(true);
     });
-    
+
     it("User1 send signed price feed", async () => {
       await priceOracle.provideData(prices, { from: user1 }
                                 ).should.be.fulfilled;
@@ -122,7 +118,7 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
       let t = prices.timestamp;
       JSON.stringify(_returnedTS).should.be.equal(JSON.stringify([t,t,t,0]));
     });
-    
+
     it("Oracle sign and send next feed", async () => {
       let oldTS = prices.timestamp;
       prices= {
@@ -140,7 +136,7 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
              message: prices,
       };
       msgParams2 = { data: msgParams };
-      signature2 = sigUtil.signTypedData_v4(privKey, msgParams1);
+      signature2 = sigUtil.signTypedData_v4(privKey, msgParams2);
       prices.signature = signature2;
 
       await priceOracle.provideData(prices, { from: user1 }
@@ -158,7 +154,7 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
 
     });
     //TODO test timestamp ranges: too early, too late, etc
-    
+
   });
 
 });
