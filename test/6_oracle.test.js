@@ -15,10 +15,12 @@ const asset0="0x0000000000000000000000000000000000000000",
       asset2="0x0000000000000000000000000000000000000002";
 let prices, msgParams1, msgParams2;
 
+const privKey1 =
+        "c09ae3abc13c501fb9ff1c3c8ad3256678416f73a41433411f1714ae7b547fe3";
 const privKey2 =
         "ecbcd49667c96bcf8b30ccb35234a0b217ea039a8e097d3a70de9d28624ba520";
 const privKey = Buffer.from(privKey2, "hex");
-
+const wrongPrivKey = Buffer.from(privKey1, "hex");
 
 async function getLastEvent(eventName, user) {
   let events = await priceOracle.getPastEvents(eventName, {
@@ -117,6 +119,35 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
       JSON.stringify(_returnedPrices).should.be.equal(JSON.stringify([1,3,2,0]));
       let t = prices.timestamp;
       JSON.stringify(_returnedTS).should.be.equal(JSON.stringify([t,t,t,0]));
+    });
+
+    it("User1 send wrongly signed price feed", async () => {
+      prices_ = {
+        assetAddresses: [asset0,asset1,asset2,user1],
+        prices: [1,2,3,4],
+        timestamp: Date.now()
+      };
+      let msgParams_ = {
+             types: {
+               EIP712Domain: domain,
+               Prices: pricesType,
+             },
+             domain: domainData,
+             primaryType: "Prices",
+             message: prices_,
+      };
+      let msgParams1_ = { data: msgParams_ };
+      signature = sigUtil.signTypedData_v4(wrongPrivKey, msgParams1_);
+      prices.signature = signature;
+      const recovered = sigUtil.recoverTypedSignature_v4({
+        data: msgParams_,
+        sig: signature
+      });
+      web3.utils.toChecksumAddress(recovered).should.be.equal(user1);
+      const checkSignatureResult = await priceOracle.checkPriceFeedSignature(prices);
+      checkSignatureResult.should.be.equal(false);
+      await priceOracle.provideData(prices, { from: user1 }
+                                ).should.be.rejected;
     });
 
     it("Oracle sign and send next feed", async () => {
