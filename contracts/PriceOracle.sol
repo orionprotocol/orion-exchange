@@ -79,7 +79,7 @@ contract PriceOracle is EIP712Interface {
     }
 
     function provideData(Prices memory priceFeed) public {
-       //require(checkPriceFeedSignature(priceFeed), "Wrong signature");
+       require(checkPriceFeedSignature(priceFeed), "Wrong signature");
        for(uint8 i=0; i<priceFeed.assetAddresses.length; i++) {
          PriceDataOut storage assetData = assetPrices[priceFeed.assetAddresses[i]];
          if(assetData.timestamp<priceFeed.timestamp) {
@@ -104,10 +104,10 @@ contract PriceOracle is EIP712Interface {
     {
         return
             keccak256(
-                abi.encodePacked(
+                abi.encode(
                     PRICES_TYPEHASH,
-                    priceVector.assetAddresses,
-                    priceVector.prices,
+                    keccak256(abi.encodePacked(priceVector.assetAddresses)),
+                    keccak256(abi.encodePacked(priceVector.prices)),
                     priceVector.timestamp
                 )
             );
