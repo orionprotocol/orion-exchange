@@ -9,6 +9,7 @@ import "./Utils.sol";
 import "./libs/LibValidator.sol";
 import "./PriceOracleInterface.sol";
 import "./StakingInterface.sol";
+import "./libs/MarginalFunctionality.sol";
 
 /**
  * @title Exchange
@@ -72,10 +73,6 @@ contract Exchange is Utils, Ownable {
         int256 totalPosition;
     }
 
-    struct Liability {
-        address asset;
-        uint64 timestamp;
-    }
     // Get trades by orderHash
     mapping(bytes32 => Trade[]) public trades;
 
@@ -85,7 +82,7 @@ contract Exchange is Utils, Ownable {
     // Get user balance by address and asset address
     mapping(address => mapping(address => uint256)) private assetBalances;
     // List of assets with negative balance for each user
-    mapping(address => Liability[]) public liabilities;
+    mapping(address => MarginalFunctionality.Liability[]) public liabilities;
     // List of assets which can be used as collateral and risk coefficients for them
     address[] public collateralAssets;
     mapping(address => uint8) public assetRisks;
@@ -380,7 +377,7 @@ contract Exchange is Utils, Ownable {
               setLiability(user, order.quoteAsset);
             }
             if(baseInLiabilities && (assetBalances[user][order.baseAsset]>0)) {
-              removeLiability(user, order.baseAsset);
+              MarginalFunctionality.removeLiability(user, order.baseAsset, liabilities);
             }
         } else {
             // Update Seller's Balance  (+ quoteAsset - baseAsset   )
@@ -391,7 +388,7 @@ contract Exchange is Utils, Ownable {
                 filledAmount
             );
             if(quoteInLiabilities && (assetBalances[user][order.quoteAsset]>0)){
-              removeLiability(user, order.quoteAsset);
+              MarginalFunctionality.removeLiability(user, order.quoteAsset, liabilities);
             }
             if(!baseInLiabilities && (assetBalances[user][order.baseAsset]<0)) {
               setLiability(user, order.baseAsset);
@@ -481,18 +478,15 @@ contract Exchange is Utils, Ownable {
         return calcPosition(user).state == PositionState.POSITIVE;
     }
 
-    function calcAssets(address user) internal view returns
+/*    function calcAssets(address user) internal view returns
         (bool outdated, int256 weightedPosition, int256 totalPosition) {
-        for(uint8 i = 0; i < collateralAssets.length; i++) {
-          (uint64 price, uint64 timestamp) = _oracle.assetPrices(collateralAssets[i]);//TODO givePrices
-          uint256 assetValue = assetBalances[user][collateralAssets[i]] *
-                               price;
-          weightedPosition += int256(assetValue.mul(assetRisks[collateralAssets[i]]).div(256)); //TODO unsafe
-          totalPosition += int256(assetValue); //TODO unsafe
-          outdated = outdated ||
-                          ((timestamp + priceOverdue) < now);
-        }
-        return (outdated, weightedPosition, totalPosition);
+        /*return MarginalFunctionality.calcAssets(user, 
+                                                _oracle,
+                                                collateralAssets,
+                                                assetBalances,
+                                                assetRisks,
+                                                priceOverdue);
+        return (true,0,0);
     }
     function calcLiabilities(address user) internal view returns
         (bool outdated, bool overdue, int256 weightedPosition, int256 totalPosition) {
@@ -509,6 +503,23 @@ contract Exchange is Utils, Ownable {
 
         return (outdated, overdue, weightedPosition, totalPosition);
     }
+*/
+    function calcPosition(address user) public view returns (Position memory) {
+        MarginalFunctionality.UsedConstants memory constants = 
+          MarginalFunctionality.UsedConstants(user, 
+                                              _oracle, 
+                                              _stakingContract,
+                                              positionOverdue,
+                                              priceOverdue,
+                                              stakeRisk);
+        MarginalFunctionality.calcPosition(collateralAssets,
+                                           liabilities,
+                                           assetBalances,
+                                           assetRisks,
+                                           constants);
+
+    }
+/*
     function calcPosition(address user) public view returns (Position memory) {
         uint256 lockedAmount = _stakingContract.getLockedStakeBalance(user);
         (bool outdatedPrice, int256 weightedPosition, int256 totalPosition) = calcAssets(user);
@@ -538,7 +549,7 @@ contract Exchange is Utils, Ownable {
         result.totalPosition = totalPosition;
 
     }
-
+*/    
     function partiallyLiquidate(address broker, address redeemedAsset, uint256 amount) public {
         Position memory initialPosition = calcPosition(broker);
         require(initialPosition.state == PositionState.NEGATIVE,
@@ -551,23 +562,26 @@ contract Exchange is Utils, Ownable {
         assetBalances[broker][redeemedAsset] = assetBalances[broker][redeemedAsset]
                                              .add(amount);
         (uint64 price, uint64 timestamp) = _oracle.assetPrices(redeemedAsset);
-        require((timestamp + priceOverdue) < now, "Price is outdated");
+        require((timestamp + priceOverdue) < now, "E9"); //Price is outdated
         uint256 orionAmount = amount.mul(price).div(255).mul(255+liquidationPremium);
         _stakingContract.seizeFromStake(broker, user, orionAmount);
         Position memory finalPosition = calcPosition(broker);
-        require( (finalPosition.state == PositionState.NEGATIVE) ||
-                 (finalPosition.state == PositionState.POSITIVE),
-                 "Incorrect state position after liquidation");
-        require(finalPosition.weightedPosition>initialPosition.weightedPosition,
-                "Liquidation should not aggravate margin position");
+        
+        require( ((finalPosition.state == PositionState.NEGATIVE) ||
+                 (finalPosition.state == PositionState.POSITIVE)) &&
+                 (finalPosition.weightedPosition>initialPosition.weightedPosition),
+                 "E10");//Incorrect state position after liquidation
+        //require(finalPosition.weightedPosition>initialPosition.weightedPosition,
+        //        "E11");//Liquidation should not aggravate margin position
+        
     }
-
+    
     function setLiability(address user, address asset) internal {
-        Liability memory newLiability = Liability({asset: asset, timestamp: uint64(now)});
+        MarginalFunctionality.Liability memory newLiability = MarginalFunctionality.Liability({asset: asset, timestamp: uint64(now)});
         liabilities[user].push(newLiability);
     }
 
-    function removeLiability(address user, address asset) internal {
+    /*function removeLiability(address user, address asset) internal {
         bool shift = false;
         for(uint8 i=0; i<liabilities[user].length-1; i++) {
           if(liabilities[user][i].asset == asset) {
@@ -578,7 +592,7 @@ contract Exchange is Utils, Ownable {
         }
         if(shift)
           liabilities[user].pop();
-    }
+    }*/
 
     /**
      *  @dev  revert on fallback function
