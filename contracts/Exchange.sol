@@ -478,32 +478,6 @@ contract Exchange is Utils, Ownable {
         return calcPosition(user).state == PositionState.POSITIVE;
     }
 
-/*    function calcAssets(address user) internal view returns
-        (bool outdated, int256 weightedPosition, int256 totalPosition) {
-        /*return MarginalFunctionality.calcAssets(user, 
-                                                _oracle,
-                                                collateralAssets,
-                                                assetBalances,
-                                                assetRisks,
-                                                priceOverdue);
-        return (true,0,0);
-    }
-    function calcLiabilities(address user) internal view returns
-        (bool outdated, bool overdue, int256 weightedPosition, int256 totalPosition) {
-        for(uint8 i = 0; i < liabilities[user].length; i++) {
-          Liability storage liability = liabilities[user][i];
-          (uint64 price, uint64 timestamp) = _oracle.assetPrices(liability.asset);//TODO givePrices
-          int256 liabilityValue = int256(assetBalances[user][liability.asset].mul(price)); //TODO unsafe
-          weightedPosition -= liabilityValue;
-          totalPosition -= liabilityValue;
-          overdue = overdue || ((liability.timestamp + positionOverdue) < now);
-          outdated = outdated ||
-                          ((timestamp + priceOverdue) < now);
-        }
-
-        return (outdated, overdue, weightedPosition, totalPosition);
-    }
-*/
     function calcPosition(address user) public view returns (Position memory) {
         MarginalFunctionality.UsedConstants memory constants = 
           MarginalFunctionality.UsedConstants(user, 
@@ -519,41 +493,10 @@ contract Exchange is Utils, Ownable {
                                            constants);
 
     }
-/*
-    function calcPosition(address user) public view returns (Position memory) {
-        uint256 lockedAmount = _stakingContract.getLockedStakeBalance(user);
-        (bool outdatedPrice, int256 weightedPosition, int256 totalPosition) = calcAssets(user);
-        weightedPosition += int256(lockedAmount.mul(stakeRisk).div(256));//TODO unsafe
-        totalPosition += int256(stakeRisk);
-        (bool _outdatedPrice, bool overdue, int256 _weightedPosition, int256 _totalPosition) =
-           calcLiabilities(user);
-        weightedPosition =weightedPosition.add(_weightedPosition);
-        totalPosition = totalPosition.add(_totalPosition);
-        outdatedPrice = outdatedPrice || _outdatedPrice;
-        bool incorrect = (liabilities[user].length > 3) ||
-                         ((liabilities[user].length>0) && (lockedAmount==0));
-        Position memory result;
-        if(weightedPosition<0) {
-          result.state = PositionState.NEGATIVE;
-        }
-        if(outdatedPrice) {
-          result.state = PositionState.NOPRICE;
-        }
-        if(overdue) {
-          result.state = PositionState.OVERDUE;
-        }
-        if(incorrect) {
-          result.state = PositionState.INCORRECT;
-        }
-        result.weightedPosition = weightedPosition;
-        result.totalPosition = totalPosition;
 
-    }
-*/    
     function partiallyLiquidate(address broker, address redeemedAsset, uint256 amount) public {
         Position memory initialPosition = calcPosition(broker);
-        require(initialPosition.state == PositionState.NEGATIVE,
-                "Can not liquidate in this position");
+        require(initialPosition.state == PositionState.NEGATIVE, "E8");
         address user = _msgSender();
         require(assetBalances[user][redeemedAsset]>amount,
                 "It is forbidden to redistribute liabilities");
@@ -571,8 +514,6 @@ contract Exchange is Utils, Ownable {
                  (finalPosition.state == PositionState.POSITIVE)) &&
                  (finalPosition.weightedPosition>initialPosition.weightedPosition),
                  "E10");//Incorrect state position after liquidation
-        //require(finalPosition.weightedPosition>initialPosition.weightedPosition,
-        //        "E11");//Liquidation should not aggravate margin position
         
     }
     
@@ -580,19 +521,6 @@ contract Exchange is Utils, Ownable {
         MarginalFunctionality.Liability memory newLiability = MarginalFunctionality.Liability({asset: asset, timestamp: uint64(now)});
         liabilities[user].push(newLiability);
     }
-
-    /*function removeLiability(address user, address asset) internal {
-        bool shift = false;
-        for(uint8 i=0; i<liabilities[user].length-1; i++) {
-          if(liabilities[user][i].asset == asset) {
-            shift = true;
-          }
-          if(shift)
-            liabilities[user][i] = liabilities[user][i+1];
-        }
-        if(shift)
-          liabilities[user].pop();
-    }*/
 
     /**
      *  @dev  revert on fallback function
@@ -609,5 +537,8 @@ contract Exchange is Utils, Ownable {
         E4: Order cancelled or expired,
         E5: Contract not active,
         E6: Transfer error
+        E8: Incorrect state prior to liquidation
+        E9: Data for liquidation handling is outdated
+        E10: Incorrect state after liquidation
     */
 }
