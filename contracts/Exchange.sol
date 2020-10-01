@@ -7,8 +7,6 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Utils.sol";
 import "./libs/LibValidator.sol";
-import "./PriceOracleInterface.sol";
-import "./StakingInterface.sol";
 import "./libs/MarginalFunctionality.sol";
 
 /**
@@ -94,17 +92,17 @@ contract Exchange is Utils, Ownable {
     uint64 public priceOverdue;
     uint64 public positionOverdue;
 
-    StakingInterface _stakingContract;
+    address _stakingContractAddress;
     IERC20 _orionToken;
-    PriceOracleInterface _oracle;
+    address _oracleAddress;
 
     // MAIN FUNCTIONS
 
     constructor(address stakingContractAddress, address orionToken, address priceOracleAddress) public {
-      _stakingContract = StakingInterface(stakingContractAddress);
+      _stakingContractAddress = stakingContractAddress;
       _orionToken = IERC20(orionToken);
-      _orionToken.approve(address(_stakingContract), 2**256-1);
-      _oracle = PriceOracleInterface(priceOracleAddress);
+      _orionToken.approve(_stakingContractAddress, 2**256-1);
+      _oracleAddress = priceOracleAddress;
       stakeRisk = 242; // 242.25/255 = 0.9;
       priceOverdue = 3 * 3600;
       positionOverdue = 24 * 3600;
@@ -175,13 +173,13 @@ contract Exchange is Utils, Ownable {
 
 
     function moveToStake(address user, uint256 amount) public {
-      require(_msgSender() == address(_stakingContract), "Unauthorized moveToStake");
+      require(_msgSender() == _stakingContractAddress, "Unauthorized moveToStake");
       assetBalances[user][address(_orionToken)] = assetBalances[user][address(_orionToken)]
             .sub(amount);
     }
 
     function moveFromStake(address user, uint256 amount) public {
-      require(_msgSender() == address(_stakingContract), "Unauthorized moveFromStake");
+      require(_msgSender() == _stakingContractAddress, "Unauthorized moveFromStake");
       assetBalances[user][address(_orionToken)] = assetBalances[user][address(_orionToken)]
             .add(amount);
     }
@@ -478,14 +476,22 @@ contract Exchange is Utils, Ownable {
         return calcPosition(user).state == PositionState.POSITIVE;
     }
 
+    function getConstants(address user) 
+             internal 
+             view 
+             returns (MarginalFunctionality.UsedConstants memory) {
+       return MarginalFunctionality.UsedConstants(user, 
+                                                  _oracleAddress, 
+                                                  _stakingContractAddress,
+                                                  positionOverdue,
+                                                  priceOverdue,
+                                                  stakeRisk,
+                                                  liquidationPremium);
+    }
+
     function calcPosition(address user) public view returns (Position memory) {
         MarginalFunctionality.UsedConstants memory constants = 
-          MarginalFunctionality.UsedConstants(user, 
-                                              _oracle, 
-                                              _stakingContract,
-                                              positionOverdue,
-                                              priceOverdue,
-                                              stakeRisk);
+          getConstants(user);
         MarginalFunctionality.calcPosition(collateralAssets,
                                            liabilities,
                                            assetBalances,
@@ -495,26 +501,15 @@ contract Exchange is Utils, Ownable {
     }
 
     function partiallyLiquidate(address broker, address redeemedAsset, uint256 amount) public {
-        Position memory initialPosition = calcPosition(broker);
-        require(initialPosition.state == PositionState.NEGATIVE, "E8");
-        address user = _msgSender();
-        require(assetBalances[user][redeemedAsset]>amount,
-                "It is forbidden to redistribute liabilities");
-        assetBalances[user][redeemedAsset] = assetBalances[user][redeemedAsset]
-                                             .sub(amount);
-        assetBalances[broker][redeemedAsset] = assetBalances[broker][redeemedAsset]
-                                             .add(amount);
-        (uint64 price, uint64 timestamp) = _oracle.assetPrices(redeemedAsset);
-        require((timestamp + priceOverdue) < now, "E9"); //Price is outdated
-        uint256 orionAmount = amount.mul(price).div(255).mul(255+liquidationPremium);
-        _stakingContract.seizeFromStake(broker, user, orionAmount);
-        Position memory finalPosition = calcPosition(broker);
-        
-        require( ((finalPosition.state == PositionState.NEGATIVE) ||
-                 (finalPosition.state == PositionState.POSITIVE)) &&
-                 (finalPosition.weightedPosition>initialPosition.weightedPosition),
-                 "E10");//Incorrect state position after liquidation
-        
+        MarginalFunctionality.UsedConstants memory constants = 
+          getConstants(broker);
+        MarginalFunctionality.partiallyLiquidate(collateralAssets,
+                                           liabilities,
+                                           assetBalances,
+                                           assetRisks,
+                                           constants,
+                                           redeemedAsset,
+                                           amount);        
     }
     
     function setLiability(address user, address asset) internal {
@@ -537,7 +532,8 @@ contract Exchange is Utils, Ownable {
         E4: Order cancelled or expired,
         E5: Contract not active,
         E6: Transfer error
-        E8: Incorrect state prior to liquidation
+        E7: Incorrect state prior to liquidation
+        E8: Liquidator doesn't satisfy requirements
         E9: Data for liquidation handling is outdated
         E10: Incorrect state after liquidation
     */

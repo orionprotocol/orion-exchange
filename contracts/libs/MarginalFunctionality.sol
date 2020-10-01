@@ -121,11 +121,12 @@ library MarginalFunctionality {
 
     struct UsedConstants {
       address user;
-      PriceOracleInterface _oracle;
-      StakingInterface _stakingContract;
+      address _oracleAddress;
+      address _stakingContractAddress;
       uint64 positionOverdue;
       uint64 priceOverdue;
       uint8 stakeRisk;
+      uint8 liquidationPremium;
     }
 
     function calcAssets(address[] storage collateralAssets,
@@ -136,7 +137,7 @@ library MarginalFunctionality {
         (bool outdated, int256 weightedPosition, int256 totalPosition) {
         for(uint8 i = 0; i < collateralAssets.length; i++) {
           address asset = collateralAssets[i];
-          (uint64 price, uint64 timestamp) = constants._oracle.assetPrices(asset);//TODO givePrices
+          (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
           int256 assetValue = mul(
                                 int256(assetBalances[constants.user][asset]), //TODO
                                 int256(price)
@@ -161,7 +162,7 @@ library MarginalFunctionality {
         (bool outdated, bool overdue, int256 weightedPosition, int256 totalPosition) {
         for(uint8 i = 0; i < liabilities[constants.user].length; i++) {
           Liability storage liability = liabilities[constants.user][i];
-          (uint64 price, uint64 timestamp) = constants._oracle.assetPrices(liability.asset);//TODO givePrices
+          (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(liability.asset);//TODO givePrices
           int256 liabilityValue = mul(int256(assetBalances[constants.user][liability.asset]),int256(price)); //TODO unsafe cast
           weightedPosition = sub(weightedPosition, liabilityValue);
           totalPosition = sub(totalPosition, liabilityValue);
@@ -191,7 +192,7 @@ library MarginalFunctionality {
                            assetBalances,
                            constants
                            );
-        int256 lockedAmount = int256(constants._stakingContract.getLockedStakeBalance(constants.user));//TODO unsafe cast
+        int256 lockedAmount = int256(StakingInterface(constants._stakingContractAddress).getLockedStakeBalance(constants.user));//TODO unsafe cast
         int256 weightedStake = uint8Percent(lockedAmount, constants.stakeRisk);
         weightedPosition = add(weightedPosition,weightedStake);
         totalPosition = add(totalPosition, lockedAmount); 
@@ -235,4 +236,42 @@ library MarginalFunctionality {
           liabilities[user].pop();
     }
 
+    function partiallyLiquidate(address[] storage collateralAssets,
+                                mapping(address => Liability[]) storage liabilities,
+                                mapping(address => mapping(address => uint256)) storage assetBalances,
+                                mapping(address => uint8) storage assetRisks,
+                                UsedConstants memory constants,
+                                address redeemedAsset, 
+                                uint256 amount) public {
+        Position memory initialPosition = calcPosition(collateralAssets,
+                                           liabilities,
+                                           assetBalances,
+                                           assetRisks,
+                                           constants);
+        require(initialPosition.state == PositionState.NEGATIVE, "E7");
+        address user = msg.sender;
+        require(assetBalances[user][redeemedAsset]>amount,"E8");
+        assetBalances[user][redeemedAsset] = uint256(sub(int256(assetBalances[constants.user][redeemedAsset]),
+                                                 int256(amount))); //TODO unsafe
+        assetBalances[constants.user][redeemedAsset] = uint256(add(int256(assetBalances[constants.user][redeemedAsset]),
+                                                   int256(amount))); //TODO
+        (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
+        require((timestamp + constants.priceOverdue) < now, "E9"); //Price is outdated
+        
+        int256 orionBaseAmount = mul(int256(amount),int256(price)); //TODO
+        int256 orionAmount = add(orionBaseAmount, 
+                                 uint8Percent(orionBaseAmount, 
+                                              255+constants.liquidationPremium));
+        StakingInterface(constants._stakingContractAddress).seizeFromStake(constants.user, user, uint256(orionAmount));
+        Position memory finalPosition = calcPosition(collateralAssets,
+                                           liabilities,
+                                           assetBalances,
+                                           assetRisks,
+                                           constants);
+        require( ((finalPosition.state == PositionState.NEGATIVE) ||
+                 (finalPosition.state == PositionState.POSITIVE)) &&
+                 (finalPosition.weightedPosition>initialPosition.weightedPosition),
+                 "E10");//Incorrect state position after liquidation
+        
+    }
 }
