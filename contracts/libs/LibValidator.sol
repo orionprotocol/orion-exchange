@@ -157,6 +157,11 @@ library LibValidator {
         require(buyOrder.expiration.div(1000) >= currentTime, "E4");
         require(sellOrder.expiration.div(1000) >= currentTime, "E4");
 
+        require( //TODO make side boolean
+                keccak256(abi.encodePacked(buyOrder.side))
+                 !=
+                keccak256(abi.encodePacked(sellOrder.side)),
+                "EX");
         success = true;
     }
 }

@@ -37,7 +37,7 @@ const orderTypes =  [
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
 
-let exchange, weth, wbtc, lib, msgParams1, msgParams2, buyOrder, sellOrder;
+let exchange, weth, wbtc, lib, msgParams1, msgParams2, buyOrder, sellOrder, buyOrder2;
 
 async function getLastTradeEvent(buyer, seller) {
   let events = await exchange.getPastEvents("NewTrade", {
@@ -154,6 +154,46 @@ contract("Exchange", ([matcher, user1, user2]) => {
       web3.utils.toChecksumAddress(recovered).should.be.equal(user1);
     });
 
+    it("second buy order creation and sign", async () => {
+      // Ganache user 1 pirvate key using fake mnemonics
+      const privKey2 =
+        "ecbcd49667c96bcf8b30ccb35234a0b217ea039a8e097d3a70de9d28624ba520";
+      const privKey = Buffer.from(privKey2, "hex");
+
+      //Client2 Order
+      buyOrder2 = {
+        senderAddress: user2,
+        matcherAddress: matcher,
+        baseAsset: weth.address,
+        quoteAsset: wbtc.address, // WBTC
+        // matcherFeeAsset: weth.address, // WETH
+        matcherFeeAsset: "0x0000000000000000000000000000000000000000", // WETH
+
+        amount: 150000000,
+        price: 2000000,
+        matcherFee: 150000,
+        nonce: NOW,
+        expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
+        side: "buy"
+      };
+
+      let msgParams = {
+             types: {
+               EIP712Domain: domain,
+               Order: orderTypes,
+             },
+             domain: domainData,
+             primaryType: "Order",
+             message: buyOrder2,
+           };
+
+      let _msgParams = { data: msgParams };
+
+      let _signature = sigUtil.signTypedData_v4(privKey, _msgParams);
+
+      buyOrder2.signature = _signature;
+    });
+
     it("sell order creation and sign", async () => {
       // Ganache user 1 pirvate key using fake mnemonics
       const privKey2 =
@@ -174,7 +214,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         matcherFee: 150000,
         nonce: NOW,
         expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
-        side: "buy"
+        side: "sell"
       };
 
       let msgParams = {
@@ -233,6 +273,16 @@ contract("Exchange", ([matcher, user1, user2]) => {
         2100000, //fill Price 0.021
         150000000, // fill Amount 1.5 WETH
         { from: user1 }
+      ).should.be.rejected;
+    });
+
+    it("can not match buy vs buy orders", async () => {
+      await exchange.fillOrders(
+        buyOrder,
+        buyOrder2,
+        FILL_PRICE, //fill Price 0.021
+        1, // fill Amount 1.5 WETH
+        { from: matcher }
       ).should.be.rejected;
     });
 
