@@ -32,7 +32,7 @@ const orderTypes =  [
             { name: "matcherFee", type: "uint64" },
             { name: "nonce", type: "uint64" },
             { name: "expiration", type: "uint64" },
-            { name: "side", type: "string" },
+            { name: "buySide", type: "uint8" },
 ];
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
@@ -125,7 +125,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         matcherFee: 350000,
         nonce: NOW,
         expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
-        side: "buy"
+        buySide: 1
       };
 
       let msgParams = {
@@ -174,7 +174,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         matcherFee: 150000,
         nonce: NOW,
         expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
-        side: "buy"
+        buySide: 1
       };
 
       let msgParams = {
@@ -214,7 +214,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         matcherFee: 150000,
         nonce: NOW,
         expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
-        side: "sell"
+        buySide: 0
       };
 
       let msgParams = {
