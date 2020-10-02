@@ -25,104 +25,19 @@ library MarginalFunctionality {
         int256 totalPosition;
     }
 
-    /* SignedSafeMath */
-    int256 constant private _INT256_MIN = -2**255;
-
-    /**
-     * @dev Returns the multiplication of two signed integers, reverting on
-     * overflow.
-     *
-     * Counterpart to Solidity's `*` operator.
-     *
-     * Requirements:
-     *
-     * - Multiplication cannot overflow.
-     */
-    function mul(int256 a, int256 b) internal pure returns (int256) {
-        // Gas optimization: this is cheaper than requiring 'a' not being zero, but the
-        // benefit is lost if 'b' is also tested.
-        // See: https://github.com/OpenZeppelin/openzeppelin-contracts/pull/522
-        if (a == 0) {
-            return 0;
-        }
-
-        require(!(a == -1 && b == _INT256_MIN), "SignedSafeMath: multiplication overflow");
-
-        int256 c = a * b;
-        require(c / a == b, "SignedSafeMath: multiplication overflow");
-
-        return c;
-    }
-
-    /**
-     * @dev Returns the integer division of two signed integers. Reverts on
-     * division by zero. The result is rounded towards zero.
-     *
-     * Counterpart to Solidity's `/` operator. Note: this function uses a
-     * `revert` opcode (which leaves remaining gas untouched) while Solidity
-     * uses an invalid opcode to revert (consuming all remaining gas).
-     *
-     * Requirements:
-     *
-     * - The divisor cannot be zero.
-     */
-    function div(int256 a, int256 b) internal pure returns (int256) {
-        require(b != 0, "SignedSafeMath: division by zero");
-        require(!(b == -1 && a == _INT256_MIN), "SignedSafeMath: division overflow");
-
-        int256 c = a / b;
-
-        return c;
-    }
-
-    /**
-     * @dev Returns the subtraction of two signed integers, reverting on
-     * overflow.
-     *
-     * Counterpart to Solidity's `-` operator.
-     *
-     * Requirements:
-     *
-     * - Subtraction cannot overflow.
-     */
-    function sub(int256 a, int256 b) internal pure returns (int256) {
-        int256 c = a - b;
-        require((b >= 0 && c <= a) || (b < 0 && c > a), "SignedSafeMath: subtraction overflow");
-
-        return c;
-    }
-
-    /**
-     * @dev Returns the addition of two signed integers, reverting on
-     * overflow.
-     *
-     * Counterpart to Solidity's `+` operator.
-     *
-     * Requirements:
-     *
-     * - Addition cannot overflow.
-     */
-    function add(int256 a, int256 b) internal pure returns (int256) {
-        int256 c = a + b;
-        require((b >= 0 && c >= a) || (b < 0 && c < a), "SignedSafeMath: addition overflow");
-
-        return c;
-    }
-
-
-    function uint8Percent(int256 a, uint8 b) internal pure returns (int256) {
+    function uint8Percent(int192 _a, uint8 b) internal pure returns (int192) {
+        int a = int256(_a);
         int d = 255;
-        int256 c = (a>65536) ? mul(div(a,d),b) : div(mul(a,b), d);
+        int192 c = int192((a>65536) ? (a/d)*b : a*b/d );
 
         return c;
     }
-
-    /* Signed Math end */
 
     struct UsedConstants {
       address user;
       address _oracleAddress;
       address _stakingContractAddress;
+      address _orionTokenAddress;
       uint64 positionOverdue;
       uint64 priceOverdue;
       uint8 stakeRisk;
@@ -130,24 +45,23 @@ library MarginalFunctionality {
     }
 
     function calcAssets(address[] storage collateralAssets,
-                        mapping(address => mapping(address => uint256)) storage assetBalances,
+                        mapping(address => mapping(address => int192)) storage assetBalances,
                         mapping(address => uint8) storage assetRisks,
                         UsedConstants memory constants)
              internal view returns
-        (bool outdated, int256 weightedPosition, int256 totalPosition) {
+        (bool outdated, int192 weightedPosition, int192 totalPosition) {
         for(uint8 i = 0; i < collateralAssets.length; i++) {
           address asset = collateralAssets[i];
           (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
-          int256 assetValue = mul(
-                                int256(assetBalances[constants.user][asset]), //TODO
-                                int256(price)
-                               );
-          weightedPosition =
-            add (
-              weightedPosition,
-              uint8Percent(assetValue, assetRisks[asset])
-            );
-          totalPosition = add( totalPosition, assetValue);
+          // balance: i192, price u64 => balance*price fits i256
+          // since generally balance <= N*maxInt112 (where N is number operations with it),
+          // assetValue <= N*maxInt112*maxUInt64/1e8.
+          // That is if N<= 2**17 *1e8 = 1.3e13  we can neglect overflows here
+          int192 assetValue = int192(int256(assetBalances[constants.user][asset])*price/1e8);
+          // Overflows logic holds here as well, except that N is the number of
+          // operations for all assets
+          weightedPosition += uint8Percent(assetValue, assetRisks[asset]);
+          totalPosition += assetValue;
           outdated = outdated ||
                           ((timestamp + constants.priceOverdue) < now);
         }
@@ -155,17 +69,24 @@ library MarginalFunctionality {
     }
 
     function calcLiabilities(mapping(address => Liability[]) storage liabilities,
-                             mapping(address => mapping(address => uint256)) storage assetBalances,
+                             mapping(address => mapping(address => int192)) storage assetBalances,
                              UsedConstants memory constants
                              )
              internal view returns
-        (bool outdated, bool overdue, int256 weightedPosition, int256 totalPosition) {
+        (bool outdated, bool overdue, int192 weightedPosition, int192 totalPosition) {
         for(uint8 i = 0; i < liabilities[constants.user].length; i++) {
           Liability storage liability = liabilities[constants.user][i];
           (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(liability.asset);//TODO givePrices
-          int256 liabilityValue = mul(int256(assetBalances[constants.user][liability.asset]),int256(price)); //TODO unsafe cast
-          weightedPosition = sub(weightedPosition, liabilityValue);
-          totalPosition = sub(totalPosition, liabilityValue);
+          // balance: i192, price u64 => balance*price fits i256
+          // since generally balance <= N*maxInt112 (where N is number operations with it),
+          // assetValue <= N*maxInt112*maxUInt64/1e8.
+          // That is if N<= 2**17 *1e8 = 1.3e13  we can neglect overflows here
+          int192 liabilityValue = int192(
+                                         int256(assetBalances[constants.user][liability.asset])
+                                         *price/1e8
+                                        );
+          weightedPosition -= liabilityValue;
+          totalPosition -= liabilityValue;
           overdue = overdue || ((liability.timestamp + constants.positionOverdue) < now);
           outdated = outdated ||
                           ((timestamp + constants.priceOverdue) < now);
@@ -177,28 +98,29 @@ library MarginalFunctionality {
     function calcPosition(
                         address[] storage collateralAssets,
                         mapping(address => Liability[]) storage liabilities,
-                        mapping(address => mapping(address => uint256)) storage assetBalances,
+                        mapping(address => mapping(address => int192)) storage assetBalances,
                         mapping(address => uint8) storage assetRisks,
                         UsedConstants memory constants
                         )
              public view returns (Position memory) {
-        (bool outdatedPrice, int256 weightedPosition, int256 totalPosition) = 
+        (bool outdatedPrice, int192 weightedPosition, int192 totalPosition) = 
           calcAssets(collateralAssets,
                      assetBalances,
                      assetRisks,
                      constants);
-        (bool _outdatedPrice, bool overdue, int256 _weightedPosition, int256 _totalPosition) =
+        (bool _outdatedPrice, bool overdue, int192 _weightedPosition, int192 _totalPosition) =
            calcLiabilities(liabilities,
                            assetBalances,
                            constants
                            );
-        int256 lockedAmount = int256(StakingInterface(constants._stakingContractAddress).getLockedStakeBalance(constants.user));//TODO unsafe cast
-        int256 weightedStake = uint8Percent(lockedAmount, constants.stakeRisk);
-        weightedPosition = add(weightedPosition,weightedStake);
-        totalPosition = add(totalPosition, lockedAmount); 
+        uint64 lockedAmount = StakingInterface(constants._stakingContractAddress)
+                                  .getLockedStakeBalance(constants.user);
+        int192 weightedStake = uint8Percent(int192(lockedAmount), constants.stakeRisk);
+        weightedPosition += weightedStake;
+        totalPosition += lockedAmount; 
 
-        weightedPosition = add(weightedPosition,_weightedPosition);
-        totalPosition = add(totalPosition,_totalPosition);
+        weightedPosition += _weightedPosition;
+        totalPosition += _totalPosition;
         outdatedPrice = outdatedPrice || _outdatedPrice;
         bool incorrect = (liabilities[constants.user].length > 3) ||
                          ((liabilities[constants.user].length>0) && (lockedAmount==0));
@@ -238,31 +160,27 @@ library MarginalFunctionality {
 
     function partiallyLiquidate(address[] storage collateralAssets,
                                 mapping(address => Liability[]) storage liabilities,
-                                mapping(address => mapping(address => uint256)) storage assetBalances,
+                                mapping(address => mapping(address => int192)) storage assetBalances,
                                 mapping(address => uint8) storage assetRisks,
                                 UsedConstants memory constants,
                                 address redeemedAsset, 
-                                uint256 amount) public {
+                                uint112 amount) public {
+        //Note: constants.user - is broker who will be liquidated
         Position memory initialPosition = calcPosition(collateralAssets,
                                            liabilities,
                                            assetBalances,
                                            assetRisks,
                                            constants);
         require(initialPosition.state == PositionState.NEGATIVE, "E7");
-        address user = msg.sender;
-        require(assetBalances[user][redeemedAsset]>amount,"E8");
-        assetBalances[user][redeemedAsset] = uint256(sub(int256(assetBalances[constants.user][redeemedAsset]),
-                                                 int256(amount))); //TODO unsafe
-        assetBalances[constants.user][redeemedAsset] = uint256(add(int256(assetBalances[constants.user][redeemedAsset]),
-                                                   int256(amount))); //TODO
+        address liquidator = msg.sender;
+        require(assetBalances[liquidator][redeemedAsset]>amount,"E8");
+        assetBalances[liquidator][redeemedAsset] -= amount;
+        assetBalances[constants.user][redeemedAsset] += amount;
         (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
         require((timestamp + constants.priceOverdue) < now, "E9"); //Price is outdated
         
-        int256 orionBaseAmount = mul(int256(amount),int256(price)); //TODO
-        int256 orionAmount = add(orionBaseAmount, 
-                                 uint8Percent(orionBaseAmount, 
-                                              255+constants.liquidationPremium));
-        StakingInterface(constants._stakingContractAddress).seizeFromStake(constants.user, user, uint256(orionAmount));
+        int64 orionAmount = reimburseLiquidator(amount, price, liquidator, assetBalances, constants);
+        assetBalances[liquidator][constants._orionTokenAddress] += orionAmount;
         Position memory finalPosition = calcPosition(collateralAssets,
                                            liabilities,
                                            assetBalances,
@@ -273,5 +191,33 @@ library MarginalFunctionality {
                  (finalPosition.weightedPosition>initialPosition.weightedPosition),
                  "E10");//Incorrect state position after liquidation
         
+    }
+    
+    function reimburseLiquidator(
+                       uint112 amount, 
+                       uint64 price,
+                       address liquidator,
+                       mapping(address => mapping(address => int192)) storage assetBalances,
+                       UsedConstants memory constants)
+             internal
+             returns (int64 orionAmount) {
+        int192 _orionAmount = int192(int256(amount)*price/1e8);
+        _orionAmount += uint8Percent(_orionAmount,constants.liquidationPremium); //Liquidation premium        
+        require(_orionAmount == int64(_orionAmount), "UX");//TODO
+        orionAmount = int64(_orionAmount);
+        // There is only 100m Orion tokens, fits i64
+        int64 onBalanceOrion = int64(assetBalances[constants.user][constants._orionTokenAddress]);
+        (int64 fromBalance, int64 fromStake) = (onBalanceOrion>orionAmount)?
+                                                 (orionAmount, 0) :
+                                                 (onBalanceOrion>0)?
+                                                   (onBalanceOrion, orionAmount-onBalanceOrion) :
+                                                   (0, orionAmount);
+
+        if(fromBalance>0) {
+          assetBalances[constants.user][constants._orionTokenAddress] -= int192(fromBalance);
+        }
+        if(fromStake>0) {
+          StakingInterface(constants._stakingContractAddress).seizeFromStake(constants.user, liquidator, uint64(orionAmount));
+        }    
     }
 }

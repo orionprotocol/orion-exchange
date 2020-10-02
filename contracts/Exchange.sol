@@ -1,8 +1,6 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/math/SignedSafeMath.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Utils.sol";
@@ -14,9 +12,26 @@ import "./libs/MarginalFunctionality.sol";
  * @dev Exchange contract for the Orion Protocol
  * @author @wafflemakr
  */
+ 
+/*
+  Overflow safety:
+  We do not use SafeMath and control overflows by 
+  not accepting large ints on input.
+
+  Balances inside contract are stored as int192.
+
+  Allowed input amounts are int112 or uint112: it is enough for all
+  practically used tokens: for instance if decimal unit is 1e18, int112
+  allow to encode up to 2.5e15 decimal units.
+  That way adding/subtracting any amount from balances won't overflow, since 
+  minimum number of operations to reach max int is practically infinite: ~1e24.
+  
+  Allowed prices are uint64. Note, that price is represented as
+  price per 1e8 tokens. That means that amount*price always fit uint256,
+  while amount*price/1e8 not only fit int192, but also can be added, subtracted
+  without overflow checks: number of malicion operations to overflow ~1e13.
+*/
 contract Exchange is Utils, Ownable {
-    using SignedSafeMath for int256;
-    using SafeMath for uint64;
 
     using LibValidator for LibValidator.Order;
 
@@ -24,21 +39,21 @@ contract Exchange is Utils, Ownable {
     event NewAssetDeposit(
         address indexed user,
         address indexed assetAddress,
-        uint256 amount
+        uint112 amount
     );
     event NewAssetWithdrawl(
         address indexed user,
         address indexed assetAddress,
-        uint256 amount
+        uint112 amount
     );
     event NewTrade(
         address indexed buyer,
         address indexed seller,
         address baseAsset,
         address quoteAsset,
-        uint256 filledPrice,
-        uint256 filledAmount,
-        uint256 amountQuote
+        uint64 filledPrice,
+        uint192 filledAmount,
+        uint192 amountQuote
     );
     event OrderUpdate(
         bytes32 orderHash,
@@ -51,10 +66,10 @@ contract Exchange is Utils, Ownable {
     enum Status {NEW, PARTIALLY_FILLED, FILLED, PARTIALLY_CANCELLED, CANCELLED}
 
     struct Trade {
-        uint256 filledPrice;
-        uint256 filledAmount;
-        uint256 feePaid;
-        uint256 timestamp;
+        uint64 filledPrice;
+        uint192 filledAmount;
+        uint192 feePaid;
+        uint64 timestamp;
     }
 
     enum PositionState {
@@ -67,8 +82,8 @@ contract Exchange is Utils, Ownable {
     }
     struct Position {
         PositionState state;
-        int256 weightedPosition;
-        int256 totalPosition;
+        int192 weightedPosition;
+        int192 totalPosition;
     }
 
     // Get trades by orderHash
@@ -78,7 +93,7 @@ contract Exchange is Utils, Ownable {
     mapping(bytes32 => Status) public orderStatus;
 
     // Get user balance by address and asset address
-    mapping(address => mapping(address => uint256)) private assetBalances;
+    mapping(address => mapping(address => int192)) private assetBalances;
     // List of assets with negative balance for each user
     mapping(address => MarginalFunctionality.Liability[]) public liabilities;
     // List of assets which can be used as collateral and risk coefficients for them
@@ -114,19 +129,19 @@ contract Exchange is Utils, Ownable {
      * @dev User needs to approve token contract first
      * @param amount asset amount to deposit in its base unit
      */
-    function depositAsset(address assetAddress, uint256 amount) external {
+    function depositAsset(address assetAddress, uint112 amount) external {
         IERC20 asset = IERC20(assetAddress);
-        require(asset.transferFrom(_msgSender(), address(this), amount), "E6");
+        require(asset.transferFrom(_msgSender(), address(this), uint256(amount)), "E6");
 
         uint256 amountDecimal = LibUnitConverter.baseUnitToDecimal(
             assetAddress,
             amount
         );
+        require(amountDecimal<uint112(-1), "E6");
+        int112 safeAmountDecimal = int112(amountDecimal);
+        assetBalances[_msgSender()][assetAddress] += safeAmountDecimal; 
 
-        assetBalances[_msgSender()][assetAddress] = assetBalances[_msgSender()][assetAddress]
-            .add(amountDecimal);
-
-        emit NewAssetDeposit(_msgSender(), assetAddress, amountDecimal);
+        emit NewAssetDeposit(_msgSender(), assetAddress, uint112(safeAmountDecimal));
     }
 
     /**
@@ -137,16 +152,14 @@ contract Exchange is Utils, Ownable {
     function deposit() external payable {
         require(msg.value > 0);
 
-        uint256 amountDecimal = LibUnitConverter.baseUnitToDecimal(
+        int112 amountDecimal = int112(LibUnitConverter.baseUnitToDecimal(
             address(0),
             msg.value
-        );
+        )); //cast to int112 is safe due to lack of ethereum in the wild
 
-        assetBalances[_msgSender()][address(
-            0
-        )] = assetBalances[_msgSender()][address(0)].add(amountDecimal);
+        assetBalances[_msgSender()][address(0)] += amountDecimal;
 
-        emit NewAssetDeposit(_msgSender(), address(0), amountDecimal);
+        emit NewAssetDeposit(_msgSender(), address(0), uint112(amountDecimal));
     }
 
     /**
@@ -154,7 +167,7 @@ contract Exchange is Utils, Ownable {
      * @param assetAddress address of the asset to withdraw
      * @param amount asset amount to withdraw in its base unit
      */
-    function withdraw(address assetAddress, uint256 amount)
+    function withdraw(address assetAddress, uint112 amount)
         external
         nonReentrant
     {
@@ -162,26 +175,28 @@ contract Exchange is Utils, Ownable {
             assetAddress,
             amount
         );
+        
+        require(amountDecimal<uint112(-1), "E6");
+        int112 safeAmountDecimal = int112(amountDecimal);
 
-        assetBalances[_msgSender()][assetAddress] = assetBalances[_msgSender()][assetAddress]
-            .sub(amountDecimal);
+        require(assetBalances[_msgSender()][assetAddress]>=safeAmountDecimal, "EX"); //TODO
+        assetBalances[_msgSender()][assetAddress] -= safeAmountDecimal;
 
-        safeTransfer(_msgSender(), assetAddress, amountDecimal);
+        safeTransfer(_msgSender(), assetAddress, uint256(safeAmountDecimal));
 
-        emit NewAssetWithdrawl(_msgSender(), assetAddress, amountDecimal);
+        emit NewAssetWithdrawl(_msgSender(), assetAddress, uint112(safeAmountDecimal));
     }
 
 
-    function moveToStake(address user, uint256 amount) public {
+    function moveToStake(address user, uint64 amount) public {
       require(_msgSender() == _stakingContractAddress, "Unauthorized moveToStake");
-      assetBalances[user][address(_orionToken)] = assetBalances[user][address(_orionToken)]
-            .sub(amount);
+      require(assetBalances[user][address(_orionToken)]>amount);
+      assetBalances[user][address(_orionToken)] -= amount;
     }
 
-    function moveFromStake(address user, uint256 amount) public {
+    function moveFromStake(address user, uint64 amount) public {
       require(_msgSender() == _stakingContractAddress, "Unauthorized moveFromStake");
-      assetBalances[user][address(_orionToken)] = assetBalances[user][address(_orionToken)]
-            .add(amount);
+      assetBalances[user][address(_orionToken)] += amount;
     }
 
     /**
@@ -192,7 +207,7 @@ contract Exchange is Utils, Ownable {
     function getBalance(address assetAddress, address user)
         public
         view
-        returns (uint256 assetBalance)
+        returns (int192 assetBalance)
     {
         return assetBalances[user][assetAddress];
     }
@@ -205,10 +220,10 @@ contract Exchange is Utils, Ownable {
     function getBalances(address[] memory assetsAddresses, address user)
         public
         view
-        returns (uint256[] memory)
+        returns (int192[] memory)
     {
-        uint256[] memory balances = new uint256[](assetsAddresses.length);
-        for (uint256 i = 0; i < assetsAddresses.length; i++) {
+        int192[] memory balances = new int192[](assetsAddresses.length);
+        for (uint16 i = 0; i < assetsAddresses.length; i++) {
             balances[i] = assetBalances[user][assetsAddresses[i]];
         }
         return balances;
@@ -232,14 +247,17 @@ contract Exchange is Utils, Ownable {
     function getFilledAmounts(LibValidator.Order memory order)
         public
         view
-        returns (uint256 totalFilled, uint256 totalFeesPaid)
+        returns (int192 totalFilled, int192 totalFeesPaid)
     {
         bytes32 orderHash = order.getTypeValueHash();
         Trade[] memory orderTrades = trades[orderHash];
 
-        for (uint256 i = 0; i < orderTrades.length; i++) {
-            totalFilled = totalFilled.add(trades[orderHash][i].filledAmount);
-            totalFeesPaid = totalFeesPaid.add(trades[orderHash][i].feePaid);
+        for (uint16 i = 0; i < orderTrades.length; i++) {
+            // Note while filledAmount and feePaid are int192
+            // they are guaranteed to be less that 2**156
+            // it is safe to add them without checks
+            totalFilled = totalFilled + int192(trades[orderHash][i].filledAmount);
+            totalFeesPaid = totalFeesPaid + int192(trades[orderHash][i].feePaid);
         }
     }
 
@@ -268,13 +286,15 @@ contract Exchange is Utils, Ownable {
     function fillOrders(
         LibValidator.Order memory buyOrder,
         LibValidator.Order memory sellOrder,
-        uint256 filledPrice,
-        uint256 filledAmount
+        uint64 filledPrice,
+        uint112 filledAmount
     ) public nonReentrant {
         // --- VARIABLES --- //
 
         // Amount of quote asset
-        uint256 amountQuote = filledAmount.mul(filledPrice).div(10**8);
+        uint256 _amountQuote = uint256(filledAmount)*filledPrice/(10**8);
+        require(_amountQuote<2**112-1, "Wrong amount");
+        uint112 amountQuote = uint112(_amountQuote);
 
         // Order Hashes
         bytes32 buyOrderHash = buyOrder.getTypeValueHash();
@@ -349,28 +369,25 @@ contract Exchange is Utils, Ownable {
      */
     function updateOrderBalance(
         LibValidator.Order memory order,
-        uint256 filledAmount,
-        uint256 amountQuote,
+        uint112 filledAmount,
+        uint112 amountQuote,
         bool isBuyer
     ) internal {
         address user = order.senderAddress;
-        uint256 baseBalance = assetBalances[user][order.baseAsset];
-        uint256 quoteBalance = assetBalances[user][order.quoteAsset];
-        uint256 matcherFee = order.matcherFee.mul(filledAmount).div(
-            order.amount
-        );
-        bool quoteInLiabilities = assetBalances[user][order.quoteAsset]<0;
-        bool baseInLiabilities  = assetBalances[user][order.baseAsset]<0;
+        int192 baseBalance = assetBalances[user][order.baseAsset];
+        int192 quoteBalance = assetBalances[user][order.quoteAsset];
+        // matcherFee: u64, filledAmount u128 => matcherFee*filledAmount fit u256
+        // result matcherFee fit u64
+        int192 matcherFee = int192(uint256(order.matcherFee)*filledAmount/order.amount); 
+
+        bool quoteInLiabilities = quoteBalance<0;
+        bool baseInLiabilities  = baseBalance<0;
         bool feeAssetInLiabilities  = assetBalances[user][order.matcherFeeAsset]<0;
 
         if (isBuyer) {
             // Update Buyer's Balance (- quoteAsset + baseAsset  )
-            assetBalances[user][order.quoteAsset] = quoteBalance.sub(
-                amountQuote
-            );
-            assetBalances[user][order.baseAsset] = baseBalance.add(
-                filledAmount
-            );
+            assetBalances[user][order.quoteAsset] -= int192(amountQuote);
+            assetBalances[user][order.baseAsset] += int192(filledAmount);
             if(!quoteInLiabilities && (assetBalances[user][order.quoteAsset]<0)){
               setLiability(user, order.quoteAsset);
             }
@@ -379,12 +396,8 @@ contract Exchange is Utils, Ownable {
             }
         } else {
             // Update Seller's Balance  (+ quoteAsset - baseAsset   )
-            assetBalances[user][order.quoteAsset] = quoteBalance.add(
-                amountQuote
-            );
-            assetBalances[user][order.baseAsset] = baseBalance.sub(
-                filledAmount
-            );
+            assetBalances[user][order.quoteAsset] += int192(amountQuote);
+            assetBalances[user][order.baseAsset] -= int192(filledAmount);
             if(quoteInLiabilities && (assetBalances[user][order.quoteAsset]>0)){
               MarginalFunctionality.removeLiability(user, order.quoteAsset, liabilities);
             }
@@ -394,13 +407,11 @@ contract Exchange is Utils, Ownable {
         }
 
         // User pay for fees
-        assetBalances[user][order.matcherFeeAsset] = assetBalances[user][order
-            .matcherFeeAsset]
-            .sub(matcherFee);
+        assetBalances[user][order.matcherFeeAsset] -= matcherFee;
         if(!feeAssetInLiabilities && (assetBalances[user][order.matcherFeeAsset]<0)) {
             setLiability(user, order.matcherFeeAsset);
         }
-        safeTransfer(order.matcherAddress, order.matcherFeeAsset, matcherFee);
+        safeTransfer(order.matcherAddress, order.matcherFeeAsset, uint256(matcherFee));
     }
 
     /**
@@ -409,25 +420,28 @@ contract Exchange is Utils, Ownable {
     function updateTrade(
         bytes32 orderHash,
         LibValidator.Order memory order,
-        uint256 filledAmount,
-        uint256 filledPrice
+        uint112 filledAmount,
+        uint64 filledPrice
     ) internal {
-        uint256 matcherFee = order.matcherFee.mul(filledAmount).div(
-            order.amount
-        );
+        // matcherFee: u64, filledAmount u128 => matcherFee*filledAmount fit u256
+        // result matcherFee fit u64
+        int192 matcherFee = int192(uint256(order.matcherFee)*filledAmount/order.amount);
 
-        (uint256 totalFilled, uint256 totalFeesPaid) = getFilledAmounts(order);
+        (int192 totalFilled, int192 totalFeesPaid) = getFilledAmounts(order);
 
-        require(totalFilled.add(filledAmount) <= order.amount, "E3");
-        require(totalFeesPaid.add(matcherFee) <= order.matcherFee, "E3");
+        uint256 afterFilled = uint256(totalFilled)+uint256(filledAmount);
+        uint256 afterFee = uint256(totalFeesPaid)+uint256(matcherFee);
+        
+        require(afterFilled <= order.amount, "E3");
+        require(afterFee <= order.matcherFee, "E3");
 
         Status status = Status.NEW;
 
         if (
-            totalFilled.add(filledAmount) < order.amount &&
+            afterFilled < order.amount &&
             trades[orderHash].length > 1
         ) status = Status.PARTIALLY_FILLED;
-        if (totalFilled.add(filledAmount) == order.amount)
+        if (afterFilled == order.amount)
             status = Status.FILLED;
 
         //Update order status in storage
@@ -435,7 +449,7 @@ contract Exchange is Utils, Ownable {
 
         // Store Trade
         trades[orderHash].push(
-            Trade(filledPrice, filledAmount, matcherFee, now)
+            Trade(filledPrice, uint192(filledAmount), uint192(matcherFee), uint64(now))
         );
 
         emit OrderUpdate(orderHash, order.senderAddress, status);
@@ -454,7 +468,7 @@ contract Exchange is Utils, Ownable {
         require(!isOrderCancelled(orderHash), "E4");
 
         (
-            uint256 totalFilled, /*uint totalFeesPaid*/
+            int192 totalFilled, /*uint totalFeesPaid*/
 
         ) = getFilledAmounts(order);
 
@@ -483,6 +497,7 @@ contract Exchange is Utils, Ownable {
        return MarginalFunctionality.UsedConstants(user, 
                                                   _oracleAddress, 
                                                   _stakingContractAddress,
+                                                  address(_orionToken),
                                                   positionOverdue,
                                                   priceOverdue,
                                                   stakeRisk,
@@ -500,7 +515,7 @@ contract Exchange is Utils, Ownable {
 
     }
 
-    function partiallyLiquidate(address broker, address redeemedAsset, uint256 amount) public {
+    function partiallyLiquidate(address broker, address redeemedAsset, uint112 amount) public {
         MarginalFunctionality.UsedConstants memory constants = 
           getConstants(broker);
         MarginalFunctionality.partiallyLiquidate(collateralAssets,

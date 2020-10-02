@@ -1,7 +1,6 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "@openzeppelin/contracts/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./StakingAccessInterface.sol";
 
@@ -12,12 +11,10 @@ import "./StakingAccessInterface.sol";
  */
 contract Staking is Ownable {
 
-    using SafeMath for uint256;
-
     enum StakePhase{ NOTSTAKED, LOCKING, LOCKED, RELEASING, READYTORELEASE, FROZEN }
 
     struct Stake {
-      uint256 amount;
+      uint64 amount; // 100m ORN in circulation fits uint64
       StakePhase phase;
       uint64 lastActionTimestamp;
     }
@@ -31,7 +28,6 @@ contract Staking is Ownable {
 
     // Get user balance by address and asset address
     mapping(address => Stake) private stakingData;
-    //mapping(address => mapping(address => uint256)) virtual assetBalances;
 
 
     constructor(address orionTokenAddress) public {
@@ -43,31 +39,32 @@ contract Staking is Ownable {
     }
 
 
-    function moveFromBalance(uint256 amount) internal {
-        require(baseAsset.transferFrom(address(_exchange), address(this), amount), "E6");
+    function moveFromBalance(uint64 amount) internal {
+        require(baseAsset.transferFrom(address(_exchange), address(this), uint256(amount)), "E6");
         _exchange.moveToStake(_msgSender(),amount);
         Stake storage stake = stakingData[_msgSender()];
-        stake.amount = stake.amount.add(amount);
+        stake.amount = amount;
     }
 
     function moveToBalance() internal {
         Stake storage stake = stakingData[_msgSender()];
-        require(baseAsset.transfer(address(_exchange), stake.amount), "E6");
+        require(baseAsset.transfer(address(_exchange), uint256(stake.amount)), "E6");
         _exchange.moveFromStake(_msgSender(), stake.amount);
         stake.amount = 0;
     }
 
-    function seizeFromStake(address user, address receiver, uint256 amount) external {
+    function seizeFromStake(address user, address receiver, uint64 amount) external {
         require(_msgSender() == address(_exchange), "Unauthorized seizeFromStake");
         Stake storage stake = stakingData[user];
-        stake.amount = stake.amount.sub(amount);
+        require(stake.amount >= amount, "UX"); //TODO
+        stake.amount -= amount;
         require(baseAsset.transfer(address(_exchange), amount), "E6");
         _exchange.moveFromStake(receiver, amount);
     }
 
 
-    function lockStake(uint256 amount) external {
-        assert(getStakePhase(_msgSender()) == StakePhase.NOTSTAKED); // TODO do we need this?
+    function lockStake(uint64 amount) external {
+        assert(getStakePhase(_msgSender()) == StakePhase.NOTSTAKED);
         moveFromBalance(amount);
         Stake storage stake = stakingData[_msgSender()];
         stake.phase = StakePhase.LOCKING;
