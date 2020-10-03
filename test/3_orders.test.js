@@ -113,7 +113,8 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("sell order creation and sign", async () => {
       sellOrder  = orders.generateOrder(user2, matcher, 0,
-                                        weth, wbtc, wbtc,
+                                        weth, wbtc,
+                                        {address:"0x0000000000000000000000000000000000000000"}, //fee in bare eth
                                         150000000,
                                         2000000,
                                         150000);
@@ -184,7 +185,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
       );
 
       event.buyer.should.be.equal(buyOrder.order.senderAddress);
-      event.seller.should.be.equal(sellOrder.senderAddress);
+      event.seller.should.be.equal(sellOrder.order.senderAddress);
       event.baseAsset.should.be.equal(buyOrder.order.baseAsset);
       event.filledPrice.should.be.equal(String(FILL_PRICE));
     });

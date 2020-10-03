@@ -1,9 +1,12 @@
+const sigUtil = require("eth-sig-util");
 const privKeyHelper = require("./PrivateKeys.js");
 const EIP712 = require("./EIP712.js");
+
 
 function generateOrder( trader, matcher, buySide,
                         baseAsset = weth, 
                         quoteAsset = wbtc,
+                        feeAsset = wbtc,
                         amount = Math.ceil(3.5e8),
                         price = Math.ceil(0.021e8),
                         fee = Math.ceil(3.5e5),
@@ -15,19 +18,20 @@ function generateOrder( trader, matcher, buySide,
         nonce = NOW;
       if(!expiration)
         expiration = NOW + 29 * 24 * 60 * 60 * 1000;
-      order = {
-        senderAddress: buyer,
+      let order = {
+        senderAddress: trader,
         matcherAddress: matcher,
         baseAsset: baseAsset.address, // WETH
         quoteAsset: quoteAsset.address, // WBTC
-        matcherFeeAsset: quoteAsset.address,
+        matcherFeeAsset: feeAsset.address,
         amount: amount,
-        price: price, 
-        matcherFee: Math.ceil(fee*amount*price),
+        price: price,
+        matcherFee: fee,
         nonce: NOW,
         expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
         buySide: buySide
       };
+      console.log(order);
       let msgParams = {
              types: {
                EIP712Domain: EIP712.domain,
@@ -38,8 +42,8 @@ function generateOrder( trader, matcher, buySide,
              message: order,
            };
 
-      msg = { data: msgParams };
-      _signature = sigUtil.signTypedData_v4(privKey, msg);
+      let msg = { data: msgParams };
+      let signature = sigUtil.signTypedData_v4(privKey, msg);
       order.signature = signature;
       return {order:order, msgParams: msgParams};
 }
