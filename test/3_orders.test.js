@@ -15,7 +15,7 @@ const LibValidator = artifacts.require("LibValidator");
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
 
-let exchange, weth, wbtc, lib, msgParams1, msgParams2, buyOrder, sellOrder, buyOrder2;
+let exchange, weth, wbtc, lib, msgParams1, msgParams2, buyOrder, sellOrder, buyOrder2, outdatedOrder;
 
 async function getLastTradeEvent(buyer, seller) {
   let events = await exchange.getPastEvents("NewTrade", {
@@ -103,12 +103,20 @@ contract("Exchange", ([matcher, user1, user2]) => {
       web3.utils.toChecksumAddress(recovered).should.be.equal(user1);
     });
 
-    it("second buy order creation and sign", async () => {
+    it("additional orders creation and sign", async () => {
       buyOrder2  = orders.generateOrder(user2, matcher, 1,
                                         weth, wbtc, wbtc,
                                         350000000, //3.5 ETH * 10^8
                                         2100000, //0.021 WBTC/WETH * 10^8
                                         350000);
+      const NOW = Date.now();
+      outdatedOrder  = orders.generateOrder(user1, matcher, 1,
+                                             weth, wbtc, wbtc,
+                                             350000000, //3.5 ETH * 10^8
+                                             2100000, //0.021 WBTC/WETH * 10^8
+                                             350000,
+                                             NOW-1,
+                                             NOW-1);
     });
 
     it("sell order creation and sign", async () => {
@@ -146,6 +154,16 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         1900000, //fill Price 0.019
         150000000, // fill Amount 1.5 WETH
+        { from: matcher }
+      ).should.be.rejected;
+    });
+    
+    it("outdated order should be rejected", async () => {
+      await exchange.fillOrders(
+        outdatedOrder.order,
+        sellOrder.order,
+        FILL_PRICE, //fill Price 0.021
+        FILL_AMOUNT, // fill Amount 1.5 WETH
         { from: matcher }
       ).should.be.rejected;
     });
