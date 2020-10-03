@@ -4,6 +4,8 @@ require("chai")
   .should();
 
 const sigUtil = require("eth-sig-util");
+const privKeyHelper = require("./helpers/PrivateKeys.js");
+const EIP712 = require("./helpers/EIP712.js");
 
 
 let PriceOracle = artifacts.require("PriceOracle");
@@ -15,12 +17,6 @@ const asset0="0x0000000000000000000000000000000000000000",
       asset2="0x0000000000000000000000000000000000000002";
 let prices, msgParams1, msgParams2;
 
-const privKey1 =
-        "c09ae3abc13c501fb9ff1c3c8ad3256678416f73a41433411f1714ae7b547fe3";
-const privKey2 =
-        "ecbcd49667c96bcf8b30ccb35234a0b217ea039a8e097d3a70de9d28624ba520";
-const privKey = Buffer.from(privKey2, "hex");
-const wrongPrivKey = Buffer.from(privKey1, "hex");
 
 async function getLastEvent(eventName, user) {
   let events = await priceOracle.getPastEvents(eventName, {
@@ -30,39 +26,17 @@ async function getLastEvent(eventName, user) {
   return events[0].returnValues;
 }
 
-const setBlockchainTime = async function(from_snapshot, time) {
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 0});
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_revert", params: [from_snapshot], id: 0});
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_snapshot", params: [], id: 0});
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 0});
-  bn = await web3.eth.blockNumber;
-  bl = await web3.eth.getBlock(bn);
-  tm = bl.timestamp;
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_increaseTime", params: [time-tm], id: 0});  
-  await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_mine", params: [], id: 0});
-};
-
-const getSnapshot = async function() {
-      return parseInt((await web3.currentProvider.send({jsonrpc: "2.0", method: "evm_snapshot", params: [], id: 0}))["result"]);
+function generateMsgParams(prices) {
+  return {
+             types: {
+               EIP712Domain: EIP712.domain,
+               Prices: EIP712.pricesType,
+             },
+             domain: EIP712.domainData,
+             primaryType: "Prices",
+             message: prices,
+      };
 }
-
-const domain = [
-                 { name: "name", type: "string" },
-                 { name: "version", type: "string" },
-                 { name: "chainId", type: "uint256" },
-                 { name: "salt", type: "bytes32" },
-               ];
-const domainData = {
-          name: "Orion Exchange",
-          version: "1",
-          chainId: 666,
-          salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
-};
-const pricesType =  [
-            { name: "assetAddresses", type: "address[]" },
-            { name: "prices", type: "uint64[]" },
-            { name: "timestamp", type: "uint64" },
-];
 
 contract("PriceOracle", ([owner, user1, oracle]) => {
   let just_staked_snapshot=0,
@@ -85,17 +59,9 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
         prices: [1,2,3],
         timestamp: Date.now()
       };
-      let msgParams = {
-             types: {
-               EIP712Domain: domain,
-               Prices: pricesType,
-             },
-             domain: domainData,
-             primaryType: "Prices",
-             message: prices,
-      };
+      let msgParams = generateMsgParams(prices);
       msgParams1 = { data: msgParams };
-      signature1 = sigUtil.signTypedData_v4(privKey, msgParams1);
+      signature1 = sigUtil.signTypedData_v4(privKeyHelper.getPrivKey(oracle), msgParams1);
       prices.signature = signature1;
       const recovered = sigUtil.recoverTypedSignature_v4({
         data: msgParams,
@@ -127,17 +93,9 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
         prices: [1,2,3,4],
         timestamp: Date.now()
       };
-      let msgParams_ = {
-             types: {
-               EIP712Domain: domain,
-               Prices: pricesType,
-             },
-             domain: domainData,
-             primaryType: "Prices",
-             message: prices_,
-      };
+      let msgParams_ = generateMsgParams(prices_);
       let msgParams1_ = { data: msgParams_ };
-      signature = sigUtil.signTypedData_v4(wrongPrivKey, msgParams1_);
+      signature = sigUtil.signTypedData_v4(privKeyHelper.getPrivKey(user1), msgParams1_);
       prices.signature = signature;
       const recovered = sigUtil.recoverTypedSignature_v4({
         data: msgParams_,
@@ -157,17 +115,9 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
         prices: [7],
         timestamp: Date.now()
       };
-      let msgParams = {
-             types: {
-               EIP712Domain: domain,
-               Prices: pricesType,
-             },
-             domain: domainData,
-             primaryType: "Prices",
-             message: prices,
-      };
+      let msgParams = generateMsgParams(prices);
       msgParams2 = { data: msgParams };
-      signature2 = sigUtil.signTypedData_v4(privKey, msgParams2);
+      signature2 = sigUtil.signTypedData_v4(privKeyHelper.getPrivKey(oracle), msgParams2);
       prices.signature = signature2;
 
       await priceOracle.provideData(prices, { from: user1 }

@@ -3,6 +3,8 @@ require("chai")
   .use(require("chai-as-promised"))
   .should();
 
+const ChainManipulation = require("./helpers/ChainManipulation");
+
 let Exchange = artifacts.require("Exchange");
 const Orion = artifacts.require("Orion");
 const Staking = artifacts.require("Staking");
@@ -21,57 +23,6 @@ async function getLastEvent(eventName, user) {
   return events[0].returnValues;
 }
 
-
-const revertToSnapshot = (snapshot_id) => {
-  return new Promise((resolve, reject) => {
-    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_revert', params: [snapshot_id], id: new Date().getTime()},
-                              (err, result) => {
-                                if (err) { return reject(err); }
-                                return resolve(result);
-                              });
-    });
-};
-
-const getSnapshot = () => {
-  return new Promise((resolve, reject) => {
-    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_snapshot', id: new Date().getTime()},
-                              (err, result) => {
-                                 if (err) { return reject(err); }
-                                 return resolve(result);
-                              })
-    });
-};
-
-const advanceTime = (time) => {
-  return new Promise((resolve, reject) => {
-    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_increaseTime', params: [time], id: new Date().getTime()},
-                              (err, result) => {
-                                 if (err) { return reject(err); }
-                                 return resolve(result);
-                              });
-    });
-};
-
-const advanceBlock = () => {
-  return new Promise((resolve, reject) => {
-    web3.currentProvider.send({jsonrpc: '2.0', method: 'evm_mine', id: new Date().getTime()},
-                              (err, result) => {
-                                if (err) { return reject(err); }
-                                return resolve(result);
-                              });
-    });
-};
-
-const setBlockchainTime = async function(from_snapshot, time) {
-  time = Math.ceil(time);
-  await revertToSnapshot(from_snapshot);
-  await getSnapshot();
-  let bn = await web3.eth.getBlockNumber();
-  let bl = await web3.eth.getBlock(bn);
-  let tm = bl.timestamp;
-  await advanceTime(time-tm);
-  await advanceBlock();
-}
 
 contract("Staking", ([owner, user1, user2, user3]) => {
 
@@ -146,8 +97,8 @@ contract("Staking", ([owner, user1, user2, user3]) => {
 
     it("locked stake value = staked value in LOCKED phase", async () => {
       await staking.lockStake(stakedBalance, {from:user2}).should.be.fulfilled;
-      await advanceTime(lockingDuration+1);
-      await advanceBlock();
+      await ChainManipulation.advanceTime(lockingDuration+1);
+      await ChainManipulation.advanceBlock();
       let stakePhase = await staking.getStakePhase(user2);
       stakePhase.toString().should.be.equal(String(LOCKED));
       let lockedBalance = await staking.getLockedStakeBalance(user2);
@@ -175,8 +126,8 @@ contract("Staking", ([owner, user1, user2, user3]) => {
     });
 
     it("user2 finish unlocking staked ORN", async () => {
-      await advanceTime(releasingDuration+1);
-      await advanceBlock();
+      await ChainManipulation.advanceTime(releasingDuration+1);
+      await ChainManipulation.advanceBlock();
       let stakePhase = await staking.getStakePhase(user2);
       stakePhase.toString().should.be.equal(String(READYTORELEASE));
 
@@ -198,8 +149,8 @@ contract("Staking", ([owner, user1, user2, user3]) => {
   describe("Staking::admin", () => {
     it("user1 try postpone user3 Stake Release", async () => {
       await staking.lockStake(stakedBalance, {from:user3}).should.be.fulfilled;
-      await advanceTime(lockingDuration+1);
-      await advanceBlock();
+      await ChainManipulation.advanceTime(lockingDuration+1);
+      await ChainManipulation.advanceBlock();
       await staking.requestReleaseStake({from:user3}).should.be.fulfilled;
       await staking.postponeStakeRelease(user3, {from:user1}).should.be.rejected;
     });
@@ -226,7 +177,7 @@ contract("Staking", ([owner, user1, user2, user3]) => {
     });
 
     it("user3 try release frozen stake after release periods", async () => {
-      await advanceTime(lockingDuration+releasingDuration+1);
+      await ChainManipulation.advanceTime(lockingDuration+releasingDuration+1);
       await staking.requestReleaseStake({from:user3}).should.be.rejected;
     });
 

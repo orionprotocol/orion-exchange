@@ -4,36 +4,14 @@ require("chai")
   .should();
 
 const sigUtil = require("eth-sig-util");
+const privKeyHelper = require("./helpers/PrivateKeys.js");
+const orders = require("./helpers/Orders.js");
 
 const Exchange = artifacts.require("Exchange");
 const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
 const LibValidator = artifacts.require("LibValidator");
-const domain = [
-                 { name: "name", type: "string" },
-                 { name: "version", type: "string" },
-                 { name: "chainId", type: "uint256" },
-                 { name: "salt", type: "bytes32" },
-               ];
-const domainData = {
-          name: "Orion Exchange",
-          version: "1",
-          chainId: 666,
-          salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
-};
-const orderTypes =  [
-            { name: "senderAddress", type: "address" },
-            { name: "matcherAddress", type: "address" },
-            { name: "baseAsset", type: "address" },
-            { name: "quoteAsset", type: "address" },
-            { name: "matcherFeeAsset", type: "address" },
-            { name: "amount", type: "uint64" },
-            { name: "price", type: "uint64" },
-            { name: "matcherFee", type: "uint64" },
-            { name: "nonce", type: "uint64" },
-            { name: "expiration", type: "uint64" },
-            { name: "buySide", type: "uint8" },
-];
+
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
 
@@ -108,158 +86,63 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("buy order creation and sign", async () => {
-      // Ganache user 1 pirvate key using fake mnemonics
-      const privKey1 =
-        "c09ae3abc13c501fb9ff1c3c8ad3256678416f73a41433411f1714ae7b547fe3";
-      const privKey = Buffer.from(privKey1, "hex");
-
-      //Client1 Order
-      buyOrder = {
-        senderAddress: user1,
-        matcherAddress: matcher,
-        baseAsset: weth.address, // WETH
-        quoteAsset: wbtc.address, // WBTC
-        matcherFeeAsset: wbtc.address, // WBTC
-        amount: 350000000, //3.5 ETH * 10^8
-        price: 2100000, //0.021 WBTC/WETH * 10^8
-        matcherFee: 350000,
-        nonce: NOW,
-        expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
-        buySide: 1
-      };
-
-      let msgParams = {
-             types: {
-               EIP712Domain: domain,
-               Order: orderTypes,
-             },
-             domain: domainData,
-             primaryType: "Order",
-             message: buyOrder,
-           };
-
-      msgParams1 = { data: msgParams };
-      // User 1 signs buy Order
-      signature1 = sigUtil.signTypedData_v4(privKey, msgParams1);
-
-      buyOrder.signature = signature1;
+      buyOrder  = orders.generateOrder(user1, matcher, 1,
+                                       weth, wbtc, wbtc,
+                                       350000000, //3.5 ETH * 10^8
+                                       2100000, //0.021 WBTC/WETH * 10^8
+                                       350000);
+      
     });
 
     it("buy order validation in js", async () => {
       const recovered = sigUtil.recoverTypedSignature_v4({
-        data: msgParams1.data,
-        sig: buyOrder.signature
+        data: buyOrder.msgParams,
+        sig: buyOrder.order.signature
       });
 
       web3.utils.toChecksumAddress(recovered).should.be.equal(user1);
     });
 
     it("second buy order creation and sign", async () => {
-      // Ganache user 1 pirvate key using fake mnemonics
-      const privKey2 =
-        "ecbcd49667c96bcf8b30ccb35234a0b217ea039a8e097d3a70de9d28624ba520";
-      const privKey = Buffer.from(privKey2, "hex");
-
-      //Client2 Order
-      buyOrder2 = {
-        senderAddress: user2,
-        matcherAddress: matcher,
-        baseAsset: weth.address,
-        quoteAsset: wbtc.address, // WBTC
-        // matcherFeeAsset: weth.address, // WETH
-        matcherFeeAsset: "0x0000000000000000000000000000000000000000", // WETH
-
-        amount: 150000000,
-        price: 2000000,
-        matcherFee: 150000,
-        nonce: NOW,
-        expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
-        buySide: 1
-      };
-
-      let msgParams = {
-             types: {
-               EIP712Domain: domain,
-               Order: orderTypes,
-             },
-             domain: domainData,
-             primaryType: "Order",
-             message: buyOrder2,
-           };
-
-      let _msgParams = { data: msgParams };
-
-      let _signature = sigUtil.signTypedData_v4(privKey, _msgParams);
-
-      buyOrder2.signature = _signature;
+      buyOrder2  = orders.generateOrder(user2, matcher, 1,
+                                        weth, wbtc, wbtc,
+                                        350000000, //3.5 ETH * 10^8
+                                        2100000, //0.021 WBTC/WETH * 10^8
+                                        350000);
     });
 
     it("sell order creation and sign", async () => {
-      // Ganache user 1 pirvate key using fake mnemonics
-      const privKey2 =
-        "ecbcd49667c96bcf8b30ccb35234a0b217ea039a8e097d3a70de9d28624ba520";
-      const privKey = Buffer.from(privKey2, "hex");
-
-      //Client2 Order
-      sellOrder = {
-        senderAddress: user2,
-        matcherAddress: matcher,
-        baseAsset: weth.address,
-        quoteAsset: wbtc.address, // WBTC
-        // matcherFeeAsset: weth.address, // WETH
-        matcherFeeAsset: "0x0000000000000000000000000000000000000000", // WETH
-
-        amount: 150000000,
-        price: 2000000,
-        matcherFee: 150000,
-        nonce: NOW,
-        expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
-        buySide: 0
-      };
-
-      let msgParams = {
-             types: {
-               EIP712Domain: domain,
-               Order: orderTypes,
-             },
-             domain: domainData,
-             primaryType: "Order",
-             message: sellOrder,
-           };
-
-      msgParams2 = { data: msgParams };
-
-      // User 2 signs sell Order
-      signature2 = sigUtil.signTypedData_v4(privKey, msgParams2);
-
-      sellOrder.signature = signature2;
+      sellOrder  = orders.generateOrder(user2, matcher, 0,
+                                        weth, wbtc, wbtc,
+                                        150000000,
+                                        2000000,
+                                        150000);
     });
 
     it("sell order validation in js", async () => {
       const recovered = sigUtil.recoverTypedSignature_v4({
-        data: msgParams2.data,
-        sig: sellOrder.signature
+        data: sellOrder.msgParams,
+        sig: sellOrder.order.signature
       });
-
       web3.utils.toChecksumAddress(recovered).should.be.equal(user2);
     });
   });
 
   describe("Exchange::fill orders", () => {
     it("validate buy order in exchange contract", async () => {
-      let isValid = await exchange.validateOrder(buyOrder, { from: matcher });
+      let isValid = await exchange.validateOrder(buyOrder.order, { from: matcher });
       isValid.should.be.true;
     });
 
     it("validate sell order in exchange contract", async () => {
-      let isValid = await exchange.validateOrder(sellOrder, { from: matcher });
+      let isValid = await exchange.validateOrder(sellOrder.order, { from: matcher });
       isValid.should.be.true;
     });
 
     it("incorrect fill price should be rejected", async () => {
       await exchange.fillOrders(
-        buyOrder,
-        sellOrder,
+        buyOrder.order,
+        sellOrder.order,
         1900000, //fill Price 0.019
         150000000, // fill Amount 1.5 WETH
         { from: matcher }
@@ -268,8 +151,8 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("only matcher can fill orders", async () => {
       await exchange.fillOrders(
-        buyOrder,
-        sellOrder,
+        buyOrder.order,
+        sellOrder.order,
         2100000, //fill Price 0.021
         150000000, // fill Amount 1.5 WETH
         { from: user1 }
@@ -278,8 +161,8 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("can not match buy vs buy orders", async () => {
       await exchange.fillOrders(
-        buyOrder,
-        buyOrder2,
+        buyOrder.order,
+        buyOrder2.order,
         FILL_PRICE, //fill Price 0.021
         1, // fill Amount 1.5 WETH
         { from: matcher }
@@ -288,29 +171,29 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("matcher can fill orders", async () => {
       await exchange.fillOrders(
-        buyOrder,
-        sellOrder,
+        buyOrder.order,
+        sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
         { from: matcher }
       ).should.be.fulfilled;
 
       const event = await getLastTradeEvent(
-        buyOrder.senderAddress,
-        sellOrder.senderAddress
+        buyOrder.order.senderAddress,
+        sellOrder.order.senderAddress
       );
 
-      event.buyer.should.be.equal(buyOrder.senderAddress);
+      event.buyer.should.be.equal(buyOrder.order.senderAddress);
       event.seller.should.be.equal(sellOrder.senderAddress);
-      event.baseAsset.should.be.equal(buyOrder.baseAsset);
+      event.baseAsset.should.be.equal(buyOrder.order.baseAsset);
       event.filledPrice.should.be.equal(String(FILL_PRICE));
     });
 
     it("trade cannot exceed order amount", async () => {
       // Calling fillOrders with same params, will cause fill amount to exceed sell order amount
       await exchange.fillOrders(
-        buyOrder,
-        sellOrder,
+        buyOrder.order,
+        sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
         { from: matcher }
@@ -320,28 +203,28 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
   describe("Exchange::order info", () => {
     it("can retrieve trades of a specific order", async () => {
-      let trades = await exchange.getOrderTrades(buyOrder, { from: matcher });
+      let trades = await exchange.getOrderTrades(buyOrder.order, { from: matcher });
       trades.length.should.be.equal(1);
       trades[0].filledAmount.should.be.equal(String(FILL_AMOUNT));
     });
 
     it("correct buy order status", async () => {
-      let status = await exchange.getOrderStatus(buyOrder, { from: matcher });
+      let status = await exchange.getOrderStatus(buyOrder.order, { from: matcher });
       status.toNumber().should.be.equal(0); // status 0 = NEW 1 = PARTIALLY_FILLED
     });
 
     it("correct sell order status", async () => {
-      let status = await exchange.getOrderStatus(sellOrder, { from: matcher });
+      let status = await exchange.getOrderStatus(sellOrder.order, { from: matcher });
       status.toNumber().should.be.equal(2); // status 0 = NEW 1 = PARTIALLY_FILLED
     });
 
     it("correct buy order filled amounts", async () => {
-      let amounts = await exchange.getFilledAmounts(sellOrder, {
+      let amounts = await exchange.getFilledAmounts(sellOrder.order, {
         from: matcher
       });
       String(amounts.totalFilled).should.be.equal(String(FILL_AMOUNT));
       String(amounts.totalFeesPaid).should.be.equal(
-        String((buyOrder.matcherFee * FILL_AMOUNT) / buyOrder.amount)
+        String((buyOrder.order.matcherFee * FILL_AMOUNT) / buyOrder.order.amount)
       );
     });
   });
@@ -363,7 +246,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
           String(
             10e8 -
               (FILL_PRICE * FILL_AMOUNT) / 1e8 -
-              buyOrder.matcherFee * (FILL_AMOUNT / buyOrder.amount)
+              buyOrder.order.matcherFee * (FILL_AMOUNT / buyOrder.order.amount)
           )
         );
     });
@@ -382,7 +265,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
       balance
         .toString()
         .should.be.equal(
-          String(1e8 - sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount))
+          String(1e8 - sellOrder.order.matcherFee * (FILL_AMOUNT / sellOrder.order.amount))
         );
     });
 
@@ -400,7 +283,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
       // WBTC = 10WBTC - 0.0035 WTBC * (1.5*3.5)
       let WBTCbalance = await wbtc.balanceOf(exchange.address);
       WBTCbalance.toString().should.be.equal(
-        String(10e8 - buyOrder.matcherFee * (FILL_AMOUNT / buyOrder.amount))
+        String(10e8 - buyOrder.order.matcherFee * (FILL_AMOUNT / buyOrder.order.amount))
       );
     });
 
@@ -419,7 +302,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         String(
           1e18 +
             1e18 -
-            sellOrder.matcherFee * (FILL_AMOUNT / sellOrder.amount) * 1e10
+            sellOrder.order.matcherFee * (FILL_AMOUNT / sellOrder.order.amount) * 1e10
         )
       );
     });
@@ -432,29 +315,29 @@ contract("Exchange", ([matcher, user1, user2]) => {
     it("correct matcher fee in WBTC", async () => {
       let WBTCbalance = await wbtc.balanceOf(matcher);
       WBTCbalance.toString().should.be.equal(
-        String(buyOrder.matcherFee * (FILL_AMOUNT / buyOrder.amount))
+        String(buyOrder.order.matcherFee * (FILL_AMOUNT / buyOrder.order.amount))
       );
     });
   });
 
   describe("Exchange::cancel orders", () => {
     it("user can't cancel an order that does not own", async () => {
-      await exchange.cancelOrder(sellOrder, { from: user1 }).should.be.rejected;
+      await exchange.cancelOrder(sellOrder.order, { from: user1 }).should.be.rejected;
     });
 
     it("user can cancel an order", async () => {
-      await exchange.cancelOrder(buyOrder, { from: user1 }).should.be.fulfilled;
+      await exchange.cancelOrder(buyOrder.order, { from: user1 }).should.be.fulfilled;
     });
 
     it("correct order status after cancelled", async () => {
-      let status = await exchange.getOrderStatus(buyOrder, { from: matcher });
+      let status = await exchange.getOrderStatus(buyOrder.order, { from: matcher });
       status.toNumber().should.be.equal(3); // status 0 = NEW 1 = PARTIALLY_FILLED 2 = FILLED, 3 = PARTIALLY_CANCELLED, 4 = CANCELLED
     });
 
     it("order can't be filled after cancelled", async () => {
       await exchange.fillOrders(
-        buyOrder,
-        sellOrder,
+        buyOrder.order,
+        sellOrder.order,
         2100000, //fill Price 0.021
         50000000, // fill Amount 0.5 WETH
         { from: matcher }
@@ -462,7 +345,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("user can't cancel an already cancelled order", async () => {
-      await exchange.cancelOrder(buyOrder, { from: user1 }).should.be.rejected;
+      await exchange.cancelOrder(buyOrder.order, { from: user1 }).should.be.rejected;
     });
   });
 });
