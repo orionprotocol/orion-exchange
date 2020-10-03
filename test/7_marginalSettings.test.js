@@ -32,18 +32,18 @@ contract("Exchange", ([owner, randomAddr1, randomAddr2]) => {
                      newStakeRisk, newPremium, 
                      newPriceOverdue, newPositionOverdue,
                      {from: owner})
-            .should.be.fullfilled;
+            .should.be.fulfilled;
     });
     it("correct settings after update", async () => {
       let stakeRisk = await exchange.stakeRisk();
       let liquidationPremium = await exchange.liquidationPremium();
       let priceOverdue = await exchange.priceOverdue();
       let positionOverdue = await exchange.positionOverdue();
-      let collateralAssets = await exchange.collateralAssets();
-      stakeRisk.should.be.equal(newStakeRisk);
-      liquidationPremium.should.be.equal(newPremium);
-      positionOverdue.should.be.equal(newPositionOverdue);
-      priceOverdue.should.be.equal(newPriceOverdue);
+      let collateralAssets = await exchange.getCollateralAssets();
+      stakeRisk.toString().should.be.equal(String(newStakeRisk));
+      liquidationPremium.toString().should.be.equal(String(newPremium));
+      positionOverdue.toString().should.be.equal(String(newPositionOverdue));
+      priceOverdue.toString().should.be.equal(String(newPriceOverdue));
       JSON.stringify(collateralAssets).should.be
         .equal(JSON.stringify([randomAddr1, randomAddr2]));
     });    
@@ -65,12 +65,14 @@ contract("Exchange", ([owner, randomAddr1, randomAddr2]) => {
                      [130, 255],
                      {from: owner}
                      )
-            .should.be.fullfilled;
+            .should.be.fulfilled;
     });
     it("correct settings after update", async () => {
-      const expectedRisks = {randomAddr1: 130, randomAddr2: 255};
+      const expectedRisks = {[randomAddr1]: 130, [randomAddr2]: 255};
       for(let i in expectedRisks) {
-        await exchange.assetRisks(i).should.be.equal(expectedRisks[i]);
+        console.log(i);
+        let risk = await exchange.assetRisks(i);
+        risk.toString().should.be.equal(expectedRisks[i]);
       }
     });
   });
