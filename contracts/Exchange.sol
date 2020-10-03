@@ -160,16 +160,14 @@ contract Exchange is Utils, Ownable {
      * @dev balance will be stored in decimal format too
      */
     function deposit() external payable {
-        require(msg.value > 0);
-
         int112 amountDecimal = int112(LibUnitConverter.baseUnitToDecimal(
             address(0),
             msg.value
         )); //cast to int112 is safe due to lack of ethereum in the wild
 
         assetBalances[_msgSender()][address(0)] += amountDecimal;
-
-        emit NewAssetDeposit(_msgSender(), address(0), uint112(amountDecimal));
+        if(msg.value>0)
+          emit NewAssetDeposit(_msgSender(), address(0), uint112(amountDecimal));
     }
 
     /**
@@ -233,7 +231,7 @@ contract Exchange is Utils, Ownable {
         returns (int192[] memory)
     {
         int192[] memory balances = new int192[](assetsAddresses.length);
-        for (uint16 i = 0; i < assetsAddresses.length; i++) {
+        for (uint16 i; i < assetsAddresses.length; i++) {
             balances[i] = assetBalances[user][assetsAddresses[i]];
         }
         return balances;
@@ -254,20 +252,19 @@ contract Exchange is Utils, Ownable {
     /**
      * @dev get trades for a specific order
      */
-    function getFilledAmounts(LibValidator.Order memory order)
+    function getFilledAmounts(bytes32 orderHash)
         public
         view
         returns (int192 totalFilled, int192 totalFeesPaid)
     {
-        bytes32 orderHash = order.getTypeValueHash();
-        Trade[] memory orderTrades = trades[orderHash];
+        Trade[] storage orderTrades = trades[orderHash];
 
-        for (uint16 i = 0; i < orderTrades.length; i++) {
+        for (uint16 i; i < orderTrades.length; i++) {
             // Note while filledAmount and feePaid are int192
             // they are guaranteed to be less that 2**156
             // it is safe to add them without checks
-            totalFilled = totalFilled + int192(trades[orderHash][i].filledAmount);
-            totalFeesPaid = totalFeesPaid + int192(trades[orderHash][i].feePaid);
+            totalFilled = totalFilled + int192(orderTrades[i].filledAmount);
+            totalFeesPaid = totalFeesPaid + int192(orderTrades[i].feePaid);
         }
     }
 
@@ -326,8 +323,7 @@ contract Exchange is Utils, Ownable {
         );
 
         // Check if orders were not cancelled
-        require(!isOrderCancelled(buyOrderHash), "E4");
-        require(!isOrderCancelled(sellOrderHash), "E4");
+        require(!(isOrderCancelled(buyOrderHash) || isOrderCancelled(sellOrderHash)), "E4");
 
         // --- UPDATES --- //
 
@@ -384,36 +380,27 @@ contract Exchange is Utils, Ownable {
         bool isBuyer
     ) internal {
         address user = order.senderAddress;
-        int192 baseBalance = assetBalances[user][order.baseAsset];
-        int192 quoteBalance = assetBalances[user][order.quoteAsset];
         // matcherFee: u64, filledAmount u128 => matcherFee*filledAmount fit u256
         // result matcherFee fit u64
         int192 matcherFee = int192(uint256(order.matcherFee)*filledAmount/order.amount); 
 
-        bool quoteInLiabilities = quoteBalance<0;
-        bool baseInLiabilities  = baseBalance<0;
-        bool feeAssetInLiabilities  = assetBalances[user][order.matcherFeeAsset]<0;
 
-        if (isBuyer) {
-            // Update Buyer's Balance (- quoteAsset + baseAsset  )
-            assetBalances[user][order.quoteAsset] -= int192(amountQuote);
-            assetBalances[user][order.baseAsset] += int192(filledAmount);
-            if(!quoteInLiabilities && (assetBalances[user][order.quoteAsset]<0)){
-              setLiability(user, order.quoteAsset);
-            }
-            if(baseInLiabilities && (assetBalances[user][order.baseAsset]>0)) {
-              MarginalFunctionality.removeLiability(user, order.baseAsset, liabilities);
-            }
-        } else {
-            // Update Seller's Balance  (+ quoteAsset - baseAsset   )
-            assetBalances[user][order.quoteAsset] += int192(amountQuote);
-            assetBalances[user][order.baseAsset] -= int192(filledAmount);
-            if(quoteInLiabilities && (assetBalances[user][order.quoteAsset]>0)){
-              MarginalFunctionality.removeLiability(user, order.quoteAsset, liabilities);
-            }
-            if(!baseInLiabilities && (assetBalances[user][order.baseAsset]<0)) {
-              setLiability(user, order.baseAsset);
-            }
+        bool feeAssetInLiabilities  = assetBalances[user][order.matcherFeeAsset]<0;
+        (address firstAsset, address secondAsset) = isBuyer?
+                                                     (order.quoteAsset, order.baseAsset):
+                                                     (order.baseAsset, order.quoteAsset);
+        int192 firstBalance = assetBalances[user][firstAsset];
+        int192 secondBalance = assetBalances[user][secondAsset];
+        bool firstInLiabilities = firstBalance<0;
+        bool secondInLiabilities  = secondBalance<0;
+
+        assetBalances[user][firstAsset] -= int192(amountQuote);
+        assetBalances[user][secondAsset] += int192(filledAmount);
+        if(!firstInLiabilities && (assetBalances[user][firstAsset]<0)){
+          setLiability(user, firstAsset);
+        }
+        if(secondInLiabilities && (assetBalances[user][secondAsset]>=0)) {
+          MarginalFunctionality.removeLiability(user, secondAsset, liabilities);
         }
 
         // User pay for fees
@@ -437,7 +424,7 @@ contract Exchange is Utils, Ownable {
         // result matcherFee fit u64
         int192 matcherFee = int192(uint256(order.matcherFee)*filledAmount/order.amount);
 
-        (int192 totalFilled, int192 totalFeesPaid) = getFilledAmounts(order);
+        (int192 totalFilled, int192 totalFeesPaid) = getFilledAmounts(orderHash);
 
         uint256 afterFilled = uint256(totalFilled)+uint256(filledAmount);
         uint256 afterFee = uint256(totalFeesPaid)+uint256(matcherFee);
@@ -447,12 +434,11 @@ contract Exchange is Utils, Ownable {
 
         Status status = Status.NEW;
 
-        if (
-            afterFilled < order.amount &&
-            trades[orderHash].length > 1
-        ) status = Status.PARTIALLY_FILLED;
-        if (afterFilled == order.amount)
+        if (afterFilled == order.amount) {
             status = Status.FILLED;
+        } else if (trades[orderHash].length > 0) {
+            status = Status.PARTIALLY_FILLED;
+        }
 
         //Update order status in storage
         orderStatus[orderHash] = status;
@@ -480,7 +466,7 @@ contract Exchange is Utils, Ownable {
         (
             int192 totalFilled, /*uint totalFeesPaid*/
 
-        ) = getFilledAmounts(order);
+        ) = getFilledAmounts(orderHash);
 
         if (totalFilled > 0)
             orderStatus[orderHash] = Status.PARTIALLY_CANCELLED;
