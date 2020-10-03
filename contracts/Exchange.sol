@@ -97,7 +97,7 @@ contract Exchange is Utils, Ownable {
     // List of assets with negative balance for each user
     mapping(address => MarginalFunctionality.Liability[]) public liabilities;
     // List of assets which can be used as collateral and risk coefficients for them
-    address[] public collateralAssets;
+    address[] private collateralAssets;
     mapping(address => uint8) public assetRisks;
     // Risk coefficient for locked ORN
     uint8 public stakeRisk;
@@ -124,14 +124,21 @@ contract Exchange is Utils, Ownable {
       liquidationPremium = 12; // 12.75/255 = 0.05
     }
 
-    function updateMarginalSettings(address[] memory collateralAssets, 
-                                    uint8 stakeRisk,
-                                    int8 liquidationPremium,
-                                    uint64 priceOverdue,
-                                    uint64 positionOverdue) public {
+    function updateMarginalSettings(address[] memory _collateralAssets, 
+                                    uint8 _stakeRisk,
+                                    uint8 _liquidationPremium,
+                                    uint64 _priceOverdue,
+                                    uint64 _positionOverdue) public onlyOwner {
+      collateralAssets = _collateralAssets;
+      stakeRisk = _stakeRisk;
+      liquidationPremium = _liquidationPremium;
+      priceOverdue = _priceOverdue;
+      positionOverdue = _positionOverdue;
     }
     
-    function updateAssetRisks(address[] memory assets, uint8[] memory risks) public {
+    function updateAssetRisks(address[] memory assets, uint8[] memory risks) public onlyOwner {
+        for(uint16 i; i< assets.length; i++)
+         assetRisks[assets[i]] = risks[i];
     }
 
     /**
@@ -235,6 +242,10 @@ contract Exchange is Utils, Ownable {
             balances[i] = assetBalances[user][assetsAddresses[i]];
         }
         return balances;
+    }
+
+    function getCollateralAssets() public view returns (address[] memory) {
+        return collateralAssets;
     }
 
     /**
