@@ -44,9 +44,10 @@ contract("Exchange", ([owner, randomAddr1, randomAddr2]) => {
       liquidationPremium.toString().should.be.equal(String(newPremium));
       positionOverdue.toString().should.be.equal(String(newPositionOverdue));
       priceOverdue.toString().should.be.equal(String(newPriceOverdue));
+      console.log("here", collateralAssets);
       JSON.stringify(collateralAssets).should.be
         .equal(JSON.stringify([randomAddr1, randomAddr2]));
-    });    
+    });
 
   });
 
@@ -72,7 +73,7 @@ contract("Exchange", ([owner, randomAddr1, randomAddr2]) => {
       for(let i in expectedRisks) {
         console.log(i);
         let risk = await exchange.assetRisks(i);
-        risk.toString().should.be.equal(expectedRisks[i]);
+        risk.toString().should.be.equal(String(expectedRisks[i]));
       }
     });
   });
