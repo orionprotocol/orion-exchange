@@ -124,6 +124,16 @@ contract Exchange is Utils, Ownable {
       liquidationPremium = 12; // 12.75/255 = 0.05
     }
 
+    function updateMarginalSettings(address[] memory collateralAssets, 
+                                    uint8 stakeRisk,
+                                    int8 liquidationPremium,
+                                    uint64 priceOverdue,
+                                    uint64 positionOverdue) public {
+    }
+    
+    function updateAssetRisks(address[] memory assets, uint8[] memory risks) public {
+    }
+
     /**
      * @dev Deposit ERC20 tokens to the exchange contract
      * @dev User needs to approve token contract first
