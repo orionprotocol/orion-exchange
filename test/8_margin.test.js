@@ -531,11 +531,32 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
       console.log(position);
     });
     it("correct balances after liquidation", async () => {
+      let liquidationAmount = Math.floor(10e8*160e8/1e8);
+      let premium = Math.floor(liquidationAmount/255)*liquidationPremium;
+      let liquidatorOrionAmount = await exchange.getBalance(orion.address, user3);
+      liquidatorOrionAmount.toString().should.be.equal(String(liquidationAmount+premium));
+    });
+    it("liquidation can not make balance very positive", async () => {
+      await exchange.partiallyLiquidate(user1, ZERO_ADDRESS, 220e8, {from:user3}).should.be.rejected;
     });
     it("overdue position can be liquidated", async () => {
-    });
-    it("overdue position can be liquidated", async () => {
-    });
- 
+      await ChainManipulation.advanceTime(overdueDuration+1);
+      await ChainManipulation.advanceBlock();
+      let position = await exchange.calcPosition(user1);
+      //position.state.should.be.equal(String(3)); //OVERDUE
+      prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
+                           [WETHPrice, WBTCPrice, OrionPrice, 160e8, WXRPPrice]);
+      await priceOracle.provideData(prices, { from: user1 }
+                                ).should.be.fulfilled;
+      //position.state.should.be.equal(String(3)); //OVERDUE
+      let liquidatorOrionAmount = await exchange.getBalance(orion.address, user3);
+      await exchange.partiallyLiquidate(user1, ZERO_ADDRESS, 180e8, {from:user3});
+      let newLiquidatorOrionAmount = await exchange.getBalance(orion.address, user3);
+
+      let liquidationAmount = Math.floor(180e8*160e8/1e8);
+      let premium = Math.floor(liquidationAmount/255)*liquidationPremium;
+      (newLiquidatorOrionAmount-liquidatorOrionAmount).toString()
+        .should.be.equal(String((liquidationAmount+premium)));
+    }); 
   });
 });
