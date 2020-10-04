@@ -104,7 +104,6 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
         prices: priceData,
         timestamp: await ChainManipulation.getBlokchainTime()
       };
-      console.log("\n\n\n\n",prices);
       let msgParams = {
              types: {
                EIP712Domain: EIP712.domain,
@@ -295,7 +294,6 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           trade[1],
           { from: matcher }
         ).should.be.fulfilled;
-        console.log(await exchange.calcPosition(user1));
       }
       let expectedOrionAmount = initialOrionBalance-stakeAmount +
                                 Math.floor(initialWBTCBalance*WBTCPrice/1e8) + (WBTCPrice*1e5/1e8) +
@@ -415,7 +413,6 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
     });
     
     it("broker can't open new liability if he overdue old one", async () => {
-      console.log(await exchange.calcPosition(user1));
       await ChainManipulation.advanceTime(overdueDuration+1);
       await ChainManipulation.advanceBlock();
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS,wxrp.address],
@@ -506,16 +503,13 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.fulfilled;
       }
-      console.log(await exchange.calcPosition(user1));
     });
     it("negative position can be liquidated", async () => {
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
                            [WETHPrice, WBTCPrice, OrionPrice, 160e8, WXRPPrice]);
       await priceOracle.provideData(prices, { from: user1 }
                                 ).should.be.fulfilled;
-      console.log("Time data", await priceOracle.assetPrices(ZERO_ADDRESS), await exchange.priceOverdue(), await ChainManipulation.getBlokchainTime())
       let position = await exchange.calcPosition(user1);
-      console.log(position)
       position.state.should.be.equal(String(1)); //Negative
       let brokerOrionAmount = await exchange.getBalance(orion.address, user1);
 
@@ -528,7 +522,6 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
       (newBrokerOrionAmount-brokerOrionAmount).toString().should.be.equal(String(-(liquidationAmount+premium)));
       liquidatorOrionAmount.toString().should.be.equal(String(liquidationAmount+premium));
       position = await exchange.calcPosition(user1);
-      console.log(position);
     });
     it("correct balances after liquidation", async () => {
       let liquidationAmount = Math.floor(10e8*160e8/1e8);

@@ -14,7 +14,6 @@ function generateOrder( trader, matcher, buySide,
                         expiration = undefined) {
       let privKey = privKeyHelper.getPrivKey(trader);
       const NOW = Date.now();
-      console.log(nonce,expiration, NOW);
       if(!nonce)
         nonce = NOW;
       if(!expiration)
@@ -32,7 +31,6 @@ function generateOrder( trader, matcher, buySide,
         expiration: expiration,
         buySide: buySide
       };
-      console.log(order);
       let msgParams = {
              types: {
                EIP712Domain: EIP712.domain,

@@ -44,7 +44,6 @@ contract("Exchange", ([owner, randomAddr1, randomAddr2]) => {
       liquidationPremium.toString().should.be.equal(String(newPremium));
       positionOverdue.toString().should.be.equal(String(newPositionOverdue));
       priceOverdue.toString().should.be.equal(String(newPriceOverdue));
-      console.log("here", collateralAssets);
       JSON.stringify(collateralAssets).should.be
         .equal(JSON.stringify([randomAddr1, randomAddr2]));
     });
@@ -71,7 +70,6 @@ contract("Exchange", ([owner, randomAddr1, randomAddr2]) => {
     it("correct settings after update", async () => {
       const expectedRisks = {[randomAddr1]: 130, [randomAddr2]: 255};
       for(let i in expectedRisks) {
-        console.log(i);
         let risk = await exchange.assetRisks(i);
         risk.toString().should.be.equal(String(expectedRisks[i]));
       }
