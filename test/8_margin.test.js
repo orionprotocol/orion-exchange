@@ -182,9 +182,9 @@ contract("Exchange", ([owner, user1, user2]) => {
       orionAmount_.toString().should.be.equal(String(initialOrionBalance-stakeAmount));
       //first get rid of all non-orion tokens
       let trades = [[wbtc, initialWBTCBalance, WBTCPrice],
-                    /*[weth, initialWETHBalance, WETHPrice],
+                    [weth, initialWETHBalance, WETHPrice],
                     [wxrp, initialWXRPBalance, WXRPPrice],
-                    [{address:ZERO_ADDRESS}, initialETHBalance, ETHPrice]*/
+                    [{address:ZERO_ADDRESS}, initialETHBalance, ETHPrice]
                    ];
       for(let trade of trades) {
         let sellOrder  = orders.generateOrder(user1, matcher, 0,
@@ -207,17 +207,57 @@ contract("Exchange", ([owner, user1, user2]) => {
       }
       let user1Position = await exchange.calcPosition(user1);
       let expectedOrionAmount = initialOrionBalance-stakeAmount +
-                                Math.floor(initialWBTCBalance*WBTCPrice/1e8) - 350000;/* +
+                                Math.floor(initialWBTCBalance*WBTCPrice/1e8) +
                                 Math.floor(initialWETHBalance*WETHPrice/1e8) +
                                 Math.floor(initialWXRPBalance*WXRPPrice/1e8) +
-                                Math.floor(initialETHBalance*ETHPrice/1e8) - 350000*4;*/
+                                Math.floor(initialETHBalance*ETHPrice/1e8) - 350000*4;
       let orionAmount = await exchange.getBalance(orion.address, user1);
       orionAmount.toString().should.be.equal(String(expectedOrionAmount));
-      let user1PositionJs = calcCollateral(stakeAmount, 
-                                         (initialOrionBalance-stakeAmount),
-                                         0, 0, 0); 
+      let user1PositionJs = calcCollateral(stakeAmount,
+                                         expectedOrionAmount,
+                                         0, 0, 0);
       user1Position.weightedPosition.should.be.equal(String(user1PositionJs.weightedPosition));
       user1Position.totalPosition.should.be.equal(String(user1PositionJs.totalPosition));
+      sellOrder  = orders.generateOrder(user1, matcher, 0,
+                                             wbtc, orion, orion,
+                                             1e5, 
+                                             WBTCPrice,
+                                             350000);
+      buyOrder  = orders.generateOrder(user2, matcher, 1,
+                                             wbtc, orion, orion,
+                                             1e5, 
+                                             WBTCPrice,
+                                             350000);
+      await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          WBTCPrice,
+          1e5,
+          { from: matcher }
+        ).should.be.fulfilled;
+    });
+    it("correct broker position after marginal trade", async () => {
+      let brokerPosition = await exchange.calcPosition(user1);
+      let expectedLiability = -(WBTCPrice*1e5/1e8);
+      let expectedOrionAmount = initialOrionBalance-stakeAmount + (WBTCPrice*1e5/1e8)+
+                                Math.floor(initialWBTCBalance*WBTCPrice/1e8) +
+                                Math.floor(initialWETHBalance*WETHPrice/1e8) +
+                                Math.floor(initialWXRPBalance*WXRPPrice/1e8) +
+                                Math.floor(initialETHBalance*ETHPrice/1e8) - 350000*5;
+      let orionAmount = await exchange.getBalance(orion.address, user1);
+      let expectedCollaterals = calcCollateral(stakeAmount, expectedOrionAmount, 
+                                         0, 0, 0);
+      let expectedWeightedPosition = expectedCollaterals.weightedPosition + expectedLiability;
+      let expectedTotalPosition = expectedCollaterals.totalPosition + expectedLiability;
+      orionAmount.toString().should.be.equal(String(expectedOrionAmount));
+      expectedLiability.toString().should.be.equal(brokerPosition.totalLiabilities.toString());
+      brokerPosition.weightedPosition.toString().should.be.equal(String(expectedWeightedPosition));
+      brokerPosition.totalPosition.toString().should.be.equal(String(expectedTotalPosition));
+    });
+    it("correct liability list after marginal trade", async () => {
+      let l1 = await exchange.liabilities(user1,0);
+      await exchange.liabilities(user1,1).should.be.rejected;
+      l1.asset.toString().should.be.equal(wbtc.address);
     });
   });
 
