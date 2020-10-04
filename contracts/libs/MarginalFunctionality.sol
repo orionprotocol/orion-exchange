@@ -183,11 +183,11 @@ library MarginalFunctionality {
                                            constants);
         require(initialPosition.state == PositionState.NEGATIVE, "E7");
         address liquidator = msg.sender;
-        require(assetBalances[liquidator][redeemedAsset]>amount,"E8");
+        require(assetBalances[liquidator][redeemedAsset]>=amount,"E8");
         assetBalances[liquidator][redeemedAsset] -= amount;
         assetBalances[constants.user][redeemedAsset] += amount;
         (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
-        require((timestamp + constants.priceOverdue) < now, "E9"); //Price is outdated
+        require((timestamp + constants.priceOverdue) > now, "E9"); //Price is outdated
         
         int64 orionAmount = reimburseLiquidator(amount, price, liquidator, assetBalances, constants);
         assetBalances[liquidator][constants._orionTokenAddress] += orionAmount;
