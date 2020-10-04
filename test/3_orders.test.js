@@ -238,7 +238,8 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("correct buy order filled amounts", async () => {
-      let amounts = await exchange.getFilledAmounts(sellOrder.order, {
+      let hash = await exchange.getOrderHash(sellOrder.order);
+      let amounts = await exchange.getFilledAmounts(hash, {
         from: matcher
       });
       String(amounts.totalFilled).should.be.equal(String(FILL_AMOUNT));

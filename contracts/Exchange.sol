@@ -235,6 +235,13 @@ contract Exchange is Utils, Ownable {
     }
 
     /**
+     * @dev get hash for an order
+     */
+    function getOrderHash(LibValidator.Order memory order) public pure returns (bytes32){
+      return order.getTypeValueHash();
+    }
+
+    /**
      * @dev get trades for a specific order
      */
     function getOrderTrades(LibValidator.Order memory order)
@@ -391,8 +398,8 @@ contract Exchange is Utils, Ownable {
         bool firstInLiabilities = firstBalance<0;
         bool secondInLiabilities  = secondBalance<0;
 
-        assetBalances[user][firstAsset] -= int192(amountQuote);
-        assetBalances[user][secondAsset] += int192(filledAmount);
+        assetBalances[user][firstAsset] -= isBuyer? amountQuote : filledAmount;
+        assetBalances[user][secondAsset] += isBuyer? filledAmount : amountQuote;
         if(!firstInLiabilities && (assetBalances[user][firstAsset]<0)){
           setLiability(user, firstAsset);
         }
