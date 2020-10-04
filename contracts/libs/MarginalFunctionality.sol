@@ -153,12 +153,16 @@ library MarginalFunctionality {
                              mapping(address => Liability[]) storage liabilities)
         public      {
         bool shift = false;
-        for(uint8 i=0; i<liabilities[user].length-1; i++) {
+        uint8 i;
+        for(; i<liabilities[user].length-1; i++) {
           if(liabilities[user][i].asset == asset) {
             shift = true;
           }
           if(shift)
             liabilities[user][i] = liabilities[user][i+1];
+        }
+        if(liabilities[user][i].asset == asset) {
+            shift = true;
         }
         if(shift)
           liabilities[user].pop();
