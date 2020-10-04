@@ -72,20 +72,6 @@ contract Exchange is Utils, Ownable {
         uint64 timestamp;
     }
 
-    enum PositionState {
-        POSITIVE,
-        NEGATIVE, // weighted position below 0
-        OVERDUE,  // liability is not returned for too long
-        NOPRICE,  // some assets has no price or expired
-        INCORRECT // some of the basic requirements are not met:
-                  // too many liabilities, no locked stake, etc
-    }
-    struct Position {
-        PositionState state;
-        int192 weightedPosition;
-        int192 totalPosition;
-    }
-
     // Get trades by orderHash
     mapping(bytes32 => Trade[]) public trades;
 
@@ -494,7 +480,7 @@ contract Exchange is Utils, Ownable {
     function checkPosition(address user) public view returns (bool) {
         if(liabilities[user].length == 0)
           return true;
-        return calcPosition(user).state == PositionState.POSITIVE;
+        return calcPosition(user).state == MarginalFunctionality.PositionState.POSITIVE;
     }
 
     function getConstants(address user) 
@@ -511,10 +497,10 @@ contract Exchange is Utils, Ownable {
                                                   liquidationPremium);
     }
 
-    function calcPosition(address user) public view returns (Position memory) {
+    function calcPosition(address user) public view returns (MarginalFunctionality.Position memory) {
         MarginalFunctionality.UsedConstants memory constants = 
           getConstants(user);
-        MarginalFunctionality.calcPosition(collateralAssets,
+        return MarginalFunctionality.calcPosition(collateralAssets,
                                            liabilities,
                                            assetBalances,
                                            assetRisks,
