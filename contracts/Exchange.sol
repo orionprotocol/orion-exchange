@@ -135,16 +135,7 @@ contract Exchange is Utils, Ownable {
     function depositAsset(address assetAddress, uint112 amount) external {
         IERC20 asset = IERC20(assetAddress);
         require(asset.transferFrom(_msgSender(), address(this), uint256(amount)), "E6");
-
-        uint256 amountDecimal = LibUnitConverter.baseUnitToDecimal(
-            assetAddress,
-            amount
-        );
-        require(amountDecimal<uint112(-1), "E6");
-        int112 safeAmountDecimal = int112(amountDecimal);
-        assetBalances[_msgSender()][assetAddress] += safeAmountDecimal; 
-
-        emit NewAssetDeposit(_msgSender(), assetAddress, uint112(safeAmountDecimal));
+        generalDeposit(assetAddress,amount);
     }
 
     /**
@@ -153,16 +144,23 @@ contract Exchange is Utils, Ownable {
      * @dev balance will be stored in decimal format too
      */
     function deposit() external payable {
-        int112 amountDecimal = int112(LibUnitConverter.baseUnitToDecimal(
-            address(0),
-            msg.value
-        )); //cast to int112 is safe due to lack of ethereum in the wild
-
-        assetBalances[_msgSender()][address(0)] += amountDecimal;
-        if(msg.value>0)
-          emit NewAssetDeposit(_msgSender(), address(0), uint112(amountDecimal));
+        generalDeposit(address(0), uint112(msg.value));
     }
 
+    function generalDeposit(address assetAddress, uint112 amount) internal {
+        bool wasLiability = assetBalances[_msgSender()][assetAddress]<0;
+        uint256 amountDecimal = LibUnitConverter.baseUnitToDecimal(
+            assetAddress,
+            amount
+        );
+        require(amountDecimal<uint112(-1), "E6");
+        int112 safeAmountDecimal = int112(amountDecimal);
+        assetBalances[_msgSender()][assetAddress] += safeAmountDecimal; 
+        if(amount>0)
+          emit NewAssetDeposit(_msgSender(), assetAddress, uint112(safeAmountDecimal));
+        if(wasLiability && assetBalances[_msgSender()][assetAddress]>=0)
+          MarginalFunctionality.removeLiability(_msgSender(), assetAddress, liabilities);
+    }
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
      * @param assetAddress address of the asset to withdraw
@@ -212,6 +210,7 @@ contract Exchange is Utils, Ownable {
     {
         return assetBalances[user][assetAddress];
     }
+
 
     /**
      * @dev Batch query of asset balances for a user
