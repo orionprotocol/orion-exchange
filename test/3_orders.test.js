@@ -15,7 +15,7 @@ const LibValidator = artifacts.require("LibValidator");
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
 
-let exchange, weth, wbtc, lib, msgParams1, msgParams2, buyOrder, sellOrder, buyOrder2, outdatedOrder;
+let exchange, weth, wbtc, lib, msgParams1, msgParams2, buyOrder, sellOrder, buyOrder2, outdatedOrder, outsizedOrder;
 
 async function getLastTradeEvent(buyer, seller) {
   let events = await exchange.getPastEvents("NewTrade", {
@@ -117,6 +117,12 @@ contract("Exchange", ([matcher, user1, user2]) => {
                                              350000,
                                              NOW-1,
                                              NOW-1);
+
+      outsizedOrder  = orders.generateOrder(user1, matcher, 1,
+                                             weth, wbtc, wbtc,
+                                             2e8, //2 ETH * 10^8
+                                             1e9, //10 WBTC/WETH * 10^8
+                                             350000);
     });
 
     it("sell order creation and sign", async () => {
@@ -164,6 +170,18 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
+        { from: matcher }
+      ).should.be.rejected;
+    });
+
+    it("outsized order should be rejected", async () => {
+      //user 1 should pay 20 wbtc for 2 eth, but he has only 10
+      // and no marginal opportunity
+      await exchange.fillOrders(
+        outsizedOrder.order,
+        sellOrder.order,
+        1e9,
+        2e8,
         { from: matcher }
       ).should.be.rejected;
     });
