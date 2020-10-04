@@ -50,12 +50,20 @@ const setBlockchainTime = async (from_snapshot, time) =>  {
   await advanceBlock();
 }
 
+const getBlokchainTime = async () => {
+  let bn = await web3.eth.getBlockNumber();
+  let bl = await web3.eth.getBlock(bn);
+  let tm = bl.timestamp;
+  return parseInt(tm.toString());
+}
+
 module.exports = Object({
     revertToSnapshot: revertToSnapshot,
     getSnapshot: getSnapshot,
     advanceTime: advanceTime,
     advanceBlock: advanceBlock,
-    setBlockchainTime: setBlockchainTime
+    setBlockchainTime: setBlockchainTime,
+    getBlokchainTime: getBlokchainTime
 });
 
 
