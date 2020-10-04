@@ -14,6 +14,7 @@ function generateOrder( trader, matcher, buySide,
                         expiration = undefined) {
       let privKey = privKeyHelper.getPrivKey(trader);
       const NOW = Date.now();
+      console.log(nonce,expiration, NOW);
       if(!nonce)
         nonce = NOW;
       if(!expiration)
@@ -27,8 +28,8 @@ function generateOrder( trader, matcher, buySide,
         amount: amount,
         price: price,
         matcherFee: fee,
-        nonce: NOW,
-        expiration: NOW + 29 * 24 * 60 * 60 * 1000, // milliseconds
+        nonce: nonce,
+        expiration: expiration,
         buySide: buySide
       };
       console.log(order);
