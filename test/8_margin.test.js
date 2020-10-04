@@ -12,6 +12,7 @@ const ChainManipulation = require("./helpers/ChainManipulation");
 const Exchange = artifacts.require("Exchange");
 const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
+const WXRP = artifacts.require("WXRP");
 const Orion = artifacts.require("Orion");
 const Staking = artifacts.require("Staking");
 let PriceOracle = artifacts.require("PriceOracle");
@@ -22,19 +23,21 @@ const MarginalFunctionality = artifacts.require("MarginalFunctionality");
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
 
-let exchange, weth, wbtc, orion, staking, priceOracle, lib, marginalFunctionality;
+let exchange, weth, wbtc, wxrp, orion, staking, priceOracle, lib, marginalFunctionality;
 let oraclePub, matcher;
 
-const initialOrionBalance = Math.floor(500e8);
-const initialWBTCBalance = Math.floor(2e8);
-const initialWETHBalance = Math.floor(100e8);
-const initialRawETHBalance = Math.floor(20e18);
+const initialOrionBalance = Math.floor(5000e8);
+const initialWBTCBalance = Math.floor(1e7); //~430 ORN
+const initialWETHBalance = Math.floor(3e8); //~430 ORN
+const initialWXRPBalance = Math.floor(4300e8); //~430 ORN
+const initialRawETHBalance = Math.floor(3e18); //~430 ORN
 const initialETHBalance = Math.floor(initialRawETHBalance/1e10);
 const stakeAmount = Math.floor(200e8);
 const lockingDuration = 3600*24;
 
 const OrionPrice = 1e8;
 const WBTCPrice = 4321e8; //4321 orions per one btc
+const WXRPPrice = 1e7; //0.1 orions per one xrp
 const WETHPrice = 143e8; //143 orions per one ether
 const ETHPrice = 143e8; //143 orions per one ether
 
@@ -45,7 +48,7 @@ const ethWeight = 190;
 const wethWeight = 10;
 const stakeRisk = 242;
 
-function calcPosition(orionStake, orion, wbtc, weth, eth) {
+function calcCollateral(orionStake, orion, wbtc, weth, eth) {
       let weighted = stakeRisk*Math.floor(orionStake/255) + 
           Math.floor(orion/255)*orionWeight  + 
           Math.floor(Math.floor(wbtc* WBTCPrice/1e8) /255) * wbtcWeight + 
@@ -63,6 +66,7 @@ contract("Exchange", ([owner, user1, user2]) => {
         exchange = await Exchange.deployed();
         weth = await WETH.deployed();
         wbtc = await WBTC.deployed();
+        wxrp = await WXRP.deployed();
         orion = await Orion.deployed();
         lib = await LibValidator.deployed();
         priceOracle = await PriceOracle.deployed();
@@ -95,6 +99,7 @@ contract("Exchange", ([owner, user1, user2]) => {
         await depositAsset(orion, initialOrionBalance, user);
         await depositAsset(wbtc, initialWBTCBalance, user);
         await depositAsset(weth, initialWETHBalance, user);
+        await depositAsset(wxrp, initialWXRPBalance, user);
         
         exchange.deposit({ from: user, value: String(initialRawETHBalance) });
         let balanceAsset = await exchange.getBalance(ZERO_ADDRESS, user);
@@ -147,19 +152,74 @@ contract("Exchange", ([owner, user1, user2]) => {
                      {from: owner}
                      )
             .should.be.fulfilled;
-      let user1Position = await exchange.calcPosition(user1);
+    });
+  });
+  describe("Exchange::margin trades", () => {
+    it("unsophisticated user has correct position", async () => {
       let user2Position = await exchange.calcPosition(user2);
-      let user1PositionJs = calcPosition(stakeAmount, 
-                                         (initialOrionBalance-stakeAmount), 
-                                         initialWBTCBalance, 
-                                         initialWETHBalance, 
-                                         initialETHBalance); 
-      let user2PositionJs = calcPosition(0, 
+      let user2PositionJs = calcCollateral(0, 
                                          initialOrionBalance, 
                                          initialWBTCBalance, 
                                          initialWETHBalance, 
                                          initialETHBalance);
-      console.log("Here",user1Position, user1PositionJs);
+      user2Position.weightedPosition.should.be.equal(String(user2PositionJs.weightedPosition));
+      user2Position.totalPosition.should.be.equal(String(user2PositionJs.totalPosition));
+    });
+
+    it("broker has correct initial position", async () => {
+      let user1Position = await exchange.calcPosition(user1);
+      let user1PositionJs = calcCollateral(stakeAmount, 
+                                         (initialOrionBalance-stakeAmount), 
+                                         initialWBTCBalance, 
+                                         initialWETHBalance, 
+                                         initialETHBalance); 
+      user1Position.weightedPosition.should.be.equal(String(user1PositionJs.weightedPosition));
+      user1Position.totalPosition.should.be.equal(String(user1PositionJs.totalPosition));
+    });
+
+    it("broker can make marginal trades", async () => {
+      let orionAmount_ = await exchange.getBalance(orion.address, user1);
+      orionAmount_.toString().should.be.equal(String(initialOrionBalance-stakeAmount));
+      //first get rid of all non-orion tokens
+      let trades = [[wbtc, initialWBTCBalance, WBTCPrice],
+                    /*[weth, initialWETHBalance, WETHPrice],
+                    [wxrp, initialWXRPBalance, WXRPPrice],
+                    [{address:ZERO_ADDRESS}, initialETHBalance, ETHPrice]*/
+                   ];
+      for(let trade of trades) {
+        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          trade[2],
+          trade[1],
+          { from: matcher }
+        ).should.be.fulfilled;
+      }
+      let user1Position = await exchange.calcPosition(user1);
+      let expectedOrionAmount = initialOrionBalance-stakeAmount +
+                                Math.floor(initialWBTCBalance*WBTCPrice/1e8) - 350000;/* +
+                                Math.floor(initialWETHBalance*WETHPrice/1e8) +
+                                Math.floor(initialWXRPBalance*WXRPPrice/1e8) +
+                                Math.floor(initialETHBalance*ETHPrice/1e8) - 350000*4;*/
+      let orionAmount = await exchange.getBalance(orion.address, user1);
+      orionAmount.toString().should.be.equal(String(expectedOrionAmount));
+      let user1PositionJs = calcCollateral(stakeAmount, 
+                                         (initialOrionBalance-stakeAmount),
+                                         0, 0, 0); 
+      user1Position.weightedPosition.should.be.equal(String(user1PositionJs.weightedPosition));
+      user1Position.totalPosition.should.be.equal(String(user1PositionJs.totalPosition));
     });
   });
+
 });
+
