@@ -23,6 +23,7 @@ library MarginalFunctionality {
         PositionState state;
         int256 weightedPosition;
         int256 totalPosition;
+        int256 totalLiabilities;
     }
 
     function uint8Percent(int192 _a, uint8 b) internal pure returns (int192) {
@@ -85,8 +86,8 @@ library MarginalFunctionality {
                                          int256(assetBalances[constants.user][liability.asset])
                                          *price/1e8
                                         );
-          weightedPosition -= liabilityValue;
-          totalPosition -= liabilityValue;
+          weightedPosition += liabilityValue; //already negative since balance is negative
+          totalPosition += liabilityValue;
           overdue = overdue || ((liability.timestamp + constants.positionOverdue) < now);
           outdated = outdated ||
                           ((timestamp + constants.priceOverdue) < now);
@@ -125,6 +126,9 @@ library MarginalFunctionality {
         bool incorrect = (liabilities[constants.user].length > 3) ||
                          ((liabilities[constants.user].length>0) && (lockedAmount==0));
         Position memory result;
+        if(_totalPosition<0) {
+          result.totalLiabilities = _totalPosition;
+        }
         if(weightedPosition<0) {
           result.state = PositionState.NEGATIVE;
         }
