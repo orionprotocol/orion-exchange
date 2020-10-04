@@ -34,6 +34,7 @@ const initialRawETHBalance = Math.floor(3e18); //~430 ORN
 const initialETHBalance = Math.floor(initialRawETHBalance/1e10);
 const stakeAmount = Math.floor(200e8);
 const lockingDuration = 3600*24;
+const overdueDuration = 3600*3;
 
 const OrionPrice = 1e8;
 const WBTCPrice = 4321e8; //4321 orions per one btc
@@ -59,7 +60,23 @@ function calcCollateral(orionStake, orion, wbtc, weth, eth) {
                   Math.floor(eth* ETHPrice/1e8);
       return {weightedPosition: weighted, totalPosition: total};
 }
-
+let depositAsset = async (asset, amount, user) => {
+        let _amount = String(amount);
+        if(asset.address==weth.address){
+          _amount = String(amount * 1e10);
+        }
+        await asset.mint(user, _amount, { from: owner }).should.be
+          .fulfilled;
+        await asset.approve(exchange.address, _amount, {
+          from: user
+        });
+        await exchange.depositAsset(asset.address, _amount, {
+          from: user
+        }).should.be.fulfilled;
+        let balanceAsset = await exchange.getBalance(asset.address, user);
+        balanceAsset.toString().should.be.equal(String(amount));     
+};
+      
 contract("Exchange", ([owner, user1, user2]) => {
   describe("Exchange::instance", () => {
       it("deploy", async () => {
@@ -79,22 +96,6 @@ contract("Exchange", ([owner, user1, user2]) => {
 
   describe("Exchange::margin setup", () => {
     it("users deposit assets to exchange", async () => {
-      let depositAsset = async (asset, amount, user) => {
-        let _amount = String(amount);
-        if(asset.address==weth.address){
-          _amount = String(amount * 1e10);
-        }
-        await asset.mint(user, _amount, { from: owner }).should.be
-          .fulfilled;
-        await asset.approve(exchange.address, _amount, {
-          from: user
-        });
-        await exchange.depositAsset(asset.address, _amount, {
-          from: user
-        }).should.be.fulfilled;
-        let balanceAsset = await exchange.getBalance(asset.address, user);
-        balanceAsset.toString().should.be.equal(String(amount));     
-      };
       for(let user of [user1, user2]) {
         await depositAsset(orion, initialOrionBalance, user);
         await depositAsset(wbtc, initialWBTCBalance, user);
@@ -143,7 +144,7 @@ contract("Exchange", ([owner, user1, user2]) => {
       await exchange.updateMarginalSettings(
                      [orion.address, weth.address, wbtc.address, ZERO_ADDRESS],
                      stakeRisk, 12,
-                     3 * 3600, 24 * 3600,
+                     overdueDuration, lockingDuration,
                      {from: owner})
             .should.be.fulfilled;
       await exchange.updateAssetRisks(
@@ -259,6 +260,199 @@ contract("Exchange", ([owner, user1, user2]) => {
       await exchange.liabilities(user1,1).should.be.rejected;
       l1.asset.toString().should.be.equal(wbtc.address);
     });
+
+    it("broker can open up to 3 liabilities", async () => {
+      let trades = [
+                    [weth, 1e8, WETHPrice],
+                    [wxrp, 1e8, WXRPPrice]
+                   ];
+      for(let trade of trades) {
+        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          trade[2],
+          trade[1],
+          { from: matcher }
+        ).should.be.fulfilled;
+      }
+      let expectedOrionAmount = initialOrionBalance-stakeAmount +
+                                Math.floor(initialWBTCBalance*WBTCPrice/1e8) + (WBTCPrice*1e5/1e8) +
+                                Math.floor(initialWETHBalance*WETHPrice/1e8) + (WETHPrice*1e8/1e8) +
+                                Math.floor(initialWXRPBalance*WXRPPrice/1e8) + (WXRPPrice*1e8/1e8) +
+                                Math.floor(initialETHBalance*ETHPrice/1e8) - 350000*7;
+      let orionAmount = await exchange.getBalance(orion.address, user1);
+      orionAmount.toString().should.be.equal(String(expectedOrionAmount));
+      let expectedLiability = -(WBTCPrice*1e5/1e8) - (WETHPrice*1e8/1e8) - (WXRPPrice*1e8/1e8);
+      let expectedWeightedPosition = expectedCollaterals.weightedPosition + expectedLiability;
+      let expectedTotalPosition = expectedCollaterals.totalPosition + expectedLiability;
+      expectedLiability.toString().should.be.equal(brokerPosition.totalLiabilities.toString());
+      brokerPosition.weightedPosition.toString().should.be.equal(String(expectedWeightedPosition));
+      brokerPosition.totalPosition.toString().should.be.equal(String(expectedTotalPosition));      
+    });
+
+    it("broker can't open 4 liabilities", async () => {
+      let trades = [
+                    [{address:ZERO_ADDRESS}, 1e8, ETHPrice]
+                   ];
+      for(let trade of trades) {
+        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          trade[2],
+          trade[1],
+          { from: matcher }
+        ).should.be.rejected;
+      }
+      await exchange.liabilities(user1,2).should.be.fulfilled;
+    });
+
+    it("broker can reimburse liability via deposit", async () => {
+      depositAsset(wbtc, 2e5, user1);
+      await exchange.liabilities(user1,2).should.be.rejected;
+      let fL = await exchange.liabilities(user1,0).should.be.rejected;
+      let sL = await exchange.liabilities(user1,1).should.be.rejected;
+      fL.asset.toString().should.be.equal(weth.address);
+      sL.asset.toString().should.be.equal(wxrp.address);
+      let wbtcAmount = await exchange.getBalance(wbtc.address, user1);
+      wbtcAmount.toString().should.be.equal(String(1e5)); //-1e5+2e5
+    });
+
+    it("broker can reimburse liability via trade", async () => {
+      let trades = [
+                    [wxrp, 2e8, WXRPPrice]
+                   ];
+      for(let trade of trades) {
+        let buyOrder  = orders.generateOrder(user1, matcher, 1,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        let sellOrder  = orders.generateOrder(user2, matcher, 0,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          trade[2],
+          trade[1],
+          { from: matcher }
+        ).should.be.fulfilled;
+      }
+      await exchange.liabilities(user1,1).should.be.rejected;
+      let fL = await exchange.liabilities(user1,0);
+      fL.asset.toString().should.be.equal(weth.address);
+    });
+
+    it("broker can deepen existing liability", async () => {
+      let fL = await exchange.liabilities(user1,0);
+      const firstLiabilityTime = fL.timestamp.toString();
+      let trades = [
+                    [weth, 1e8, WETHPrice]
+                   ];
+      for(let trade of trades) {
+        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          trade[2],
+          trade[1],
+          { from: matcher }
+        ).should.be.fulfilled;
+      }
+      await exchange.liabilities(user1,1).should.be.rejected; //No new liabilities
+      let fL = await exchange.liabilities(user1,0);
+      const newLiabilityTime = fL.timestamp.toString();
+      firstLiabilityTime.should.be.equal(newLiabilityTime);
+      let wethAmount = await exchange.getBalance(weth.address, user1);
+      wethAmount.toString().should.be.equal(-String(2e8));
+      
+    });
+
+    it("broker can't open new liability if he overdue old one", async () => {
+      await ChainManipulation.advanceTime(overdueDuration+1);
+      await ChainManipulation.advanceBlock();
+      let trades = [
+                    [{address:ZERO_ADDRESS}, 1e8, ETHPrice]
+                   ];
+      for(let trade of trades) {
+        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          trade[2],
+          trade[1],
+          { from: matcher }
+        ).should.be.rejected;
+      }
+    });
+
+    it("broker can't deepen old liability if he overdue it", async () => {
+      await ChainManipulation.advanceTime(overdueDuration+1);
+      await ChainManipulation.advanceBlock();
+      let trades = [
+                    [weth, 1e8, WETHPrice]
+                   ];
+      for(let trade of trades) {
+        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+                                               trade[0], orion, orion,
+                                               trade[1], 
+                                               trade[2],
+                                               350000);
+        await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          trade[2],
+          trade[1],
+          { from: matcher }
+        ).should.be.rejected;
+      }
+    });
+
   });
 
 });
