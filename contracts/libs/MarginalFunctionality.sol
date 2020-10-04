@@ -53,6 +53,8 @@ library MarginalFunctionality {
         (bool outdated, int192 weightedPosition, int192 totalPosition) {
         for(uint8 i = 0; i < collateralAssets.length; i++) {
           address asset = collateralAssets[i];
+          if(assetBalances[constants.user][asset]<0)
+              continue; // will be calculated in calcLiabilities
           (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
           // balance: i192, price u64 => balance*price fits i256
           // since generally balance <= N*maxInt112 (where N is number operations with it),
