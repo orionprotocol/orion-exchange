@@ -181,7 +181,8 @@ library MarginalFunctionality {
                                            assetBalances,
                                            assetRisks,
                                            constants);
-        require(initialPosition.state == PositionState.NEGATIVE, "E7");
+        require(initialPosition.state == PositionState.NEGATIVE ||
+                initialPosition.state == PositionState.OVERDUE  , "E7");
         address liquidator = msg.sender;
         require(assetBalances[liquidator][redeemedAsset]>=amount,"E8");
         assetBalances[liquidator][redeemedAsset] -= amount;
@@ -196,10 +197,11 @@ library MarginalFunctionality {
                                            assetBalances,
                                            assetRisks,
                                            constants);
-        require( ((finalPosition.state == PositionState.NEGATIVE) ||
-                 (finalPosition.state == PositionState.POSITIVE)) &&
+        require( int(finalPosition.state)<3 && //POSITIVE,NEGATIVE or OVERDUE
                  (finalPosition.weightedPosition>initialPosition.weightedPosition),
                  "E10");//Incorrect state position after liquidation
+       if(finalPosition.state == PositionState.POSITIVE)
+         require (finalPosition.weightedPosition<10e8,"Can not liquidate to very positive state");
         
     }
     
