@@ -12,10 +12,10 @@ import "./libs/MarginalFunctionality.sol";
  * @dev Exchange contract for the Orion Protocol
  * @author @wafflemakr
  */
- 
+
 /*
   Overflow safety:
-  We do not use SafeMath and control overflows by 
+  We do not use SafeMath and control overflows by
   not accepting large ints on input.
 
   Balances inside contract are stored as int192.
@@ -23,9 +23,9 @@ import "./libs/MarginalFunctionality.sol";
   Allowed input amounts are int112 or uint112: it is enough for all
   practically used tokens: for instance if decimal unit is 1e18, int112
   allow to encode up to 2.5e15 decimal units.
-  That way adding/subtracting any amount from balances won't overflow, since 
+  That way adding/subtracting any amount from balances won't overflow, since
   minimum number of operations to reach max int is practically infinite: ~1e24.
-  
+
   Allowed prices are uint64. Note, that price is represented as
   price per 1e8 tokens. That means that amount*price always fit uint256,
   while amount*price/1e8 not only fit int192, but also can be added, subtracted
@@ -110,7 +110,7 @@ contract Exchange is Utils, Ownable {
       liquidationPremium = 12; // 12.75/255 = 0.05
     }
 
-    function updateMarginalSettings(address[] memory _collateralAssets, 
+    function updateMarginalSettings(address[] memory _collateralAssets,
                                     uint8 _stakeRisk,
                                     uint8 _liquidationPremium,
                                     uint64 _priceOverdue,
@@ -121,7 +121,7 @@ contract Exchange is Utils, Ownable {
       priceOverdue = _priceOverdue;
       positionOverdue = _positionOverdue;
     }
-    
+
     function updateAssetRisks(address[] memory assets, uint8[] memory risks) public onlyOwner {
         for(uint16 i; i< assets.length; i++)
          assetRisks[assets[i]] = risks[i];
@@ -155,7 +155,7 @@ contract Exchange is Utils, Ownable {
         );
         require(amountDecimal<uint112(-1), "E6");
         int112 safeAmountDecimal = int112(amountDecimal);
-        assetBalances[_msgSender()][assetAddress] += safeAmountDecimal; 
+        assetBalances[_msgSender()][assetAddress] += safeAmountDecimal;
         if(amount>0)
           emit NewAssetDeposit(_msgSender(), assetAddress, uint112(safeAmountDecimal));
         if(wasLiability && assetBalances[_msgSender()][assetAddress]>=0)
@@ -174,11 +174,11 @@ contract Exchange is Utils, Ownable {
             assetAddress,
             amount
         );
-        
+
         require(amountDecimal<uint112(-1), "E6");
         int112 safeAmountDecimal = int112(amountDecimal);
 
-        require(assetBalances[_msgSender()][assetAddress]>=safeAmountDecimal, "EX"); //TODO
+        require(assetBalances[_msgSender()][assetAddress]>=safeAmountDecimal, "E1"); //TODO
         assetBalances[_msgSender()][assetAddress] -= safeAmountDecimal;
 
         safeTransfer(_msgSender(), assetAddress, uint256(safeAmountDecimal));
@@ -385,7 +385,7 @@ contract Exchange is Utils, Ownable {
         address user = order.senderAddress;
         // matcherFee: u64, filledAmount u128 => matcherFee*filledAmount fit u256
         // result matcherFee fit u64
-        int192 matcherFee = int192(uint256(order.matcherFee)*filledAmount/order.amount); 
+        int192 matcherFee = int192(uint256(order.matcherFee)*filledAmount/order.amount);
 
 
         bool feeAssetInLiabilities  = assetBalances[user][order.matcherFeeAsset]<0;
@@ -431,7 +431,7 @@ contract Exchange is Utils, Ownable {
 
         uint256 afterFilled = uint256(totalFilled)+uint256(filledAmount);
         uint256 afterFee = uint256(totalFeesPaid)+uint256(matcherFee);
-        
+
         require(afterFilled <= order.amount, "E3");
         require(afterFee <= order.matcherFee, "E3");
 
@@ -489,12 +489,12 @@ contract Exchange is Utils, Ownable {
         return calcPosition(user).state == MarginalFunctionality.PositionState.POSITIVE;
     }
 
-    function getConstants(address user) 
-             internal 
-             view 
+    function getConstants(address user)
+             internal
+             view
              returns (MarginalFunctionality.UsedConstants memory) {
-       return MarginalFunctionality.UsedConstants(user, 
-                                                  _oracleAddress, 
+       return MarginalFunctionality.UsedConstants(user,
+                                                  _oracleAddress,
                                                   _stakingContractAddress,
                                                   address(_orionToken),
                                                   positionOverdue,
@@ -504,7 +504,7 @@ contract Exchange is Utils, Ownable {
     }
 
     function calcPosition(address user) public view returns (MarginalFunctionality.Position memory) {
-        MarginalFunctionality.UsedConstants memory constants = 
+        MarginalFunctionality.UsedConstants memory constants =
           getConstants(user);
         return MarginalFunctionality.calcPosition(collateralAssets,
                                            liabilities,
@@ -515,7 +515,7 @@ contract Exchange is Utils, Ownable {
     }
 
     function partiallyLiquidate(address broker, address redeemedAsset, uint112 amount) public {
-        MarginalFunctionality.UsedConstants memory constants = 
+        MarginalFunctionality.UsedConstants memory constants =
           getConstants(broker);
         MarginalFunctionality.partiallyLiquidate(collateralAssets,
                                            liabilities,
@@ -523,9 +523,9 @@ contract Exchange is Utils, Ownable {
                                            assetRisks,
                                            constants,
                                            redeemedAsset,
-                                           amount);        
+                                           amount);
     }
-    
+
     function setLiability(address user, address asset) internal {
         MarginalFunctionality.Liability memory newLiability = MarginalFunctionality.Liability({asset: asset, timestamp: uint64(now)});
         liabilities[user].push(newLiability);
@@ -550,5 +550,6 @@ contract Exchange is Utils, Ownable {
         E8: Liquidator doesn't satisfy requirements
         E9: Data for liquidation handling is outdated
         E10: Incorrect state after liquidation
+        E11: Amount overflow
     */
 }

@@ -106,7 +106,7 @@ library MarginalFunctionality {
                         UsedConstants memory constants
                         )
              public view returns (Position memory) {
-        (bool outdatedPrice, int192 weightedPosition, int192 totalPosition) = 
+        (bool outdatedPrice, int192 weightedPosition, int192 totalPosition) =
           calcAssets(collateralAssets,
                      assetBalances,
                      assetRisks,
@@ -120,7 +120,7 @@ library MarginalFunctionality {
                                   .getLockedStakeBalance(constants.user);
         int192 weightedStake = uint8Percent(int192(lockedAmount), constants.stakeRisk);
         weightedPosition += weightedStake;
-        totalPosition += lockedAmount; 
+        totalPosition += lockedAmount;
 
         weightedPosition += _weightedPosition;
         totalPosition += _totalPosition;
@@ -148,7 +148,7 @@ library MarginalFunctionality {
         return result;
     }
 
-    function removeLiability(address user, 
+    function removeLiability(address user,
                              address asset,
                              mapping(address => Liability[]) storage liabilities)
         public      {
@@ -173,7 +173,7 @@ library MarginalFunctionality {
                                 mapping(address => mapping(address => int192)) storage assetBalances,
                                 mapping(address => uint8) storage assetRisks,
                                 UsedConstants memory constants,
-                                address redeemedAsset, 
+                                address redeemedAsset,
                                 uint112 amount) public {
         //Note: constants.user - is broker who will be liquidated
         Position memory initialPosition = calcPosition(collateralAssets,
@@ -189,7 +189,7 @@ library MarginalFunctionality {
         assetBalances[constants.user][redeemedAsset] += amount;
         (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
         require((timestamp + constants.priceOverdue) > now, "E9"); //Price is outdated
-        
+
         int64 orionAmount = reimburseLiquidator(amount, price, liquidator, assetBalances, constants);
         assetBalances[liquidator][constants._orionTokenAddress] += orionAmount;
         Position memory finalPosition = calcPosition(collateralAssets,
@@ -202,11 +202,11 @@ library MarginalFunctionality {
                  "E10");//Incorrect state position after liquidation
        if(finalPosition.state == PositionState.POSITIVE)
          require (finalPosition.weightedPosition<10e8,"Can not liquidate to very positive state");
-        
+
     }
-    
+
     function reimburseLiquidator(
-                       uint112 amount, 
+                       uint112 amount,
                        uint64 price,
                        address liquidator,
                        mapping(address => mapping(address => int192)) storage assetBalances,
@@ -214,8 +214,8 @@ library MarginalFunctionality {
              internal
              returns (int64 orionAmount) {
         int192 _orionAmount = int192(int256(amount)*price/1e8);
-        _orionAmount += uint8Percent(_orionAmount,constants.liquidationPremium); //Liquidation premium        
-        require(_orionAmount == int64(_orionAmount), "UX");//TODO
+        _orionAmount += uint8Percent(_orionAmount,constants.liquidationPremium); //Liquidation premium
+        require(_orionAmount == int64(_orionAmount), "E11");
         orionAmount = int64(_orionAmount);
         // There is only 100m Orion tokens, fits i64
         int64 onBalanceOrion = int64(assetBalances[constants.user][constants._orionTokenAddress]);
@@ -230,6 +230,6 @@ library MarginalFunctionality {
         }
         if(fromStake>0) {
           StakingInterface(constants._stakingContractAddress).seizeFromStake(constants.user, liquidator, uint64(orionAmount));
-        }    
+        }
     }
 }

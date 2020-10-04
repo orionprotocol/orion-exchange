@@ -91,7 +91,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
                                        350000000, //3.5 ETH * 10^8
                                        2100000, //0.021 WBTC/WETH * 10^8
                                        350000);
-      
+
     });
 
     it("buy order validation in js", async () => {
@@ -163,7 +163,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         { from: matcher }
       ).should.be.rejected;
     });
-    
+
     it("outdated order should be rejected", async () => {
       await exchange.fillOrders(
         outdatedOrder.order,

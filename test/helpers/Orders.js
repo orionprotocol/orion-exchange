@@ -4,7 +4,7 @@ const EIP712 = require("./EIP712.js");
 
 
 function generateOrder( trader, matcher, buySide,
-                        baseAsset = weth, 
+                        baseAsset = weth,
                         quoteAsset = wbtc,
                         feeAsset = wbtc,
                         amount = Math.ceil(3.5e8),

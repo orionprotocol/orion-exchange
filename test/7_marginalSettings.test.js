@@ -20,7 +20,7 @@ contract("Exchange", ([owner, randomAddr1, randomAddr2]) => {
     it("only owner can update settings", async () => {
       await exchange.updateMarginalSettings(
                      [randomAddr1, randomAddr2],
-                     newStakeRisk, newPremium, 
+                     newStakeRisk, newPremium,
                      newPriceOverdue, newPositionOverdue,
                      {from: randomAddr1}
                      )
@@ -29,7 +29,7 @@ contract("Exchange", ([owner, randomAddr1, randomAddr2]) => {
     it("owner can update settings", async () => {
       await exchange.updateMarginalSettings(
                      [randomAddr1, randomAddr2],
-                     newStakeRisk, newPremium, 
+                     newStakeRisk, newPremium,
                      newPriceOverdue, newPositionOverdue,
                      {from: owner})
             .should.be.fulfilled;
