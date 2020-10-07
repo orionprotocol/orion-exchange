@@ -1,6 +1,6 @@
-pragma solidity 0.5.10;
+pragma solidity ^0.6.0;
 
-import "@openzeppelin/contracts/ownership/Ownable.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
 import "./Utils.sol";
 
 /**
@@ -45,18 +45,18 @@ contract OrionProxy is Ownable {
         implementation = _implementation;
     }
 
-    function() external payable {
+    fallback () external payable {
         address _imp = implementation;
 
         assembly {
             let ptr := mload(0x40)
 
             // (1) copy incoming call data
-            calldatacopy(ptr, 0, calldatasize)
+            calldatacopy(ptr, 0, calldatasize())
 
             // (2) forward call to logic contract
-            let result := delegatecall(gas, _imp, ptr, calldatasize, 0, 0)
-            let size := returndatasize
+            let result := delegatecall(gas(), _imp, ptr, calldatasize(), 0, 0)
+            let size := returndatasize()
 
             // (3) retrieve return data
             returndatacopy(ptr, 0, size)

@@ -19,6 +19,13 @@ async function getLastEvent(eventName, user) {
   return events[0].returnValues;
 }
 
+async function wereNoEvents(eventName, user) {
+  let events = await exchange.getPastEvents(eventName, {
+    user
+  });
+  return events.length==0;
+}
+
 contract("Exchange", ([owner, user1, user2]) => {
   describe("Exchange::instance", async () => {
     exchange = await Exchange.deployed();
@@ -34,17 +41,30 @@ contract("Exchange", ([owner, user1, user2]) => {
   });
 
   describe("Exchange::deposit", () => {
-    it("user can deposit wan to exchange", async () => {
-      await exchange.depositWan({ from: user1, value: web3.utils.toWei("0.1") })
+    it("user can deposit eth to exchange", async () => {
+      await exchange.deposit({ from: user1, value: web3.utils.toWei("0.1") })
         .should.be.fulfilled;
-      let balanceWan = await exchange.getBalance(ZERO_ADDRESS, user1);
+      let balanceEth = await exchange.getBalance(ZERO_ADDRESS, user1);
 
       // Balance responses are in 10^8 format
-      balanceWan.toString().should.be.equal(String(0.1e8));
+      balanceEth.toString().should.be.equal(String(0.1e8));
 
       // Check event values (amount is emitted in 10^8 format too)
       const event = await getLastEvent("NewAssetDeposit", user1);
       event.amount.should.be.equal(String(0.1e8));
+    });
+
+    it("user can deposit 0 eth to exchange", async () => {
+      await exchange.deposit({ from: user1, value: 0 })
+        .should.be.fulfilled;
+      let balanceEth = await exchange.getBalance(ZERO_ADDRESS, user1);
+
+      // Balance responses are in 10^8 format
+      balanceEth.toString().should.be.equal(String(0.1e8));
+
+      //no event with 0 deposit
+      let noEvents = await wereNoEvents("NewAssetDeposit", user1);
+      noEvents.should.be.equal(true);
     });
 
     it("user can deposit weth to exchange", async () => {
@@ -86,12 +106,12 @@ contract("Exchange", ([owner, user1, user2]) => {
   });
 
   describe("Exchange::withdraw", () => {
-    it("user can withdraw wan from exchange", async () => {
+    it("user can withdraw eth from exchange", async () => {
       await exchange.withdraw(ZERO_ADDRESS, web3.utils.toWei("0.1"), {
         from: user1
       }).should.be.fulfilled;
-      let balanceWan = await exchange.getBalance(ZERO_ADDRESS, user1);
-      balanceWan.toString().should.be.equal(String(web3.utils.toWei("0")));
+      let balanceEth = await exchange.getBalance(ZERO_ADDRESS, user1);
+      balanceEth.toString().should.be.equal(String(web3.utils.toWei("0")));
 
       // Check event values (amount is emitted in 10^8 format too)
       const event = await getLastEvent("NewAssetWithdrawl", user1);

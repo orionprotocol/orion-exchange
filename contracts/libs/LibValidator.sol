@@ -1,4 +1,4 @@
-pragma solidity 0.5.10;
+pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -20,7 +20,7 @@ library LibValidator {
     );
     bytes32 public constant ORDER_TYPEHASH = keccak256(
         abi.encodePacked(
-            "Order(address senderAddress,address matcherAddress,address baseAsset,address quoteAsset,address matcherFeeAsset,uint64 amount,uint64 price,uint64 matcherFee,uint64 nonce,uint64 expiration,string side)"
+            "Order(address senderAddress,address matcherAddress,address baseAsset,address quoteAsset,address matcherFeeAsset,uint64 amount,uint64 price,uint64 matcherFee,uint64 nonce,uint64 expiration,uint8 buySide)"
         )
     );
 
@@ -45,7 +45,7 @@ library LibValidator {
         uint64 matcherFee;
         uint64 nonce;
         uint64 expiration;
-        string side; // buy or sell
+        uint8 buySide; // buy or sell
         bytes signature;
     }
 
@@ -115,7 +115,7 @@ library LibValidator {
                     _order.matcherFee,
                     _order.nonce,
                     _order.expiration,
-                    keccak256(bytes(_order.side))
+                    _order.buySide
                 )
             );
     }
@@ -157,6 +157,7 @@ library LibValidator {
         require(buyOrder.expiration.div(1000) >= currentTime, "E4");
         require(sellOrder.expiration.div(1000) >= currentTime, "E4");
 
+        require( buyOrder.buySide==1 && sellOrder.buySide==0, "EX");
         success = true;
     }
 }
