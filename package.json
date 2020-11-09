@@ -11,8 +11,9 @@
     "test-orders": "truffle test test/3_orders.test.js",
     "test-orders-dev": "truffle test test/3_orders.test.js",
     "test-proxy-dev": "truffle test test/4_proxy.test.js",
+    "test-margin-dev": "truffle test test/8_margin.test.js",
     "flow": "node scripts/completeFlow.js",
-    "ganache": "ganache-cli -i 666 -p 8545 -m 'uphold wide shed another couch focus hidden soup lazy top salon salute'",
+    "ganache": "ganache-cli -i 999 -p 8545 -m 'uphold wide shed another couch focus hidden soup lazy top salon salute'",
     "validate": "node scripts/validateV3"
   },
   "repository": {
@@ -43,6 +44,7 @@
     "chai-shallow-deep-equal": "^1.4.6",
     "dotenv": "^8.2.0",
     "eth-gas-reporter": "^0.2.11",
-    "truffle": "5.0.5"
+    "ganache-cli": "^6.12.1",
+    "truffle": "^5.1.52"
   }
 }
