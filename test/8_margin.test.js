@@ -5,9 +5,9 @@ require("chai")
 
 const orders = require("./helpers/Orders.js");
 const sigUtil = require("eth-sig-util");
-const privKeyHelper = require("./helpers/PrivateKeys.js");
 const EIP712 = require("./helpers/EIP712.js");
 const ChainManipulation = require("./helpers/ChainManipulation");
+const eth_signTypedData = require("./helpers/GanacheSignatures.js");
 
 const Exchange = artifacts.require("Exchange");
 const WETH = artifacts.require("WETH");
@@ -114,7 +114,7 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
              message: prices,
       };
       msgParams1 = { data: msgParams };
-      signature1 = sigUtil.signTypedData_v4(privKeyHelper.getPrivKey(oraclePub), msgParams1);
+      signature1 = await eth_signTypedData(oraclePub, msgParams);
       prices.signature = signature1;
       return prices;
   };
@@ -198,12 +198,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [{address:ZERO_ADDRESS}, initialETHBalance, ETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
                                                350000);
-        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+        let buyOrder  = await orders.generateOrder(user2, matcher, 1,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -229,12 +229,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                                          0, 0, 0);
       user1Position.weightedPosition.should.be.equal(String(user1PositionJs.weightedPosition));
       user1Position.totalPosition.should.be.equal(String(user1PositionJs.totalPosition));
-      sellOrder  = orders.generateOrder(user1, matcher, 0,
+      sellOrder  = await orders.generateOrder(user1, matcher, 0,
                                              wbtc, orion, orion,
                                              1e5,
                                              WBTCPrice,
                                              350000);
-      buyOrder  = orders.generateOrder(user2, matcher, 1,
+      buyOrder  = await orders.generateOrder(user2, matcher, 1,
                                              wbtc, orion, orion,
                                              1e5,
                                              WBTCPrice,
@@ -277,12 +277,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [wxrp, 1e8, WXRPPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
                                                350000);
-        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+        let buyOrder  = await orders.generateOrder(user2, matcher, 1,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -318,12 +318,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [{address:ZERO_ADDRESS}, 1e8, ETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
                                                350000);
-        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+        let buyOrder  = await orders.generateOrder(user2, matcher, 1,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -355,12 +355,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [wxrp, 2e8, WXRPPrice]
                    ];
       for(let trade of trades) {
-        let buyOrder  = orders.generateOrder(user1, matcher, 1,
+        let buyOrder  = await orders.generateOrder(user1, matcher, 1,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
                                                350000);
-        let sellOrder  = orders.generateOrder(user2, matcher, 0,
+        let sellOrder  = await orders.generateOrder(user2, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -385,12 +385,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [weth, 1e8, WETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
                                                350000);
-        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+        let buyOrder  = await orders.generateOrder(user2, matcher, 1,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -423,12 +423,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [{address:ZERO_ADDRESS}, 1e8, ETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
                                                350000);
-        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+        let buyOrder  = await orders.generateOrder(user2, matcher, 1,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -454,12 +454,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [weth, 1e8, WETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
                                                350000);
-        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+        let buyOrder  = await orders.generateOrder(user2, matcher, 1,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -485,12 +485,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [{address:ZERO_ADDRESS}, 200e8, ETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
                                                350000);
-        let buyOrder  = orders.generateOrder(user2, matcher, 1,
+        let buyOrder  = await orders.generateOrder(user2, matcher, 1,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
