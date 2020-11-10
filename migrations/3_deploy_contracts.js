@@ -11,15 +11,29 @@ const LibValidator = artifacts.require("LibValidator");
 const LibUnitConverter = artifacts.require("LibUnitConverter");
 const MarginalFunctionality = artifacts.require("MarginalFunctionality");
 
-const oraclePubkey = "0xDc966DCB447004dF677c8A509dd24A070AE93Bf2";
+let oraclePubkey = "";
 
-module.exports = async (deployer, network) => {
+module.exports = async (deployer, network, accounts) => {
   if (network === "development") {
-    await deployer.deploy(WXRP);
-    await deployer.deploy(WBTC);
-    await deployer.deploy(WETH);
-    await deployer.deploy(Orion);
+    oraclePubkey = accounts[2];
+    await deployer.deploy(SafeMath);
+    await deployer.deploy(LibValidator);
+    await deployer.deploy(LibUnitConverter);
+    await deployer.deploy(MarginalFunctionality);
 
+    await deployer.link(SafeMath, Exchange);
+    await deployer.link(LibValidator, Exchange);
+    await deployer.link(LibUnitConverter, Exchange);
+    await deployer.link(MarginalFunctionality,Exchange);
+
+    await deployer.deploy(Staking, Orion.address);
+    await deployer.deploy(PriceOracle, oraclePubkey);
+    await deployer.deploy(Exchange, Staking.address, Orion.address, PriceOracle.address);
+
+    await deployer.deploy(OrionProxy, Exchange.address);
+  }
+  if (network === "ropsten") {
+    oraclePubkey = "0x00de7D7035D44Efb51618ebBE814EcACf0354387";
 
     await deployer.deploy(SafeMath);
     await deployer.deploy(LibValidator);
