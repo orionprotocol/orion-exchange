@@ -7,7 +7,7 @@ const domain = [
 const domainData = {
           name: "Orion Exchange",
           version: "1",
-          chainId: 666,
+          chainId: 3,
           salt: "0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557",
 };
 const orderTypes =  [

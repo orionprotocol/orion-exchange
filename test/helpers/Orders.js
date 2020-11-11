@@ -1,9 +1,8 @@
 const sigUtil = require("eth-sig-util");
-const privKeyHelper = require("./PrivateKeys.js");
 const EIP712 = require("./EIP712.js");
+const eth_signTypedData = require("./GanacheSignatures.js");
 
-
-function generateOrder( trader, matcher, buySide,
+async function generateOrder( trader, matcher, buySide,
                         baseAsset = weth,
                         quoteAsset = wbtc,
                         feeAsset = wbtc,
@@ -12,7 +11,6 @@ function generateOrder( trader, matcher, buySide,
                         fee = Math.ceil(3.5e5),
                         nonce = undefined,
                         expiration = undefined) {
-      let privKey = privKeyHelper.getPrivKey(trader);
       const NOW = Date.now();
       if(!nonce)
         nonce = NOW;
@@ -42,7 +40,7 @@ function generateOrder( trader, matcher, buySide,
            };
 
       let msg = { data: msgParams };
-      let signature = sigUtil.signTypedData_v4(privKey, msg);
+      let signature = await eth_signTypedData(trader, msgParams);
       order.signature = signature;
       return {order:order, msgParams: msgParams};
 }
