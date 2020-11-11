@@ -86,7 +86,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("buy order creation and sign", async () => {
-      buyOrder  = orders.generateOrder(user1, matcher, 1,
+      buyOrder  = await orders.generateOrder(user1, matcher, 1,
                                        weth, wbtc, wbtc,
                                        350000000, //3.5 ETH * 10^8
                                        2100000, //0.021 WBTC/WETH * 10^8
@@ -104,13 +104,13 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("additional orders creation and sign", async () => {
-      buyOrder2  = orders.generateOrder(user2, matcher, 1,
+      buyOrder2  = await orders.generateOrder(user2, matcher, 1,
                                         weth, wbtc, wbtc,
                                         350000000, //3.5 ETH * 10^8
                                         2100000, //0.021 WBTC/WETH * 10^8
                                         350000);
       const NOW = Date.now();
-      outdatedOrder  = orders.generateOrder(user1, matcher, 1,
+      outdatedOrder  = await orders.generateOrder(user1, matcher, 1,
                                              weth, wbtc, wbtc,
                                              350000000, //3.5 ETH * 10^8
                                              2100000, //0.021 WBTC/WETH * 10^8
@@ -118,7 +118,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
                                              NOW-1,
                                              NOW-1);
 
-      outsizedOrder  = orders.generateOrder(user1, matcher, 1,
+      outsizedOrder  = await orders.generateOrder(user1, matcher, 1,
                                              weth, wbtc, wbtc,
                                              2e8, //2 ETH * 10^8
                                              1e9, //10 WBTC/WETH * 10^8
@@ -126,7 +126,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("sell order creation and sign", async () => {
-      sellOrder  = orders.generateOrder(user2, matcher, 0,
+      sellOrder  = await orders.generateOrder(user2, matcher, 0,
                                         weth, wbtc,
                                         {address:"0x0000000000000000000000000000000000000000"}, //fee in bare eth
                                         150000000,
