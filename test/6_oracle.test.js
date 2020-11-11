@@ -4,7 +4,7 @@ require("chai")
   .should();
 
 const sigUtil = require("eth-sig-util");
-const privKeyHelper = require("./helpers/PrivateKeys.js");
+const eth_signTypedData = require("./helpers/GanacheSignatures.js");
 const EIP712 = require("./helpers/EIP712.js");
 
 
@@ -61,7 +61,7 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
       };
       let msgParams = generateMsgParams(prices);
       msgParams1 = { data: msgParams };
-      signature1 = sigUtil.signTypedData_v4(privKeyHelper.getPrivKey(oracle), msgParams1);
+      signature1 = await eth_signTypedData(oracle, msgParams);
       prices.signature = signature1;
       const recovered = sigUtil.recoverTypedSignature_v4({
         data: msgParams,
@@ -95,7 +95,7 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
       };
       let msgParams_ = generateMsgParams(prices_);
       let msgParams1_ = { data: msgParams_ };
-      signature = sigUtil.signTypedData_v4(privKeyHelper.getPrivKey(user1), msgParams1_);
+      signature = await eth_signTypedData(user1, msgParams_);
       prices.signature = signature;
       const recovered = sigUtil.recoverTypedSignature_v4({
         data: msgParams_,
@@ -117,7 +117,7 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
       };
       let msgParams = generateMsgParams(prices);
       msgParams2 = { data: msgParams };
-      signature2 = sigUtil.signTypedData_v4(privKeyHelper.getPrivKey(oracle), msgParams2);
+      signature2 = await eth_signTypedData(oracle, msgParams);
       prices.signature = signature2;
 
       await priceOracle.provideData(prices, { from: user1 }
