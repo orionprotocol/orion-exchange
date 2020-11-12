@@ -247,6 +247,14 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.fulfilled;
     });
+    it("stake can not be withdrawn if there is liability", async () => {
+      await staking.requestReleaseStake({from:user1}).should.be.rejected;
+    });
+    it("asset with negative balance can not be withdrawn", async () => {
+      await exchange.withdraw(wbtc.address, 1, {
+          from: user1
+        }).should.be.rejected;
+    });
     it("correct broker position after marginal trade", async () => {
       let brokerPosition = await exchange.calcPosition(user1);
       let expectedLiability = -(WBTCPrice*1e5/1e8);
