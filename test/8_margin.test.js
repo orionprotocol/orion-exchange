@@ -47,7 +47,7 @@ const ETHPrice = 143e8; //143 orions per one ether
 const orionWeight = 220;
 const wbtcWeight = 200;
 const ethWeight = 190;
-const wethWeight = 10;
+const wethWeight = 190;
 const stakeRisk = 242;
 const liquidationPremium = 12;
 
@@ -503,6 +503,7 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.fulfilled;
       }
+      await exchange.partiallyLiquidate(user1, ZERO_ADDRESS, 10e8, {from:user3}).should.be.rejected;
     });
     it("negative position can be liquidated", async () => {
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
