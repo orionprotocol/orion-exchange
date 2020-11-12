@@ -14,6 +14,7 @@ import "./libs/MarginalFunctionality.sol";
  */
 
 /*
+
   Overflow safety:
   We do not use SafeMath and control overflows by
   not accepting large ints on input.
@@ -104,10 +105,6 @@ contract Exchange is Utils, Ownable {
       _orionToken = IERC20(orionToken);
       _orionToken.approve(_stakingContractAddress, 2**256-1);
       _oracleAddress = priceOracleAddress;
-      stakeRisk = 242; // 242.25/255 = 0.9;
-      priceOverdue = 3 * 3600;
-      positionOverdue = 24 * 3600;
-      liquidationPremium = 12; // 12.75/255 = 0.05
     }
 
     function updateMarginalSettings(address[] memory _collateralAssets,
@@ -177,13 +174,14 @@ contract Exchange is Utils, Ownable {
 
         require(amountDecimal<uint112(-1), "E6");
         int112 safeAmountDecimal = int112(amountDecimal);
+        address user = _msgSender();
 
-        require(assetBalances[_msgSender()][assetAddress]>=safeAmountDecimal, "E1"); //TODO
-        assetBalances[_msgSender()][assetAddress] -= safeAmountDecimal;
+        require(assetBalances[user][assetAddress]>=safeAmountDecimal && checkPosition(user), "E1"); //TODO
+        assetBalances[user][assetAddress] -= safeAmountDecimal;
 
-        safeTransfer(_msgSender(), assetAddress, uint256(safeAmountDecimal));
+        safeTransfer(user, assetAddress, uint256(safeAmountDecimal));
 
-        emit NewAssetWithdrawl(_msgSender(), assetAddress, uint112(safeAmountDecimal));
+        emit NewAssetWithdrawl(user, assetAddress, uint112(safeAmountDecimal));
     }
 
 
