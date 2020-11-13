@@ -14,6 +14,7 @@ import "./libs/MarginalFunctionality.sol";
  */
 
 /*
+
   Overflow safety:
   We do not use SafeMath and control overflows by
   not accepting large ints on input.
@@ -104,10 +105,6 @@ contract Exchange is Utils, Ownable {
       _orionToken = IERC20(orionToken);
       _orionToken.approve(_stakingContractAddress, 2**256-1);
       _oracleAddress = priceOracleAddress;
-      stakeRisk = 242; // 242.25/255 = 0.9;
-      priceOverdue = 3 * 3600;
-      positionOverdue = 24 * 3600;
-      liquidationPremium = 12; // 12.75/255 = 0.05
     }
 
     function updateMarginalSettings(address[] memory _collateralAssets,
@@ -134,7 +131,7 @@ contract Exchange is Utils, Ownable {
      */
     function depositAsset(address assetAddress, uint112 amount) external {
         IERC20 asset = IERC20(assetAddress);
-        require(asset.transferFrom(_msgSender(), address(this), uint256(amount)), "E6");
+        require(asset.transferFrom(msg.sender, address(this), uint256(amount)), "E6");
         generalDeposit(assetAddress,amount);
     }
 
@@ -148,18 +145,19 @@ contract Exchange is Utils, Ownable {
     }
 
     function generalDeposit(address assetAddress, uint112 amount) internal {
-        bool wasLiability = assetBalances[_msgSender()][assetAddress]<0;
+        address user = msg.sender;
+        bool wasLiability = assetBalances[user][assetAddress]<0;
         uint256 amountDecimal = LibUnitConverter.baseUnitToDecimal(
             assetAddress,
             amount
         );
         require(amountDecimal<uint112(-1), "E6");
         int112 safeAmountDecimal = int112(amountDecimal);
-        assetBalances[_msgSender()][assetAddress] += safeAmountDecimal;
+        assetBalances[user][assetAddress] += safeAmountDecimal;
         if(amount>0)
-          emit NewAssetDeposit(_msgSender(), assetAddress, uint112(safeAmountDecimal));
-        if(wasLiability && assetBalances[_msgSender()][assetAddress]>=0)
-          MarginalFunctionality.removeLiability(_msgSender(), assetAddress, liabilities);
+          emit NewAssetDeposit(user, assetAddress, uint112(safeAmountDecimal));
+        if(wasLiability && assetBalances[user][assetAddress]>=0)
+          MarginalFunctionality.removeLiability(user, assetAddress, liabilities);
     }
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
@@ -177,24 +175,25 @@ contract Exchange is Utils, Ownable {
 
         require(amountDecimal<uint112(-1), "E6");
         int112 safeAmountDecimal = int112(amountDecimal);
+        address user = msg.sender;
 
-        require(assetBalances[_msgSender()][assetAddress]>=safeAmountDecimal, "E1"); //TODO
-        assetBalances[_msgSender()][assetAddress] -= safeAmountDecimal;
+        require(assetBalances[user][assetAddress]>=safeAmountDecimal && checkPosition(user), "E1"); //TODO
+        assetBalances[user][assetAddress] -= safeAmountDecimal;
 
-        safeTransfer(_msgSender(), assetAddress, uint256(safeAmountDecimal));
+        safeTransfer(user, assetAddress, uint256(safeAmountDecimal));
 
-        emit NewAssetWithdrawl(_msgSender(), assetAddress, uint112(safeAmountDecimal));
+        emit NewAssetWithdrawl(user, assetAddress, uint112(safeAmountDecimal));
     }
 
 
     function moveToStake(address user, uint64 amount) public {
-      require(_msgSender() == _stakingContractAddress, "Unauthorized moveToStake");
+      require(msg.sender == _stakingContractAddress, "Unauthorized moveToStake");
       require(assetBalances[user][address(_orionToken)]>amount);
       assetBalances[user][address(_orionToken)] -= amount;
     }
 
     function moveFromStake(address user, uint64 amount) public {
-      require(_msgSender() == _stakingContractAddress, "Unauthorized moveFromStake");
+      require(msg.sender == _stakingContractAddress, "Unauthorized moveFromStake");
       assetBalances[user][address(_orionToken)] += amount;
     }
 
@@ -317,7 +316,7 @@ contract Exchange is Utils, Ownable {
             LibValidator.checkOrdersInfo(
                 buyOrder,
                 sellOrder,
-                _msgSender(),
+                msg.sender,
                 filledAmount,
                 filledPrice,
                 now
@@ -460,7 +459,7 @@ contract Exchange is Utils, Ownable {
      */
     function cancelOrder(LibValidator.Order memory order) public nonReentrant {
         require(order.validateV3(), "E2");
-        require(_msgSender() == order.senderAddress, "Not owner");
+        require(msg.sender == order.senderAddress, "Not owner");
 
         bytes32 orderHash = order.getTypeValueHash();
 
@@ -475,7 +474,7 @@ contract Exchange is Utils, Ownable {
             orderStatus[orderHash] = Status.PARTIALLY_CANCELLED;
         else orderStatus[orderHash] = Status.CANCELLED;
 
-        emit OrderUpdate(orderHash, _msgSender(), orderStatus[orderHash]);
+        emit OrderUpdate(orderHash, msg.sender, orderStatus[orderHash]);
 
         assert(
             orderStatus[orderHash] == Status.PARTIALLY_CANCELLED ||

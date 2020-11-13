@@ -2,7 +2,7 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "./StakingAccessInterface.sol";
+import "./ExchangeInterface.sol";
 
 /**
  * @title Staking
@@ -24,7 +24,7 @@ contract Staking is Ownable {
 
     //Asset for staking
     IERC20 baseAsset;
-    StakingAccessInterface _exchange;
+    ExchangeInterface _exchange;
 
     // Get user balance by address and asset address
     mapping(address => Stake) private stakingData;
@@ -35,7 +35,7 @@ contract Staking is Ownable {
     }
 
     function setExchangeAddress(address exchange) external onlyOwner {
-        _exchange = StakingAccessInterface(exchange);
+        _exchange = ExchangeInterface(exchange);
     }
 
 
@@ -71,8 +71,17 @@ contract Staking is Ownable {
         stake.lastActionTimestamp = uint64(now);
     }
 
+    function checkLiabilityAbsence(address user) internal returns (bool) {
+      try _exchange.liabilities(user,0) {
+        return false;
+      } catch {
+        return true;
+      }
+    }
+
     function requestReleaseStake() external {
         StakePhase currentPhase = getStakePhase(_msgSender());
+        require(checkLiabilityAbsence(_msgSender()), "Can not release stake: user has liabilities");
         if(currentPhase == StakePhase.LOCKING || currentPhase == StakePhase.READYTORELEASE) {
           moveToBalance();
           Stake storage stake = stakingData[_msgSender()];
