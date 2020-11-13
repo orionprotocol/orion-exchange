@@ -47,7 +47,7 @@ const ETHPrice = 143e8; //143 orions per one ether
 const orionWeight = 220;
 const wbtcWeight = 200;
 const ethWeight = 190;
-const wethWeight = 10;
+const wethWeight = 190;
 const stakeRisk = 242;
 const liquidationPremium = 12;
 
@@ -62,7 +62,7 @@ function calcCollateral(orionStake, orion, wbtc, weth, eth) {
                   Math.floor(eth* ETHPrice/1e8);
       return {weightedPosition: weighted, totalPosition: total};
 }
-contract("Exchange", ([owner, user1, user2, user3]) => {
+contract("Exchange", ([owner, broker, user2, liquidator]) => {
   describe("Exchange::instance", () => {
       it("deploy", async () => {
         exchange = await Exchange.deployed();
@@ -84,7 +84,7 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
         let balanceBefore = await exchange.getBalance(asset.address, user);
         let _amount = String(amount);
         if(asset.address==weth.address){
-          _amount = String(amount * 1e10);
+          _amount = _amount+"0000000000";
         }
         await asset.mint(user, _amount, { from: owner }).should.be
           .fulfilled;
@@ -121,7 +121,7 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
 
   describe("Exchange::margin setup", () => {
     it("users deposit assets to exchange", async () => {
-      for(let user of [user1, user2]) {
+      for(let user of [broker, user2]) {
         await depositAsset(orion, initialOrionBalance, user);
         await depositAsset(wbtc, initialWBTCBalance, user);
         await depositAsset(weth, initialWETHBalance, user);
@@ -133,10 +133,10 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
       }
     });
 
-    it("user1 stake some orion", async () => {
+    it("broker stake some orion", async () => {
       await staking.setExchangeAddress(exchange.address, {from:owner}).should.be
             .fulfilled;
-      await staking.lockStake(stakeAmount, {from:user1}).should.be.fulfilled;
+      await staking.lockStake(stakeAmount, {from:broker}).should.be.fulfilled;
       await ChainManipulation.advanceTime(lockingDuration+1);
       await ChainManipulation.advanceBlock();
     });
@@ -146,7 +146,7 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
       _oracle.should.be.equal(oraclePub);
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
                            [WETHPrice, WBTCPrice, OrionPrice, ETHPrice, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: user1 }
+      await priceOracle.provideData(prices, { from: broker }
                                 ).should.be.fulfilled;
     });
 
@@ -178,18 +178,18 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
     });
 
     it("broker has correct initial position", async () => {
-      let user1Position = await exchange.calcPosition(user1);
-      let user1PositionJs = calcCollateral(stakeAmount,
+      let brokerPosition = await exchange.calcPosition(broker);
+      let brokerPositionJs = calcCollateral(stakeAmount,
                                          (initialOrionBalance-stakeAmount),
                                          initialWBTCBalance,
                                          initialWETHBalance,
                                          initialETHBalance);
-      user1Position.weightedPosition.should.be.equal(String(user1PositionJs.weightedPosition));
-      user1Position.totalPosition.should.be.equal(String(user1PositionJs.totalPosition));
+      brokerPosition.weightedPosition.should.be.equal(String(brokerPositionJs.weightedPosition));
+      brokerPosition.totalPosition.should.be.equal(String(brokerPositionJs.totalPosition));
     });
 
     it("broker can make marginal trades", async () => {
-      let orionAmount_ = await exchange.getBalance(orion.address, user1);
+      let orionAmount_ = await exchange.getBalance(orion.address, broker);
       orionAmount_.toString().should.be.equal(String(initialOrionBalance-stakeAmount));
       //first get rid of all non-orion tokens
       let trades = [[wbtc, initialWBTCBalance, WBTCPrice],
@@ -198,7 +198,7 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [{address:ZERO_ADDRESS}, initialETHBalance, ETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(broker, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -216,20 +216,20 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.fulfilled;
       }
-      let user1Position = await exchange.calcPosition(user1);
+      let brokerPosition = await exchange.calcPosition(broker);
       let expectedOrionAmount = initialOrionBalance-stakeAmount +
                                 Math.floor(initialWBTCBalance*WBTCPrice/1e8) +
                                 Math.floor(initialWETHBalance*WETHPrice/1e8) +
                                 Math.floor(initialWXRPBalance*WXRPPrice/1e8) +
                                 Math.floor(initialETHBalance*ETHPrice/1e8) - 350000*4;
-      let orionAmount = await exchange.getBalance(orion.address, user1);
+      let orionAmount = await exchange.getBalance(orion.address, broker);
       orionAmount.toString().should.be.equal(String(expectedOrionAmount));
-      let user1PositionJs = calcCollateral(stakeAmount,
+      let brokerPositionJs = calcCollateral(stakeAmount,
                                          expectedOrionAmount,
                                          0, 0, 0);
-      user1Position.weightedPosition.should.be.equal(String(user1PositionJs.weightedPosition));
-      user1Position.totalPosition.should.be.equal(String(user1PositionJs.totalPosition));
-      sellOrder  = await orders.generateOrder(user1, matcher, 0,
+      brokerPosition.weightedPosition.should.be.equal(String(brokerPositionJs.weightedPosition));
+      brokerPosition.totalPosition.should.be.equal(String(brokerPositionJs.totalPosition));
+      sellOrder  = await orders.generateOrder(broker, matcher, 0,
                                              wbtc, orion, orion,
                                              1e5,
                                              WBTCPrice,
@@ -247,15 +247,23 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.fulfilled;
     });
+    it("stake can not be withdrawn if there is liability", async () => {
+      await staking.requestReleaseStake({from:broker}).should.be.rejected;
+    });
+    it("asset with negative balance can not be withdrawn", async () => {
+      await exchange.withdraw(wbtc.address, 1, {
+          from: broker
+        }).should.be.rejected;
+    });
     it("correct broker position after marginal trade", async () => {
-      let brokerPosition = await exchange.calcPosition(user1);
+      let brokerPosition = await exchange.calcPosition(broker);
       let expectedLiability = -(WBTCPrice*1e5/1e8);
       let expectedOrionAmount = initialOrionBalance-stakeAmount + (WBTCPrice*1e5/1e8)+
                                 Math.floor(initialWBTCBalance*WBTCPrice/1e8) +
                                 Math.floor(initialWETHBalance*WETHPrice/1e8) +
                                 Math.floor(initialWXRPBalance*WXRPPrice/1e8) +
                                 Math.floor(initialETHBalance*ETHPrice/1e8) - 350000*5;
-      let orionAmount = await exchange.getBalance(orion.address, user1);
+      let orionAmount = await exchange.getBalance(orion.address, broker);
       let expectedCollaterals = calcCollateral(stakeAmount, expectedOrionAmount,
                                          0, 0, 0);
       let expectedWeightedPosition = expectedCollaterals.weightedPosition + expectedLiability;
@@ -266,8 +274,8 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
       brokerPosition.totalPosition.toString().should.be.equal(String(expectedTotalPosition));
     });
     it("correct liability list after marginal trade", async () => {
-      let l1 = await exchange.liabilities(user1,0);
-      await exchange.liabilities(user1,1).should.be.rejected;
+      let l1 = await exchange.liabilities(broker,0);
+      await exchange.liabilities(broker,1).should.be.rejected;
       l1.asset.toString().should.be.equal(wbtc.address);
     });
 
@@ -277,7 +285,7 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [wxrp, 1e8, WXRPPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(broker, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -300,14 +308,14 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                                 Math.floor(initialWETHBalance*WETHPrice/1e8) + (WETHPrice*1e8/1e8) +
                                 Math.floor(initialWXRPBalance*WXRPPrice/1e8) + (WXRPPrice*1e8/1e8) +
                                 Math.floor(initialETHBalance*ETHPrice/1e8) - 350000*7;
-      let orionAmount = await exchange.getBalance(orion.address, user1);
+      let orionAmount = await exchange.getBalance(orion.address, broker);
       orionAmount.toString().should.be.equal(String(expectedOrionAmount));
       let expectedCollaterals = calcCollateral(stakeAmount, expectedOrionAmount,
                                          0, 0, 0);
       let expectedLiability = -(WBTCPrice*1e5/1e8) - (WETHPrice*1e8/1e8) - (WXRPPrice*1e8/1e8);
       let expectedWeightedPosition = expectedCollaterals.weightedPosition + expectedLiability;
       let expectedTotalPosition = expectedCollaterals.totalPosition + expectedLiability;
-      let brokerPosition = await exchange.calcPosition(user1);
+      let brokerPosition = await exchange.calcPosition(broker);
       expectedLiability.toString().should.be.equal(brokerPosition.totalLiabilities.toString());
       brokerPosition.weightedPosition.toString().should.be.equal(String(expectedWeightedPosition));
       brokerPosition.totalPosition.toString().should.be.equal(String(expectedTotalPosition));
@@ -318,7 +326,7 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [{address:ZERO_ADDRESS}, 1e8, ETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(broker, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -336,17 +344,17 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.rejected;
       }
-      await exchange.liabilities(user1,2).should.be.fulfilled;
+      await exchange.liabilities(broker,2).should.be.fulfilled;
     });
 
     it("broker can reimburse liability via deposit", async () => {
-      await depositAsset(wbtc, 2e5, user1);
-      await exchange.liabilities(user1,2).should.be.rejected;
-      let fL = await exchange.liabilities(user1,0);
-      let sL = await exchange.liabilities(user1,1);
+      await depositAsset(wbtc, 2e5, broker);
+      await exchange.liabilities(broker,2).should.be.rejected;
+      let fL = await exchange.liabilities(broker,0);
+      let sL = await exchange.liabilities(broker,1);
       fL.asset.toString().should.be.equal(weth.address);
       sL.asset.toString().should.be.equal(wxrp.address);
-      let wbtcAmount = await exchange.getBalance(wbtc.address, user1);
+      let wbtcAmount = await exchange.getBalance(wbtc.address, broker);
       wbtcAmount.toString().should.be.equal(String(1e5)); //-1e5+2e5
     });
 
@@ -355,7 +363,7 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
                     [wxrp, 2e8, WXRPPrice]
                    ];
       for(let trade of trades) {
-        let buyOrder  = await orders.generateOrder(user1, matcher, 1,
+        let buyOrder  = await orders.generateOrder(broker, matcher, 1,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -373,19 +381,19 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.fulfilled;
       }
-      await exchange.liabilities(user1,1).should.be.rejected;
-      let fL = await exchange.liabilities(user1,0);
+      await exchange.liabilities(broker,1).should.be.rejected;
+      let fL = await exchange.liabilities(broker,0);
       fL.asset.toString().should.be.equal(weth.address);
     });
 
     it("broker can deepen existing liability", async () => {
-      let fL = await exchange.liabilities(user1,0);
+      let fL = await exchange.liabilities(broker,0);
       const firstLiabilityTime = fL.timestamp.toString();
       let trades = [
                     [weth, 1e8, WETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(broker, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -403,11 +411,11 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.fulfilled;
       }
-      await exchange.liabilities(user1,1).should.be.rejected; //No new liabilities
-      let nL = await exchange.liabilities(user1,0);
+      await exchange.liabilities(broker,1).should.be.rejected; //No new liabilities
+      let nL = await exchange.liabilities(broker,0);
       const newLiabilityTime = nL.timestamp.toString();
       firstLiabilityTime.should.be.equal(newLiabilityTime);
-      let wethAmount = await exchange.getBalance(weth.address, user1);
+      let wethAmount = await exchange.getBalance(weth.address, broker);
       wethAmount.toString().should.be.equal(String(-2e8));
 
     });
@@ -417,13 +425,13 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
       await ChainManipulation.advanceBlock();
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS,wxrp.address],
                            [WETHPrice, WBTCPrice, OrionPrice, ETHPrice, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: user1 }
+      await priceOracle.provideData(prices, { from: broker }
                                 ).should.be.fulfilled;
       let trades = [
                     [{address:ZERO_ADDRESS}, 1e8, ETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(broker, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -448,13 +456,13 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
       await ChainManipulation.advanceBlock();
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
                            [WETHPrice, WBTCPrice, OrionPrice, ETHPrice, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: user1 }
+      await priceOracle.provideData(prices, { from: broker }
                                 ).should.be.fulfilled;
       let trades = [
                     [weth, 1e8, WETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(broker, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -472,8 +480,8 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.rejected;
       }
-      await depositAsset(weth, 2e8, user1);
-      await exchange.liabilities(user1,0).should.be.rejected; //No liabilities
+      await depositAsset(weth, 2e8, broker);
+      await exchange.liabilities(broker,0).should.be.rejected; //No liabilities
     });
 
   });
@@ -481,11 +489,12 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
   describe("Exchange::Liquidation", () => {
     it("positive position can not be liquidated", async () => {
       await depositAsset(orion, 50000e8, user2);
+      await depositAsset(weth, Math.floor(1100e8), liquidator);
       let trades = [
-                    [{address:ZERO_ADDRESS}, 200e8, ETHPrice]
+                    [{address:weth.address}, 200e8, WETHPrice]
                    ];
       for(let trade of trades) {
-        let sellOrder  = await orders.generateOrder(user1, matcher, 0,
+        let sellOrder  = await orders.generateOrder(broker, matcher, 0,
                                                trade[0], orion, orion,
                                                trade[1],
                                                trade[2],
@@ -503,48 +512,48 @@ contract("Exchange", ([owner, user1, user2, user3]) => {
           { from: matcher }
         ).should.be.fulfilled;
       }
+      await exchange.partiallyLiquidate(broker, weth.address, 10e8, {from:liquidator}).should.be.rejected;
     });
     it("negative position can be liquidated", async () => {
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
-                           [WETHPrice, WBTCPrice, OrionPrice, 160e8, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: user1 }
+                           [160e8, WBTCPrice, OrionPrice, 160e8, WXRPPrice]);
+      await priceOracle.provideData(prices, { from: broker }
                                 ).should.be.fulfilled;
-      let position = await exchange.calcPosition(user1);
+      let position = await exchange.calcPosition(broker);
       position.state.should.be.equal(String(1)); //Negative
-      let brokerOrionAmount = await exchange.getBalance(orion.address, user1);
+      let brokerOrionAmount = await exchange.getBalance(orion.address, broker);
 
-      exchange.deposit({ from: user3, value: String(200e18) });
-      await exchange.partiallyLiquidate(user1, ZERO_ADDRESS, 10e8, {from:user3});
-      let newBrokerOrionAmount = await exchange.getBalance(orion.address, user1);
-      let liquidatorOrionAmount = await exchange.getBalance(orion.address, user3);
+      await exchange.partiallyLiquidate(broker, weth.address, 10e8, {from:liquidator});
+      let newBrokerOrionAmount = await exchange.getBalance(orion.address, broker);
+      let liquidatorOrionAmount = await exchange.getBalance(orion.address, liquidator);
       let liquidationAmount = Math.floor(10e8*160e8/1e8);
       let premium = Math.floor(liquidationAmount/255)*liquidationPremium;
       (newBrokerOrionAmount-brokerOrionAmount).toString().should.be.equal(String(-(liquidationAmount+premium)));
       liquidatorOrionAmount.toString().should.be.equal(String(liquidationAmount+premium));
-      position = await exchange.calcPosition(user1);
+      position = await exchange.calcPosition(broker);
     });
     it("correct balances after liquidation", async () => {
       let liquidationAmount = Math.floor(10e8*160e8/1e8);
       let premium = Math.floor(liquidationAmount/255)*liquidationPremium;
-      let liquidatorOrionAmount = await exchange.getBalance(orion.address, user3);
+      let liquidatorOrionAmount = await exchange.getBalance(orion.address, liquidator);
       liquidatorOrionAmount.toString().should.be.equal(String(liquidationAmount+premium));
     });
     it("liquidation can not make balance very positive", async () => {
-      await exchange.partiallyLiquidate(user1, ZERO_ADDRESS, 220e8, {from:user3}).should.be.rejected;
+      await exchange.partiallyLiquidate(broker, weth.address, 220e8, {from:liquidator}).should.be.rejected;
     });
     it("overdue position can be liquidated", async () => {
       await ChainManipulation.advanceTime(overdueDuration+1);
       await ChainManipulation.advanceBlock();
-      let position = await exchange.calcPosition(user1);
+      let position = await exchange.calcPosition(broker);
       //position.state.should.be.equal(String(3)); //OVERDUE
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
-                           [WETHPrice, WBTCPrice, OrionPrice, 160e8, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: user1 }
+                           [160e8, WBTCPrice, OrionPrice, 160e8, WXRPPrice]);
+      await priceOracle.provideData(prices, { from: broker }
                                 ).should.be.fulfilled;
       //position.state.should.be.equal(String(3)); //OVERDUE
-      let liquidatorOrionAmount = await exchange.getBalance(orion.address, user3);
-      await exchange.partiallyLiquidate(user1, ZERO_ADDRESS, 180e8, {from:user3});
-      let newLiquidatorOrionAmount = await exchange.getBalance(orion.address, user3);
+      let liquidatorOrionAmount = await exchange.getBalance(orion.address, liquidator);
+      await exchange.partiallyLiquidate(broker, weth.address, 180e8, {from:liquidator});
+      let newLiquidatorOrionAmount = await exchange.getBalance(orion.address, liquidator);
 
       let liquidationAmount = Math.floor(180e8*160e8/1e8);
       let premium = Math.floor(liquidationAmount/255)*liquidationPremium;
