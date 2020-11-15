@@ -9,6 +9,7 @@ library MarginalFunctionality {
     struct Liability {
         address asset;
         uint64 timestamp;
+        uint192 outstandingAmount;
     }
 
     enum PositionState {
@@ -166,6 +167,31 @@ library MarginalFunctionality {
         }
         if(shift)
           liabilities[user].pop();
+    }
+
+    function updateLiability(address user,
+                             address asset,
+                             mapping(address => Liability[]) storage liabilities,
+                             uint112 depositAmount,
+                             int192 currentBalance)
+        public      {
+        uint8 i;
+        for(; i<liabilities[user].length-1; i++) {
+            if(liabilities[user][i].asset == asset)
+              break;
+          }
+        Liability storage liability = liabilities[user][i];
+        if(depositAmount>liability.outstandingAmount) {
+          if(currentBalance>=0) {
+            removeLiability(user,asset,liabilities);
+          }
+          else {
+            liability.outstandingAmount = uint192(-currentBalance);
+            liability.timestamp = uint64(now);
+          }
+        } else {
+            liability.outstandingAmount -= depositAmount;
+        }
     }
 
     function partiallyLiquidate(address[] storage collateralAssets,

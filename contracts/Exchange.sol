@@ -2,8 +2,11 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 import "./Utils.sol";
+import "./libs/LibUnitConverter.sol";
 import "./libs/LibValidator.sol";
 import "./libs/MarginalFunctionality.sol";
 
@@ -35,6 +38,7 @@ import "./libs/MarginalFunctionality.sol";
 contract Exchange is Utils, Ownable {
 
     using LibValidator for LibValidator.Order;
+    using SafeERC20 for IERC20;
 
     // EVENTS
     event NewAssetDeposit(
@@ -130,8 +134,8 @@ contract Exchange is Utils, Ownable {
      * @param amount asset amount to deposit in its base unit
      */
     function depositAsset(address assetAddress, uint112 amount) external {
-        IERC20 asset = IERC20(assetAddress);
-        require(asset.transferFrom(msg.sender, address(this), uint256(amount)), "E6");
+        //require(asset.transferFrom(msg.sender, address(this), uint256(amount)), "E6");
+        IERC20(assetAddress).safeTransferFrom(msg.sender, address(this), uint256(amount));
         generalDeposit(assetAddress,amount);
     }
 
@@ -147,17 +151,16 @@ contract Exchange is Utils, Ownable {
     function generalDeposit(address assetAddress, uint112 amount) internal {
         address user = msg.sender;
         bool wasLiability = assetBalances[user][assetAddress]<0;
-        uint256 amountDecimal = LibUnitConverter.baseUnitToDecimal(
+        int112 safeAmountDecimal = LibUnitConverter.baseUnitToDecimal(
             assetAddress,
             amount
         );
-        require(amountDecimal<uint112(-1), "E6");
-        int112 safeAmountDecimal = int112(amountDecimal);
         assetBalances[user][assetAddress] += safeAmountDecimal;
         if(amount>0)
           emit NewAssetDeposit(user, assetAddress, uint112(safeAmountDecimal));
-        if(wasLiability && assetBalances[user][assetAddress]>=0)
-          MarginalFunctionality.removeLiability(user, assetAddress, liabilities);
+        if(wasLiability)
+          MarginalFunctionality.updateLiability(user, assetAddress, liabilities, uint112(safeAmountDecimal), assetBalances[user][assetAddress]);
+
     }
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
@@ -168,19 +171,24 @@ contract Exchange is Utils, Ownable {
         external
         nonReentrant
     {
-        uint256 amountDecimal = LibUnitConverter.baseUnitToDecimal(
+        int112 safeAmountDecimal = LibUnitConverter.baseUnitToDecimal(
             assetAddress,
             amount
         );
 
-        require(amountDecimal<uint112(-1), "E6");
-        int112 safeAmountDecimal = int112(amountDecimal);
         address user = msg.sender;
 
         require(assetBalances[user][assetAddress]>=safeAmountDecimal && checkPosition(user), "E1"); //TODO
         assetBalances[user][assetAddress] -= safeAmountDecimal;
+        
+        uint256 _amount = uint256(amount);
+        if(assetAddress == address(0)) {
+          (bool success, ) = user.call.value(_amount)("");
+          require(success, "E6");
+        } else {
+          IERC20(assetAddress).safeTransfer(user, _amount);
+        }
 
-        safeTransfer(user, assetAddress, uint256(safeAmountDecimal));
 
         emit NewAssetWithdrawl(user, assetAddress, uint112(safeAmountDecimal));
     }
@@ -382,10 +390,12 @@ contract Exchange is Utils, Ownable {
         bool isBuyer
     ) internal {
         address user = order.senderAddress;
+
         // matcherFee: u64, filledAmount u128 => matcherFee*filledAmount fit u256
         // result matcherFee fit u64
-        int192 matcherFee = int192(uint256(order.matcherFee)*filledAmount/order.amount);
-
+        order.matcherFee = uint64(uint256(order.matcherFee)*filledAmount/order.amount); //rewrite in memory only
+        if(!isBuyer)
+          (filledAmount, amountQuote) = (amountQuote, filledAmount);
 
         bool feeAssetInLiabilities  = assetBalances[user][order.matcherFeeAsset]<0;
         (address firstAsset, address secondAsset) = isBuyer?
@@ -393,24 +403,29 @@ contract Exchange is Utils, Ownable {
                                                      (order.baseAsset, order.quoteAsset);
         int192 firstBalance = assetBalances[user][firstAsset];
         int192 secondBalance = assetBalances[user][secondAsset];
+        int192 temp; // this variable will be used for temporary variable storage (optimization purpose)
         bool firstInLiabilities = firstBalance<0;
         bool secondInLiabilities  = secondBalance<0;
 
-        assetBalances[user][firstAsset] -= isBuyer? amountQuote : filledAmount;
-        assetBalances[user][secondAsset] += isBuyer? filledAmount : amountQuote;
-        if(!firstInLiabilities && (assetBalances[user][firstAsset]<0)){
-          setLiability(user, firstAsset);
+        temp = assetBalances[user][firstAsset] - amountQuote;
+        assetBalances[user][firstAsset] = temp;
+        assetBalances[user][secondAsset] += filledAmount;
+        if(!firstInLiabilities && (temp<0)){
+          setLiability(user, firstAsset, temp);
         }
         if(secondInLiabilities && (assetBalances[user][secondAsset]>=0)) {
           MarginalFunctionality.removeLiability(user, secondAsset, liabilities);
         }
 
         // User pay for fees
-        assetBalances[user][order.matcherFeeAsset] -= matcherFee;
-        if(!feeAssetInLiabilities && (assetBalances[user][order.matcherFeeAsset]<0)) {
-            setLiability(user, order.matcherFeeAsset);
+        temp = assetBalances[user][order.matcherFeeAsset] - order.matcherFee;
+        assetBalances[user][order.matcherFeeAsset] = temp;
+        if(!feeAssetInLiabilities && (temp<0)) {
+            setLiability(user, order.matcherFeeAsset, temp);
         }
-        safeTransfer(order.matcherAddress, order.matcherFeeAsset, uint256(matcherFee));
+        assetBalances[order.matcherAddress][order.matcherFeeAsset] += order.matcherFee;
+        //generalTransfer(order.matcherFeeAsset, order.matcherAddress, order.matcherFee, true);
+        //IERC20(order.matcherFeeAsset).safeTransfer(order.matcherAddress, uint256(order.matcherFee)); //TODO not transfer, but add to balance
     }
 
     /**
@@ -457,7 +472,7 @@ contract Exchange is Utils, Ownable {
      * @notice users can cancel an order
      * @dev write an orderHash in the contract so that such an order cannot be filled (executed)
      */
-    function cancelOrder(LibValidator.Order memory order) public nonReentrant {
+    function cancelOrder(LibValidator.Order memory order) public {
         require(order.validateV3(), "E2");
         require(msg.sender == order.senderAddress, "Not owner");
 
@@ -525,9 +540,13 @@ contract Exchange is Utils, Ownable {
                                            amount);
     }
 
-    function setLiability(address user, address asset) internal {
-        MarginalFunctionality.Liability memory newLiability = MarginalFunctionality.Liability({asset: asset, timestamp: uint64(now)});
-        liabilities[user].push(newLiability);
+    function setLiability(address user, address asset, int192 balance) internal {
+        liabilities[user].push(
+          MarginalFunctionality.Liability({
+                                             asset: asset,
+                                             timestamp: uint64(now),
+                                             outstandingAmount: uint192(-balance)})
+        );
     }
 
     /**

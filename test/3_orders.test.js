@@ -320,8 +320,11 @@ contract("Exchange", ([matcher, user1, user2]) => {
       // WBTC = depositUser1 - feeMatcher(buyOrder) *  ( fillAmount/buyOrderAmount)
       // WBTC = 10WBTC - 0.0035 WTBC * (1.5*3.5)
       let WBTCbalance = await wbtc.balanceOf(exchange.address);
-      WBTCbalance.toString().should.be.equal(
+      /*WBTCbalance.toString().should.be.equal(
         String(10e8 - buyOrder.order.matcherFee * (FILL_AMOUNT / buyOrder.order.amount))
+      );*/
+      WBTCbalance.toString().should.be.equal(
+        String(10e8)
       );
     });
 
@@ -333,25 +336,24 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("correct total exchange balance in ETH after trade", async () => {
-      // ETH = depositUser1 + depositUser2 - feeMatcher (sellOrder ) *  ( fillAmount/sellOrderAmount)
+      // ETH = depositUser1 + depositUser2 
       // ETH = 1 ETH + 1 ETH - 0.0015 ETH
       let WETHbalance = await web3.eth.getBalance(exchange.address);
       WETHbalance.toString().should.be.equal(
         String(
           1e18 +
-            1e18 -
-            sellOrder.order.matcherFee * (FILL_AMOUNT / sellOrder.order.amount) * 1e10
+            1e18
         )
       );
     });
 
     it("correct matcher fee in WETH", async () => {
-      let WETHbalance = await weth.balanceOf(matcher);
+      let WETHbalance = await exchange.getBalance(weth.address, matcher);
       WETHbalance.toString().should.be.equal(String(0));
     });
 
     it("correct matcher fee in WBTC", async () => {
-      let WBTCbalance = await wbtc.balanceOf(matcher);
+      let WBTCbalance = await exchange.getBalance(wbtc.address, matcher);
       WBTCbalance.toString().should.be.equal(
         String(buyOrder.order.matcherFee * (FILL_AMOUNT / buyOrder.order.amount))
       );
