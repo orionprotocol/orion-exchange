@@ -483,9 +483,95 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
       await depositAsset(weth, 2e8, broker);
       await exchange.liabilities(broker,0).should.be.rejected; //No liabilities
     });
+    it("correct overdue time calculation", async () => {
+      // Create liability
+      let addWethLiability = async (amount) => {
+        await ChainManipulation.advanceBlock();
+        prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
+                             [WETHPrice, WBTCPrice, OrionPrice, ETHPrice, WXRPPrice]);
+        await priceOracle.provideData(prices, { from: broker }
+                                  ).should.be.fulfilled;
+        let trades = [
+                      [weth, amount, WETHPrice]
+                     ];
+        for(let trade of trades) {
+          let sellOrder  = await orders.generateOrder(broker, matcher, 0,
+                                                 trade[0], orion, orion,
+                                                 trade[1],
+                                                 trade[2],
+                                                 350000);
+          let buyOrder  = await orders.generateOrder(user2, matcher, 1,
+                                                 trade[0], orion, orion,
+                                                 trade[1],
+                                                 trade[2],
+                                                 350000);
+          await exchange.fillOrders(
+            buyOrder.order,
+            sellOrder.order,
+            trade[2],
+            trade[1],
+            { from: matcher }
+          ).should.be.fulfilled;
+        }
+      }
+      
+      //Create liability
+      let initialAmount = 1e8;
+      await addWethLiability(initialAmount);
+      let liability = await exchange.liabilities(broker,0);
+      liability.asset.toString().should.be.equal(weth.address);
+      let liabilityTimestamp = liability.timestamp;
+      liability.outstandingAmount.toString().should.be.equal(String(initialAmount));
+      // liability.timestamp should be roughly equal blockchain subjective time
+      let st = Math.abs(liability.timestamp - await ChainManipulation.getBlokchainTime())<5;
+      st.toString().should.be.equal("true");
+
+      await ChainManipulation.advanceTime(1000);
+
+      //Deepen liability
+      let additionalAmount = 3e5;
+      await addWethLiability(additionalAmount);
+      let updatedLiability = await exchange.liabilities(broker,0);
+      // liability.timestamp and outstandingAmount should not be updated
+      updatedLiability.outstandingAmount.toString().should.be.equal(String(initialAmount));
+      updatedLiability.timestamp.toString().should.be.equal(liabilityTimestamp.toString());
+
+
+      await ChainManipulation.advanceTime(1000);
+
+      //partially reimburse liability
+      let partialAmount = Math.floor(initialAmount/3);
+      await depositAsset(weth, partialAmount, broker);
+
+      let updatedLiability2 = await exchange.liabilities(broker,0);
+      // outstandingAmount should be decreased by partial amount
+      updatedLiability2.outstandingAmount.toString().should.be.equal(String(initialAmount-partialAmount));
+      // since initial liability is not reimbursed timestamp should not be updated
+      updatedLiability2.timestamp.toString().should.be.equal(liabilityTimestamp.toString());
+
+
+      //fully reimburse 1st liability and partially second
+      let partialAmount2 = initialAmount - partialAmount + Math.floor(additionalAmount/3);
+      await depositAsset(weth, partialAmount2, broker);
+
+      let updatedLiability3 = await exchange.liabilities(broker,0);
+      // outstandingAmount should be now be equal current total liability
+      updatedLiability3.outstandingAmount.toString().should.be.equal(
+        String(initialAmount + additionalAmount - partialAmount - partialAmount2)
+      );
+      // since initial liability is reimbursed timestamp should be roughly equal blockchain subjective time
+      st = Math.abs(updatedLiability3.timestamp - await ChainManipulation.getBlokchainTime())<5;
+      st.toString().should.be.equal("true");
+
+
+      await depositAsset(weth, initialAmount + additionalAmount - partialAmount - partialAmount2, broker);
+      console.log(await exchange.liabilities(broker,0));
+      await exchange.liabilities(broker,0).should.be.rejected; //No liabilities
+
+    });
 
   });
-
+/*
   describe("Exchange::Liquidation", () => {
     it("positive position can not be liquidated", async () => {
       await depositAsset(orion, 50000e8, user2);
@@ -561,4 +647,5 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
         .should.be.equal(String((liquidationAmount+premium)));
     });
   });
+*/
 });
