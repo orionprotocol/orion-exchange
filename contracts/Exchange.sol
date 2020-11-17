@@ -236,6 +236,15 @@ contract Exchange is Utils, Ownable {
         return balances;
     }
 
+    function getLiabilities(address user)
+        public
+        view
+        returns (MarginalFunctionality.Liability[] memory liabilitiesArray)
+    {
+        return liabilities[user];
+    }
+    
+
     function getCollateralAssets() public view returns (address[] memory) {
         return collateralAssets;
     }
@@ -472,6 +481,7 @@ contract Exchange is Utils, Ownable {
      * @notice users can cancel an order
      * @dev write an orderHash in the contract so that such an order cannot be filled (executed)
      */
+    /* Unused for now
     function cancelOrder(LibValidator.Order memory order) public {
         require(order.validateV3(), "E2");
         require(msg.sender == order.senderAddress, "Not owner");
@@ -481,7 +491,7 @@ contract Exchange is Utils, Ownable {
         require(!isOrderCancelled(orderHash), "E4");
 
         (
-            int192 totalFilled, /*uint totalFeesPaid*/
+            int192 totalFilled, //uint totalFeesPaid
 
         ) = getFilledAmounts(orderHash);
 
@@ -496,6 +506,7 @@ contract Exchange is Utils, Ownable {
                 orderStatus[orderHash] == Status.CANCELLED
         );
     }
+    */
 
     function checkPosition(address user) public view returns (bool) {
         if(liabilities[user].length == 0)
