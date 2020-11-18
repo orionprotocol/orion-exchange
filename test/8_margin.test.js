@@ -565,13 +565,12 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
 
 
       await depositAsset(weth, initialAmount + additionalAmount - partialAmount - partialAmount2, broker);
-      console.log(await exchange.liabilities(broker,0));
       await exchange.liabilities(broker,0).should.be.rejected; //No liabilities
 
     });
 
   });
-/*
+
   describe("Exchange::Liquidation", () => {
     it("positive position can not be liquidated", async () => {
       await depositAsset(orion, 50000e8, user2);
@@ -647,5 +646,5 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
         .should.be.equal(String((liquidationAmount+premium)));
     });
   });
-*/
+
 });

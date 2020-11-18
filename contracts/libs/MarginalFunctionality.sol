@@ -181,7 +181,7 @@ library MarginalFunctionality {
               break;
           }
         Liability storage liability = liabilities[user][i];
-        if(depositAmount>liability.outstandingAmount) {
+        if(depositAmount>=liability.outstandingAmount) {
           if(currentBalance>=0) {
             removeLiability(user,asset,liabilities);
           }
