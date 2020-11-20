@@ -360,6 +360,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
   });
 
+  /*
   describe("Exchange::cancel orders", () => {
     it("user can't cancel an order that does not own", async () => {
       await exchange.cancelOrder(sellOrder.order, { from: user1 }).should.be.rejected;
@@ -388,4 +389,5 @@ contract("Exchange", ([matcher, user1, user2]) => {
       await exchange.cancelOrder(buyOrder.order, { from: user1 }).should.be.rejected;
     });
   });
+  */
 });

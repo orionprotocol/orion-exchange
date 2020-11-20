@@ -101,14 +101,16 @@ contract Exchange is Utils, Ownable {
     address _stakingContractAddress;
     IERC20 _orionToken;
     address _oracleAddress;
+    address _allowedMatcher;
 
     // MAIN FUNCTIONS
 
-    constructor(address stakingContractAddress, address orionToken, address priceOracleAddress) public {
+    constructor(address stakingContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public {
       _stakingContractAddress = stakingContractAddress;
       _orionToken = IERC20(orionToken);
       _orionToken.approve(_stakingContractAddress, 2**256-1);
       _oracleAddress = priceOracleAddress;
+      _allowedMatcher = allowedMatcher;
     }
 
     function updateMarginalSettings(address[] memory _collateralAssets,
@@ -336,7 +338,8 @@ contract Exchange is Utils, Ownable {
                 msg.sender,
                 filledAmount,
                 filledPrice,
-                now
+                now,
+                _allowedMatcher
             ),
             "E3"
         );
