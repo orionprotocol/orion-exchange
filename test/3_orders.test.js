@@ -160,7 +160,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         1900000, //fill Price 0.019
         150000000, // fill Amount 1.5 WETH
-        Date.now(),
         { from: matcher }
       ).should.be.rejected;
     });
@@ -171,7 +170,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
-        Date.now(),
         { from: matcher }
       ).should.be.rejected;
     });
@@ -184,7 +182,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         1e9,
         2e8,
-        Date.now(),
         { from: matcher }
       ).should.be.rejected;
     });
@@ -195,7 +192,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         2100000, //fill Price 0.021
         150000000, // fill Amount 1.5 WETH
-        Date.now(),
         { from: user1 }
       ).should.be.rejected;
     });
@@ -206,7 +202,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
         buyOrder2.order,
         FILL_PRICE, //fill Price 0.021
         1, // fill Amount 1.5 WETH
-        Date.now(),
         { from: matcher }
       ).should.be.rejected;
     });
@@ -217,7 +212,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
-        Date.now(),
         { from: matcher }
       ).should.be.fulfilled;
 
@@ -239,70 +233,8 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
-        Date.now(),
         { from: matcher }
       ).should.be.rejected;
-    });
-  });
-
-  describe("Exchange::trade ids", () => {
-    it("second fillOrders with the same orders and id", async () => {
-      var buyO  = await orders.generateOrder(user1, matcher, 1,
-                                             weth, wbtc, wbtc,
-                                             350000000, //3.5 ETH * 10^8
-                                             2100000, //0.021 WBTC/WETH * 10^8
-                                             350000);
-      var sellO  = await orders.generateOrder(user1, matcher, 0,
-                                              weth, wbtc, wbtc,
-                                              350000000, //3.5 ETH * 10^8
-                                              2100000, //0.021 WBTC/WETH * 10^8
-                                              350000);
-      await exchange.fillOrders(
-        buyO.order,
-        sellO.order,
-        2100000, //fill Price 0.019
-        10, // fill Amount 1.5 WETH,
-        5,
-        { from: matcher }
-      ).should.be.fulfilled;
-
-      await exchange.fillOrders(
-        buyO.order,
-        sellO.order,
-        2100000, //fill Price 0.019
-        10, // fill Amount 1.5 WETH,
-        5,
-        { from: matcher }
-      ).should.be.rejected;
-    });
-    it("second fillOrders with the same orders and different id", async () => {
-      var buyO  = await orders.generateOrder(user1, matcher, 1,
-                                             weth, wbtc, wbtc,
-                                             350000000, //3.5 ETH * 10^8
-                                             2100000, //0.021 WBTC/WETH * 10^8
-                                             350000);
-      var sellO  = await orders.generateOrder(user1, matcher, 0,
-                                              weth, wbtc, wbtc,
-                                              350000000, //3.5 ETH * 10^8
-                                              2100000, //0.021 WBTC/WETH * 10^8
-                                              350000);
-      await exchange.fillOrders(
-        buyO.order,
-        sellO.order,
-        2100000, //fill Price 0.019
-        10, // fill Amount 1.5 WETH,
-        7,
-        { from: matcher }
-      ).should.be.fulfilled;
-
-      await exchange.fillOrders(
-        buyO.order,
-        sellO.order,
-        2100000, //fill Price 0.019
-        10, // fill Amount 1.5 WETH,
-        6,
-        { from: matcher }
-      ).should.be.fulfilled;
     });
   });
 

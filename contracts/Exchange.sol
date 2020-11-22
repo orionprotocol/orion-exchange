@@ -56,8 +56,7 @@ contract Exchange is Utils, Ownable {
         address quoteAsset,
         uint64 filledPrice,
         uint192 filledAmount,
-        uint192 amountQuote,
-        uint64 tradeId
+        uint192 amountQuote
     );
 
     // GLOBAL VARIABLES
@@ -71,8 +70,6 @@ contract Exchange is Utils, Ownable {
 
     // Get trades by orderHash
     mapping(bytes32 => Trade[]) public trades;
-    // processed trades: tradeId -> is processed
-    mapping(uint64 => bool) public processedTrades;
 
     // Get user balance by address and asset address
     mapping(address => mapping(address => int192)) private assetBalances;
@@ -295,12 +292,9 @@ contract Exchange is Utils, Ownable {
         LibValidator.Order memory buyOrder,
         LibValidator.Order memory sellOrder,
         uint64 filledPrice,
-        uint112 filledAmount,
-        uint64 tradeId
+        uint112 filledAmount
     ) public nonReentrant {
         // --- VARIABLES --- //
-        require(!processedTrades[tradeId], "E4");
-        processedTrades[tradeId] = true;
         // Amount of quote asset
         uint256 _amountQuote = uint256(filledAmount)*filledPrice/(10**8);
         require(_amountQuote<2**112-1, "Wrong amount");
@@ -346,8 +340,7 @@ contract Exchange is Utils, Ownable {
             buyOrder.quoteAsset,
             filledPrice,
             filledAmount,
-            amountQuote,
-            tradeId
+            amountQuote
         );
     }
 
