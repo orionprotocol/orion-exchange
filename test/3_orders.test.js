@@ -245,6 +245,67 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
   });
 
+  describe("Exchange::trade ids", () => {
+    it("second fillOrders with the same orders and id", async () => {
+      var buyO  = await orders.generateOrder(user1, matcher, 1,
+                                             weth, wbtc, wbtc,
+                                             350000000, //3.5 ETH * 10^8
+                                             2100000, //0.021 WBTC/WETH * 10^8
+                                             350000);
+      var sellO  = await orders.generateOrder(user1, matcher, 0,
+                                              weth, wbtc, wbtc,
+                                              350000000, //3.5 ETH * 10^8
+                                              2100000, //0.021 WBTC/WETH * 10^8
+                                              350000);
+      await exchange.fillOrders(
+        buyO.order,
+        sellO.order,
+        2100000, //fill Price 0.019
+        10, // fill Amount 1.5 WETH,
+        5,
+        { from: matcher }
+      ).should.be.fulfilled;
+
+      await exchange.fillOrders(
+        buyO.order,
+        sellO.order,
+        2100000, //fill Price 0.019
+        10, // fill Amount 1.5 WETH,
+        5,
+        { from: matcher }
+      ).should.be.rejected;
+    });
+    it("second fillOrders with the same orders and different id", async () => {
+      var buyO  = await orders.generateOrder(user1, matcher, 1,
+                                             weth, wbtc, wbtc,
+                                             350000000, //3.5 ETH * 10^8
+                                             2100000, //0.021 WBTC/WETH * 10^8
+                                             350000);
+      var sellO  = await orders.generateOrder(user1, matcher, 0,
+                                              weth, wbtc, wbtc,
+                                              350000000, //3.5 ETH * 10^8
+                                              2100000, //0.021 WBTC/WETH * 10^8
+                                              350000);
+      await exchange.fillOrders(
+        buyO.order,
+        sellO.order,
+        2100000, //fill Price 0.019
+        10, // fill Amount 1.5 WETH,
+        7,
+        { from: matcher }
+      ).should.be.fulfilled;
+
+      await exchange.fillOrders(
+        buyO.order,
+        sellO.order,
+        2100000, //fill Price 0.019
+        10, // fill Amount 1.5 WETH,
+        6,
+        { from: matcher }
+      ).should.be.fulfilled;
+    });
+  });
+
   describe("Exchange::order info", () => {
     it("can retrieve trades of a specific order", async () => {
       let trades = await exchange.getOrderTrades(buyOrder.order, { from: matcher });
