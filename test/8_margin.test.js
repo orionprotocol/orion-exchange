@@ -213,6 +213,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
           sellOrder.order,
           trade[2],
           trade[1],
+          Date.now(),
           { from: matcher }
         ).should.be.fulfilled;
       }
@@ -244,6 +245,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
           sellOrder.order,
           WBTCPrice,
           1e5,
+          Date.now(),
           { from: matcher }
         ).should.be.fulfilled;
     });
@@ -300,6 +302,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
           sellOrder.order,
           trade[2],
           trade[1],
+          Date.now(),
           { from: matcher }
         ).should.be.fulfilled;
       }
@@ -341,6 +344,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
           sellOrder.order,
           trade[2],
           trade[1],
+          Date.now(),
           { from: matcher }
         ).should.be.rejected;
       }
@@ -378,6 +382,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
           sellOrder.order,
           trade[2],
           trade[1],
+          Date.now(),
           { from: matcher }
         ).should.be.fulfilled;
       }
@@ -408,6 +413,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
           sellOrder.order,
           trade[2],
           trade[1],
+          Date.now(),
           { from: matcher }
         ).should.be.fulfilled;
       }
@@ -446,6 +452,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
           sellOrder.order,
           trade[2],
           trade[1],
+          Date.now(),
           { from: matcher }
         ).should.be.rejected;
       }
@@ -477,6 +484,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
           sellOrder.order,
           trade[2],
           trade[1],
+          Date.now(),
           { from: matcher }
         ).should.be.rejected;
       }
@@ -510,6 +518,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
             sellOrder.order,
             trade[2],
             trade[1],
+            Date.now(),
             { from: matcher }
           ).should.be.fulfilled;
         }
@@ -594,6 +603,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
           sellOrder.order,
           trade[2],
           trade[1],
+          Date.now(),
           { from: matcher }
         ).should.be.fulfilled;
       }

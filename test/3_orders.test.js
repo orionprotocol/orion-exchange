@@ -160,6 +160,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         1900000, //fill Price 0.019
         150000000, // fill Amount 1.5 WETH
+        Date.now(),
         { from: matcher }
       ).should.be.rejected;
     });
@@ -170,6 +171,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
+        Date.now(),
         { from: matcher }
       ).should.be.rejected;
     });
@@ -182,6 +184,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         1e9,
         2e8,
+        Date.now(),
         { from: matcher }
       ).should.be.rejected;
     });
@@ -192,6 +195,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         2100000, //fill Price 0.021
         150000000, // fill Amount 1.5 WETH
+        Date.now(),
         { from: user1 }
       ).should.be.rejected;
     });
@@ -202,6 +206,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         buyOrder2.order,
         FILL_PRICE, //fill Price 0.021
         1, // fill Amount 1.5 WETH
+        Date.now(),
         { from: matcher }
       ).should.be.rejected;
     });
@@ -212,6 +217,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
+        Date.now(),
         { from: matcher }
       ).should.be.fulfilled;
 
@@ -233,6 +239,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
         sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
+        Date.now(),
         { from: matcher }
       ).should.be.rejected;
     });
@@ -243,16 +250,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
       let trades = await exchange.getOrderTrades(buyOrder.order, { from: matcher });
       trades.length.should.be.equal(1);
       trades[0].filledAmount.should.be.equal(String(FILL_AMOUNT));
-    });
-
-    it("correct buy order status", async () => {
-      let status = await exchange.getOrderStatus(buyOrder.order, { from: matcher });
-      status.toNumber().should.be.equal(0); // status 0 = NEW 1 = PARTIALLY_FILLED
-    });
-
-    it("correct sell order status", async () => {
-      let status = await exchange.getOrderStatus(sellOrder.order, { from: matcher });
-      status.toNumber().should.be.equal(2); // status 0 = NEW 1 = PARTIALLY_FILLED
     });
 
     it("correct buy order filled amounts", async () => {

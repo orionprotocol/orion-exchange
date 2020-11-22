@@ -50,8 +50,9 @@ contract("Exchange", ([owner, user1, user2]) => {
       balanceEth.toString().should.be.equal(String(0.1e8));
 
       // Check event values (amount is emitted in 10^8 format too)
-      const event = await getLastEvent("NewAssetDeposit", user1);
+      const event = await getLastEvent("NewAssetTransaction", user1);
       event.amount.should.be.equal(String(0.1e8));
+      event.isDeposit.should.be.equal(true);
     });
 
     it("user can deposit 0 eth to exchange", async () => {
@@ -63,7 +64,7 @@ contract("Exchange", ([owner, user1, user2]) => {
       balanceEth.toString().should.be.equal(String(0.1e8));
 
       //no event with 0 deposit
-      let noEvents = await wereNoEvents("NewAssetDeposit", user1);
+      let noEvents = await wereNoEvents("NewAssetTransaction", user1);
       noEvents.should.be.equal(true);
     });
 
@@ -82,8 +83,9 @@ contract("Exchange", ([owner, user1, user2]) => {
       balanceAsset.toString().should.be.equal(String(1e8));
 
       // Check event values (amount is emitted in 10^8 format too)
-      const event = await getLastEvent("NewAssetDeposit", user1);
+      const event = await getLastEvent("NewAssetTransaction", user1);
       event.amount.should.be.equal(String(1e8));
+      event.isDeposit.should.be.equal(true);
     });
 
     it("user can deposit wbtc to exchange", async () => {
@@ -100,8 +102,9 @@ contract("Exchange", ([owner, user1, user2]) => {
       balanceAsset.toString().should.be.equal(String(1e8));
 
       // Check event values (amount is emitted in 10^8 format too)
-      const event = await getLastEvent("NewAssetDeposit", user2);
+      const event = await getLastEvent("NewAssetTransaction", user2);
       event.amount.should.be.equal(String(1e8));
+      event.isDeposit.should.be.equal(true);
     });
   });
 
@@ -114,8 +117,9 @@ contract("Exchange", ([owner, user1, user2]) => {
       balanceEth.toString().should.be.equal(String(web3.utils.toWei("0")));
 
       // Check event values (amount is emitted in 10^8 format too)
-      const event = await getLastEvent("NewAssetWithdrawl", user1);
+      const event = await getLastEvent("NewAssetTransaction", user1);
       event.amount.should.be.equal(String(0.1e8));
+      event.isDeposit.should.be.equal(false);
     });
 
     it("user can withdraw an asset from exchange", async () => {
@@ -133,8 +137,9 @@ contract("Exchange", ([owner, user1, user2]) => {
       balanceWeth.toString().should.be.equal(String(web3.utils.toWei("1")));
 
       // Check event values (amount is emitted in 10^8 format too)
-      const event = await getLastEvent("NewAssetWithdrawl", user1);
+      const event = await getLastEvent("NewAssetTransaction", user1);
       event.amount.should.be.equal(String(1e8));
+      event.isDeposit.should.be.equal(false);
     });
 
     it("user can't withdraw an asset if does not hold enough balance", async () => {
