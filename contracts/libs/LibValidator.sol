@@ -126,7 +126,8 @@ library LibValidator {
         address sender,
         uint256 filledAmount,
         uint256 filledPrice,
-        uint256 currentTime
+        uint256 currentTime,
+        address allowedMatcher
     ) public pure returns (bool success) {
         require(validateV3(buyOrder), "E2");
         require(validateV3(sellOrder), "E2");
@@ -137,6 +138,11 @@ library LibValidator {
                 sellOrder.matcherAddress == sender,
             "E3"
         );
+
+        if(allowedMatcher != address(0)) {
+          require(buyOrder.matcherAddress == allowedMatcher, "E3");
+        }
+
 
         // Check matching assets
         require(

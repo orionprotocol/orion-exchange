@@ -28,7 +28,7 @@ module.exports = async (deployer, network, accounts) => {
 
     await deployer.deploy(Staking, Orion.address);
     await deployer.deploy(PriceOracle, oraclePubkey);
-    await deployer.deploy(Exchange, Staking.address, Orion.address, PriceOracle.address);
+    await deployer.deploy(Exchange, Staking.address, Orion.address, PriceOracle.address, "0x0000000000000000000000000000000000000000");
 
     await deployer.deploy(OrionProxy, Exchange.address);
   }
@@ -47,7 +47,7 @@ module.exports = async (deployer, network, accounts) => {
 
     await deployer.deploy(Staking, Orion.address);
     await deployer.deploy(PriceOracle, oraclePubkey);
-    await deployer.deploy(Exchange, Staking.address, Orion.address, PriceOracle.address);
+    await deployer.deploy(Exchange, Staking.address, Orion.address, PriceOracle.address, "0x1FF516E5ce789085CFF86d37fc27747dF852a80a");
 
     await deployer.deploy(OrionProxy, Exchange.address);
   }

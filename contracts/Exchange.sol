@@ -41,16 +41,14 @@ contract Exchange is Utils, Ownable {
     using SafeERC20 for IERC20;
 
     // EVENTS
-    event NewAssetDeposit(
+    event NewAssetTransaction(
         address indexed user,
         address indexed assetAddress,
-        uint112 amount
+        bool isDeposit,
+        uint112 amount,
+        uint64 timestamp
     );
-    event NewAssetWithdrawl(
-        address indexed user,
-        address indexed assetAddress,
-        uint112 amount
-    );
+
     event NewTrade(
         address indexed buyer,
         address indexed seller,
@@ -60,15 +58,8 @@ contract Exchange is Utils, Ownable {
         uint192 filledAmount,
         uint192 amountQuote
     );
-    event OrderUpdate(
-        bytes32 orderHash,
-        address indexed user,
-        Status orderStatus
-    );
 
     // GLOBAL VARIABLES
-
-    enum Status {NEW, PARTIALLY_FILLED, FILLED, PARTIALLY_CANCELLED, CANCELLED}
 
     struct Trade {
         uint64 filledPrice;
@@ -79,9 +70,6 @@ contract Exchange is Utils, Ownable {
 
     // Get trades by orderHash
     mapping(bytes32 => Trade[]) public trades;
-
-    // Get trades by orderHash
-    mapping(bytes32 => Status) public orderStatus;
 
     // Get user balance by address and asset address
     mapping(address => mapping(address => int192)) private assetBalances;
@@ -101,14 +89,16 @@ contract Exchange is Utils, Ownable {
     address _stakingContractAddress;
     IERC20 _orionToken;
     address _oracleAddress;
+    address _allowedMatcher;
 
     // MAIN FUNCTIONS
 
-    constructor(address stakingContractAddress, address orionToken, address priceOracleAddress) public {
+    constructor(address stakingContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public {
       _stakingContractAddress = stakingContractAddress;
       _orionToken = IERC20(orionToken);
       _orionToken.approve(_stakingContractAddress, 2**256-1);
       _oracleAddress = priceOracleAddress;
+      _allowedMatcher = allowedMatcher;
     }
 
     function updateMarginalSettings(address[] memory _collateralAssets,
@@ -157,7 +147,7 @@ contract Exchange is Utils, Ownable {
         );
         assetBalances[user][assetAddress] += safeAmountDecimal;
         if(amount>0)
-          emit NewAssetDeposit(user, assetAddress, uint112(safeAmountDecimal));
+          emit NewAssetTransaction(user, assetAddress, true, uint112(safeAmountDecimal), uint64(now));
         if(wasLiability)
           MarginalFunctionality.updateLiability(user, assetAddress, liabilities, uint112(safeAmountDecimal), assetBalances[user][assetAddress]);
 
@@ -190,7 +180,7 @@ contract Exchange is Utils, Ownable {
         }
 
 
-        emit NewAssetWithdrawl(user, assetAddress, uint112(safeAmountDecimal));
+        emit NewAssetTransaction(user, assetAddress, false, uint112(safeAmountDecimal), uint64(now));
     }
 
 
@@ -287,17 +277,6 @@ contract Exchange is Utils, Ownable {
         }
     }
 
-    /**
-     * @dev get trades for a specific order
-     */
-    function getOrderStatus(LibValidator.Order memory order)
-        public
-        view
-        returns (Status status)
-    {
-        bytes32 orderHash = order.getTypeValueHash();
-        return orderStatus[orderHash];
-    }
 
     /**
      * @notice Settle a trade with two orders, filled price and amount
@@ -316,7 +295,6 @@ contract Exchange is Utils, Ownable {
         uint112 filledAmount
     ) public nonReentrant {
         // --- VARIABLES --- //
-
         // Amount of quote asset
         uint256 _amountQuote = uint256(filledAmount)*filledPrice/(10**8);
         require(_amountQuote<2**112-1, "Wrong amount");
@@ -336,13 +314,12 @@ contract Exchange is Utils, Ownable {
                 msg.sender,
                 filledAmount,
                 filledPrice,
-                now
+                now,
+                _allowedMatcher
             ),
             "E3"
         );
 
-        // Check if orders were not cancelled
-        require(!(isOrderCancelled(buyOrderHash) || isOrderCancelled(sellOrderHash)), "E4");
 
         // --- UPDATES --- //
 
@@ -365,19 +342,6 @@ contract Exchange is Utils, Ownable {
             filledAmount,
             amountQuote
         );
-    }
-
-    /**
-     * @notice check if order was cancelled
-     */
-    function isOrderCancelled(bytes32 orderHash) public view returns (bool) {
-        // Check if order was not cancelled
-        if (
-            orderStatus[orderHash] == Status.CANCELLED ||
-            orderStatus[orderHash] == Status.PARTIALLY_CANCELLED
-        ) return true;
-
-        return false;
     }
 
     function validateOrder(LibValidator.Order memory order)
@@ -458,23 +422,10 @@ contract Exchange is Utils, Ownable {
         require(afterFilled <= order.amount, "E3");
         require(afterFee <= order.matcherFee, "E3");
 
-        Status status = Status.NEW;
-
-        if (afterFilled == order.amount) {
-            status = Status.FILLED;
-        } else if (trades[orderHash].length > 0) {
-            status = Status.PARTIALLY_FILLED;
-        }
-
-        //Update order status in storage
-        orderStatus[orderHash] = status;
-
         // Store Trade
         trades[orderHash].push(
             Trade(filledPrice, uint192(filledAmount), uint192(matcherFee), uint64(now))
         );
-
-        emit OrderUpdate(orderHash, order.senderAddress, status);
     }
 
     /**
