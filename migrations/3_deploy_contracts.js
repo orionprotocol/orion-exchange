@@ -31,6 +31,11 @@ module.exports = async (deployer, network, accounts) => {
     await deployer.deploy(Exchange, Staking.address, Orion.address, PriceOracle.address, "0x0000000000000000000000000000000000000000");
 
     await deployer.deploy(OrionProxy, Exchange.address);
+
+    let stakingInstance = await Staking.deployed();
+    let exchangeInstance = await Exchange.deployed();
+    await stakingInstance.setExchangeAddress(exchangeInstance.address, {from:deployer});
+
   }
   if (network === "ropsten") {
     oraclePubkey = "0x00de7D7035D44Efb51618ebBE814EcACf0354387";
