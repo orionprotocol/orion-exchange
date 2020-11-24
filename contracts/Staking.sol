@@ -19,7 +19,7 @@ contract Staking is Ownable {
       uint64 lastActionTimestamp;
     }
 
-    uint64 constant lockingDuration = 3600*24;
+    uint64 constant lockingDuration = 0;
     uint64 constant releasingDuration = 3600*24;
 
     //Asset for staking
