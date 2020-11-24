@@ -5,11 +5,11 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./ExchangeInterface.sol";
 
 /**
- * @title Staking
- * @dev Staking contract for the Orion Protocol
+ * @title OrionVault
+ * @dev OrionVault contract for the Orion Protocol
  * @author @EmelyanenkoK
  */
-contract Staking is Ownable {
+contract OrionVault is Ownable {
 
     enum StakePhase{ NOTSTAKED, LOCKING, LOCKED, RELEASING, READYTORELEASE, FROZEN }
 

@@ -2,7 +2,7 @@ const WXRP = artifacts.require("WXRP");
 const WBTC = artifacts.require("WBTC");
 const WETH = artifacts.require("WETH");
 const Orion = artifacts.require("Orion");
-const Staking = artifacts.require("Staking");
+const OrionVault = artifacts.require("OrionVault");
 const PriceOracle = artifacts.require("PriceOracle");
 const Exchange = artifacts.require("Exchange");
 const OrionProxy = artifacts.require("OrionProxy");
@@ -26,15 +26,15 @@ module.exports = async (deployer, network, accounts) => {
     await deployer.link(LibUnitConverter, Exchange);
     await deployer.link(MarginalFunctionality,Exchange);
 
-    await deployer.deploy(Staking, Orion.address);
+    await deployer.deploy(OrionVault, Orion.address);
     await deployer.deploy(PriceOracle, oraclePubkey);
-    await deployer.deploy(Exchange, Staking.address, Orion.address, PriceOracle.address, "0x0000000000000000000000000000000000000000");
+    await deployer.deploy(Exchange, OrionVault.address, Orion.address, PriceOracle.address, "0x0000000000000000000000000000000000000000");
 
     await deployer.deploy(OrionProxy, Exchange.address);
 
-    let stakingInstance = await Staking.deployed();
+    let orionVaultInstance = await OrionVault.deployed();
     let exchangeInstance = await Exchange.deployed();
-    await stakingInstance.setExchangeAddress(exchangeInstance.address, {from:deployer});
+    await orionVaultInstance.setExchangeAddress(exchangeInstance.address);
 
   }
   if (network === "ropsten") {
@@ -50,10 +50,14 @@ module.exports = async (deployer, network, accounts) => {
     await deployer.link(LibUnitConverter, Exchange);
     await deployer.link(MarginalFunctionality,Exchange);
 
-    await deployer.deploy(Staking, Orion.address);
+    await deployer.deploy(orionVault, Orion.address);
     await deployer.deploy(PriceOracle, oraclePubkey);
-    await deployer.deploy(Exchange, Staking.address, Orion.address, PriceOracle.address, "0x1FF516E5ce789085CFF86d37fc27747dF852a80a");
+    await deployer.deploy(Exchange, OrionVault.address, Orion.address, PriceOracle.address, "0x1FF516E5ce789085CFF86d37fc27747dF852a80a");
 
     await deployer.deploy(OrionProxy, Exchange.address);
+
+    let orionVaultInstance = await OrionVault.deployed();
+    let exchangeInstance = await Exchange.deployed();
+    await orionVaultInstance.setExchangeAddress(exchangeInstance.address);
   }
 };

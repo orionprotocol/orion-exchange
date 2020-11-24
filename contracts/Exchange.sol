@@ -86,17 +86,17 @@ contract Exchange is Utils, Ownable {
     uint64 public priceOverdue;
     uint64 public positionOverdue;
 
-    address _stakingContractAddress;
+    address _orionVaultContractAddress;
     IERC20 _orionToken;
     address _oracleAddress;
     address _allowedMatcher;
 
     // MAIN FUNCTIONS
 
-    constructor(address stakingContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public {
-      _stakingContractAddress = stakingContractAddress;
+    constructor(address orionVaultContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public {
+      _orionVaultContractAddress = orionVaultContractAddress;
       _orionToken = IERC20(orionToken);
-      _orionToken.approve(_stakingContractAddress, 2**256-1);
+      _orionToken.approve(_orionVaultContractAddress, 2**256-1);
       _oracleAddress = priceOracleAddress;
       _allowedMatcher = allowedMatcher;
     }
@@ -185,13 +185,13 @@ contract Exchange is Utils, Ownable {
 
 
     function moveToStake(address user, uint64 amount) public {
-      require(msg.sender == _stakingContractAddress, "Unauthorized moveToStake");
+      require(msg.sender == _orionVaultContractAddress, "Unauthorized moveToStake");
       require(assetBalances[user][address(_orionToken)]>amount);
       assetBalances[user][address(_orionToken)] -= amount;
     }
 
     function moveFromStake(address user, uint64 amount) public {
-      require(msg.sender == _stakingContractAddress, "Unauthorized moveFromStake");
+      require(msg.sender == _orionVaultContractAddress, "Unauthorized moveFromStake");
       assetBalances[user][address(_orionToken)] += amount;
     }
 
@@ -471,7 +471,7 @@ contract Exchange is Utils, Ownable {
              returns (MarginalFunctionality.UsedConstants memory) {
        return MarginalFunctionality.UsedConstants(user,
                                                   _oracleAddress,
-                                                  _stakingContractAddress,
+                                                  _orionVaultContractAddress,
                                                   address(_orionToken),
                                                   positionOverdue,
                                                   priceOverdue,

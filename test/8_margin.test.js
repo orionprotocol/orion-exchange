@@ -14,7 +14,7 @@ const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
 const WXRP = artifacts.require("WXRP");
 const Orion = artifacts.require("Orion");
-const Staking = artifacts.require("Staking");
+const OrionVault = artifacts.require("OrionVault");
 let PriceOracle = artifacts.require("PriceOracle");
 
 const LibValidator = artifacts.require("LibValidator");
@@ -23,7 +23,7 @@ const MarginalFunctionality = artifacts.require("MarginalFunctionality");
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
 
-let exchange, weth, wbtc, wxrp, orion, staking, priceOracle, lib, marginalFunctionality;
+let exchange, weth, wbtc, wxrp, orion, orionVault, priceOracle, lib, marginalFunctionality;
 let oraclePub, matcher;
 
 const initialOrionBalance = Math.floor(5000e8);
@@ -72,7 +72,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
         orion = await Orion.deployed();
         lib = await LibValidator.deployed();
         priceOracle = await PriceOracle.deployed();
-        staking = await Staking.deployed(orion.address);
+        orionVault = await OrionVault.deployed(orion.address);
         marginalFunctionality = await MarginalFunctionality.deployed();
         oraclePub = user2; //Defined in migrations
         matcher = owner;
@@ -134,9 +134,9 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
     });
 
     it("broker stake some orion", async () => {
-      await staking.setExchangeAddress(exchange.address, {from:owner}).should.be
+      await orionVault.setExchangeAddress(exchange.address, {from:owner}).should.be
             .fulfilled;
-      await staking.lockStake(stakeAmount, {from:broker}).should.be.fulfilled;
+      await orionVault.lockStake(stakeAmount, {from:broker}).should.be.fulfilled;
       await ChainManipulation.advanceTime(lockingDuration+1);
       await ChainManipulation.advanceBlock();
     });
@@ -248,7 +248,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
         ).should.be.fulfilled;
     });
     it("stake can not be withdrawn if there is liability", async () => {
-      await staking.requestReleaseStake({from:broker}).should.be.rejected;
+      await orionVault.requestReleaseStake({from:broker}).should.be.rejected;
     });
     it("asset with negative balance can not be withdrawn", async () => {
       await exchange.withdraw(wbtc.address, 1, {

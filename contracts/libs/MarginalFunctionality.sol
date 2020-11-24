@@ -1,7 +1,7 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 import "../PriceOracleInterface.sol";
-import "../StakingInterface.sol";
+import "../OrionVaultInterface.sol";
 
 
 library MarginalFunctionality {
@@ -38,7 +38,7 @@ library MarginalFunctionality {
     struct UsedConstants {
       address user;
       address _oracleAddress;
-      address _stakingContractAddress;
+      address _orionVaultContractAddress;
       address _orionTokenAddress;
       uint64 positionOverdue;
       uint64 priceOverdue;
@@ -117,7 +117,7 @@ library MarginalFunctionality {
                            assetBalances,
                            constants
                            );
-        uint64 lockedAmount = StakingInterface(constants._stakingContractAddress)
+        uint64 lockedAmount = OrionVaultInterface(constants._orionVaultContractAddress)
                                   .getLockedStakeBalance(constants.user);
         int192 weightedStake = uint8Percent(int192(lockedAmount), constants.stakeRisk);
         weightedPosition += weightedStake;
@@ -255,7 +255,7 @@ library MarginalFunctionality {
           assetBalances[constants.user][constants._orionTokenAddress] -= int192(fromBalance);
         }
         if(fromStake>0) {
-          StakingInterface(constants._stakingContractAddress).seizeFromStake(constants.user, liquidator, uint64(orionAmount));
+          OrionVaultInterface(constants._orionVaultContractAddress).seizeFromStake(constants.user, liquidator, uint64(orionAmount));
         }
     }
 }
