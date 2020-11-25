@@ -245,16 +245,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
       trades[0].filledAmount.should.be.equal(String(FILL_AMOUNT));
     });
 
-    it("correct buy order status", async () => {
-      let status = await exchange.getOrderStatus(buyOrder.order, { from: matcher });
-      status.toNumber().should.be.equal(0); // status 0 = NEW 1 = PARTIALLY_FILLED
-    });
-
-    it("correct sell order status", async () => {
-      let status = await exchange.getOrderStatus(sellOrder.order, { from: matcher });
-      status.toNumber().should.be.equal(2); // status 0 = NEW 1 = PARTIALLY_FILLED
-    });
-
     it("correct buy order filled amounts", async () => {
       let hash = await exchange.getOrderHash(sellOrder.order);
       let amounts = await exchange.getFilledAmounts(hash, {
@@ -360,6 +350,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
   });
 
+  /*
   describe("Exchange::cancel orders", () => {
     it("user can't cancel an order that does not own", async () => {
       await exchange.cancelOrder(sellOrder.order, { from: user1 }).should.be.rejected;
@@ -388,4 +379,5 @@ contract("Exchange", ([matcher, user1, user2]) => {
       await exchange.cancelOrder(buyOrder.order, { from: user1 }).should.be.rejected;
     });
   });
+  */
 });
