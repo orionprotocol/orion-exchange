@@ -3,9 +3,9 @@ pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+//import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./Utils.sol";
+import "./utils/ReentrancyGuard.sol";
 import "./libs/LibUnitConverter.sol";
 import "./libs/LibValidator.sol";
 import "./libs/MarginalFunctionality.sol";
@@ -35,7 +35,7 @@ import "./libs/MarginalFunctionality.sol";
   while amount*price/1e8 not only fit int192, but also can be added, subtracted
   without overflow checks: number of malicion operations to overflow ~1e13.
 */
-contract Exchange is Utils, Ownable {
+contract Exchange is ReentrancyGuard {
 
     using LibValidator for LibValidator.Order;
     using SafeERC20 for IERC20;
@@ -93,7 +93,12 @@ contract Exchange is Utils, Ownable {
 
     // MAIN FUNCTIONS
 
-    constructor(address orionVaultContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public {
+    modifier onlyMatcher() {
+      require(_allowedMatcher==msg.sender || _allowedMatcher==address(0), "Unauthorized action");
+      _;
+    }
+
+    function setBasicParams(address orionVaultContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public onlyMatcher {
       _orionVaultContractAddress = orionVaultContractAddress;
       _orionToken = IERC20(orionToken);
       _orionToken.approve(_orionVaultContractAddress, 2**256-1);
@@ -105,7 +110,7 @@ contract Exchange is Utils, Ownable {
                                     uint8 _stakeRisk,
                                     uint8 _liquidationPremium,
                                     uint64 _priceOverdue,
-                                    uint64 _positionOverdue) public onlyOwner {
+                                    uint64 _positionOverdue) public onlyMatcher {
       collateralAssets = _collateralAssets;
       stakeRisk = _stakeRisk;
       liquidationPremium = _liquidationPremium;
@@ -113,7 +118,7 @@ contract Exchange is Utils, Ownable {
       positionOverdue = _positionOverdue;
     }
 
-    function updateAssetRisks(address[] memory assets, uint8[] memory risks) public onlyOwner {
+    function updateAssetRisks(address[] memory assets, uint8[] memory risks) public onlyMatcher {
         for(uint16 i; i< assets.length; i++)
          assetRisks[assets[i]] = risks[i];
     }

@@ -2,12 +2,14 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import "./libs/EIP712Interface.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/Initializable.sol";
+
 /**
  * @title PriceOracle
  * @dev Contract for storing and providing price data for the Orion Protocol
  * @author @EmelyanenkoK
  */
-contract PriceOracle is EIP712Interface {
+contract PriceOracle is EIP712Interface, Initializable {
 
     struct Prices {
         address[] assetAddresses;
@@ -30,7 +32,7 @@ contract PriceOracle is EIP712Interface {
     address public oraclePublicKey;
     mapping(address => PriceDataOut) public assetPrices;
 
-    constructor(address publicKey) public {
+    function initialize(address publicKey) public payable initializer {
         oraclePublicKey = publicKey;
     }
 

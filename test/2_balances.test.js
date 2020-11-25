@@ -33,12 +33,12 @@ contract("Exchange", ([owner, user1, user2]) => {
     wbtc = await WBTC.deployed();
   });
 
-  describe("Exchange::access", () => {
+  /*describe("Exchange::access", () => {
     it("correct owner of contract", async () => {
       let _owner = await exchange.owner();
       _owner.should.be.equal(owner);
     });
-  });
+  });*/ //TODO
 
   describe("Exchange::deposit", () => {
     it("user can deposit eth to exchange", async () => {

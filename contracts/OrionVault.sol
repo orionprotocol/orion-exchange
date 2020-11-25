@@ -1,7 +1,9 @@
 pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
-import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+
+import "@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol";
+
 import "./ExchangeInterface.sol";
 
 /**
@@ -9,7 +11,7 @@ import "./ExchangeInterface.sol";
  * @dev OrionVault contract for the Orion Protocol
  * @author @EmelyanenkoK
  */
-contract OrionVault is Ownable {
+contract OrionVault is OwnableUpgradeSafe {
 
     enum StakePhase{ NOTSTAKED, LOCKING, LOCKED, RELEASING, READYTORELEASE, FROZEN }
 
@@ -30,8 +32,9 @@ contract OrionVault is Ownable {
     mapping(address => Stake) private stakingData;
 
 
-    constructor(address orionTokenAddress) public {
+    function initialize(address orionTokenAddress) public payable initializer {
         baseAsset = IERC20(orionTokenAddress);
+        OwnableUpgradeSafe.__Ownable_init();
     }
 
     function setExchangeAddress(address exchange) external onlyOwner {
