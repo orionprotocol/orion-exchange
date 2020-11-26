@@ -3,7 +3,7 @@ pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-//import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "./utils/ReentrancyGuard.sol";
 import "./libs/LibUnitConverter.sol";
@@ -35,7 +35,7 @@ import "./libs/MarginalFunctionality.sol";
   while amount*price/1e8 not only fit int192, but also can be added, subtracted
   without overflow checks: number of malicion operations to overflow ~1e13.
 */
-contract Exchange is ReentrancyGuard {
+contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
 
     using LibValidator for LibValidator.Order;
     using SafeERC20 for IERC20;
@@ -93,12 +93,11 @@ contract Exchange is ReentrancyGuard {
 
     // MAIN FUNCTIONS
 
-    modifier onlyMatcher() {
-      require(_allowedMatcher==msg.sender || _allowedMatcher==address(0), "Unauthorized action");
-      _;
+    function initialize() public payable initializer {
+        OwnableUpgradeSafe.__Ownable_init();
     }
 
-    function setBasicParams(address orionVaultContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public onlyMatcher {
+    function setBasicParams(address orionVaultContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
       _orionVaultContractAddress = orionVaultContractAddress;
       _orionToken = IERC20(orionToken);
       _orionToken.approve(_orionVaultContractAddress, 2**256-1);
@@ -110,7 +109,7 @@ contract Exchange is ReentrancyGuard {
                                     uint8 _stakeRisk,
                                     uint8 _liquidationPremium,
                                     uint64 _priceOverdue,
-                                    uint64 _positionOverdue) public onlyMatcher {
+                                    uint64 _positionOverdue) public onlyOwner {
       collateralAssets = _collateralAssets;
       stakeRisk = _stakeRisk;
       liquidationPremium = _liquidationPremium;
@@ -118,7 +117,7 @@ contract Exchange is ReentrancyGuard {
       positionOverdue = _positionOverdue;
     }
 
-    function updateAssetRisks(address[] memory assets, uint8[] memory risks) public onlyMatcher {
+    function updateAssetRisks(address[] memory assets, uint8[] memory risks) public onlyOwner {
         for(uint16 i; i< assets.length; i++)
          assetRisks[assets[i]] = risks[i];
     }
