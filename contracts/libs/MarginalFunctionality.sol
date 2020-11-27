@@ -56,7 +56,12 @@ library MarginalFunctionality {
           address asset = collateralAssets[i];
           if(assetBalances[constants.user][asset]<0)
               continue; // will be calculated in calcLiabilities
-          (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
+          (uint64 price, uint64 timestamp) = (1e8, 0xfffffff000000000);
+
+          if(asset != constants._orionTokenAddress) {
+            (price, timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
+          }
+
           // balance: i192, price u64 => balance*price fits i256
           // since generally balance <= N*maxInt112 (where N is number operations with it),
           // assetValue <= N*maxInt112*maxUInt64/1e8.
@@ -64,10 +69,13 @@ library MarginalFunctionality {
           int192 assetValue = int192(int256(assetBalances[constants.user][asset])*price/1e8);
           // Overflows logic holds here as well, except that N is the number of
           // operations for all assets
-          weightedPosition += uint8Percent(assetValue, assetRisks[asset]);
-          totalPosition += assetValue;
-          outdated = outdated ||
-                          ((timestamp + constants.priceOverdue) < now);
+          if(assetValue>0) {
+            weightedPosition += uint8Percent(assetValue, assetRisks[asset]);
+            totalPosition += assetValue;
+            // if assetValue == 0  ignore outdated price
+            outdated = outdated ||
+                            ((timestamp + constants.priceOverdue) < now);
+          }
         }
         return (outdated, weightedPosition, totalPosition);
     }
