@@ -9,7 +9,7 @@ import "@openzeppelin/contracts-ethereum-package/contracts/Initializable.sol";
  * @dev Contract for storing and providing price data for the Orion Protocol
  * @author @EmelyanenkoK
  */
-contract PriceOracle is EIP712Interface, Initializable {
+contract PriceOracle is EIP712Interface {
 
     struct Prices {
         address[] assetAddresses;
@@ -32,7 +32,7 @@ contract PriceOracle is EIP712Interface, Initializable {
     address public oraclePublicKey;
     mapping(address => PriceDataOut) public assetPrices;
 
-    function initialize(address publicKey) public payable initializer {
+    constructor(address publicKey, address baseAsset) public {
         oraclePublicKey = publicKey;
     }
 
