@@ -28,7 +28,7 @@ module.exports = async (deployer, network, accounts) => {
     await deployer.link(MarginalFunctionality,Exchange);
 
     let orionVaultInstance = await deployProxy(OrionVault, [Orion.address], {unsafeAllowCustomTypes: true});
-    let priceOracleInstance = await deployProxy(PriceOracle, [oraclePubkey], {unsafeAllowCustomTypes: true});
+    let priceOracleInstance = await deployer.deploy(PriceOracle, oraclePubkey);
     let exchangeInstance = await deployProxy(Exchange, {unsafeAllowCustomTypes: true, unsafeAllowLinkedLibraries: true});
 
     await exchangeInstance.setBasicParams(OrionVault.address, Orion.address, PriceOracle.address, accounts[0]);
@@ -49,7 +49,7 @@ module.exports = async (deployer, network, accounts) => {
     await deployer.link(MarginalFunctionality,Exchange);
 
     let orionVaultInstance = await deployProxy(OrionVault, [Orion.address], {unsafeAllowCustomTypes: true});
-    let priceOracleInstance = await deployProxy(PriceOracle, [oraclePubkey], {unsafeAllowCustomTypes: true});
+    let priceOracleInstance = await deployer.deploy(PriceOracle, oraclePubkey);
     let exchangeInstance = await deployProxy(Exchange, {unsafeAllowCustomTypes: true, unsafeAllowLinkedLibraries: true});
 
     await exchangeInstance.setBasicParams(OrionVault.address, Orion.address, PriceOracle.address, "0x1FF516E5ce789085CFF86d37fc27747dF852a80a");
