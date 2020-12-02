@@ -1,3 +1,5 @@
+pragma solidity ^0.6.2;
+
 contract EIP712Interface {
     string public constant DOMAIN_NAME = "Orion Exchange";
     string public constant DOMAIN_VERSION = "1";

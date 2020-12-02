@@ -28,11 +28,14 @@
   "homepage": "https://github.com/orionprotocol/orion-exchange#readme",
   "dependencies": {
     "@openzeppelin/contracts": "^3.2.0",
+    "@openzeppelin/contracts-ethereum-package": "^3.0.0",
+    "@chainlink/contracts": "^0.0.11",
     "@waves/waves-transactions": "^3.19.0",
     "eth-sig-util": "^2.5.3",
     "ethers": "^4.0.37",
     "iwan-sdk": "^1.1.1",
     "long": "^4.0.0",
+    "truffle-contract-size": "^2.0.0",
     "truffle-hdwallet-provider": "^1.0.17",
     "wanchainjs-tx": "^1.5.0",
     "web3": "^1.2.6"
@@ -43,6 +46,7 @@
     "chai-shallow-deep-equal": "^1.4.6",
     "dotenv": "^8.2.0",
     "eth-gas-reporter": "^0.2.11",
-    "truffle": "5.0.5"
+    "truffle": "5.0.5",
+    "@openzeppelin/truffle-upgrades": "^1.1.1"
   }
 }

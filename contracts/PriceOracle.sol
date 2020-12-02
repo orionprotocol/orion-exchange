@@ -2,12 +2,15 @@ pragma solidity ^0.6.0;
 pragma experimental ABIEncoderV2;
 
 import "./libs/EIP712Interface.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
+
 /**
  * @title PriceOracle
  * @dev Contract for storing and providing price data for the Orion Protocol
  * @author @EmelyanenkoK
  */
-contract PriceOracle is EIP712Interface {
+contract PriceOracle is EIP712Interface, Ownable {
 
     struct Prices {
         address[] assetAddresses;
@@ -28,10 +31,13 @@ contract PriceOracle is EIP712Interface {
     );
 
     address public oraclePublicKey;
+    address public baseAsset;
     mapping(address => PriceDataOut) public assetPrices;
+    mapping(address => address) public chainLinkUSDTAggregator;
 
-    constructor(address publicKey) public {
+    constructor(address publicKey, address _baseAsset) public {
         oraclePublicKey = publicKey;
+        baseAsset = _baseAsset;
     }
 
     function checkPriceFeedSignature(Prices memory priceFeed) public view returns (bool) {
@@ -111,5 +117,45 @@ contract PriceOracle is EIP712Interface {
                     priceVector.timestamp
                 )
             );
+    }
+
+    function getChainLinkPriceData(address[] memory assets) public {
+      address baseAggregator = chainLinkUSDTAggregator[baseAsset];
+      if(baseAggregator == address(0))
+        return;
+      (
+          uint80 roundID, 
+          int basePrice,
+          uint startedAt,
+          uint timestamp,
+          uint80 answeredInRound
+      ) = AggregatorV3Interface(baseAggregator).latestRoundData();
+      for(uint8 i=0; i<assets.length; i++) {
+        address currentAsset = assets[i];
+        address currentAggregator = chainLinkUSDTAggregator[currentAsset];
+        if( currentAggregator == address(0)) 
+          continue;
+        (
+            uint80 aRoundID, 
+            int aBasePrice,
+            uint aStartedAt,
+            uint aTimestamp,
+            uint80 aAnsweredInRound
+        ) = AggregatorV3Interface(currentAggregator).latestRoundData();
+        uint newTimestamp = timestamp > aTimestamp? aTimestamp : timestamp;
+        
+        PriceDataOut storage assetData = assetPrices[currentAsset];
+        if(assetData.timestamp<newTimestamp) {
+          assetData.price = uint64((aBasePrice *1e8)/basePrice);
+          assetData.timestamp = uint64(newTimestamp);
+        }
+
+      }
+    }
+    
+    function setChainLinkAggregators(address[] memory assets, address[] memory aggregatorAddresses) public onlyOwner {
+      for(uint8 i=0; i<assets.length; i++) {
+        chainLinkUSDTAggregator[assets[i]] = aggregatorAddresses[i];
+      }
     }
 }
