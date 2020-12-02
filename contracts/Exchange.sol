@@ -461,10 +461,10 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
 
     /* Error Codes
 
-        E1: Insufficient Balance,
-        E2: Invalid Signature,
-        E3: Invalid Order Info,
-        E4: Order cancelled or expired,
+        E1: Insufficient Balance, flavor S - stake
+        E2: Invalid Signature, flavor B,S - buyer, seller
+        E3: Invalid Order Info, flavor G - general, M - wrong matcher, M2 unauthorized matcher, As - asset mismatch, AmB/AmS - amount mismatch (buyer,seller), PrB/PrS - price mismatch(buyer,seller), D - direction mismatch,
+        E4: Order expired, flavor B,S - buyer,seller
         E5: Contract not active,
         E6: Transfer error
         E7: Incorrect state prior to liquidation
@@ -472,6 +472,8 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         E9: Data for liquidation handling is outdated
         E10: Incorrect state after liquidation
         E11: Amount overflow
+        E12: Incorrect filled amount, flavor G,B,S: general(overflow), buyer order overflow, seller order overflow
+        E14: Authorization error, sfs - seizeFromStake
     */
 
 // OrionVault part, will be moved in right place after successfull tests
