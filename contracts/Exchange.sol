@@ -59,17 +59,9 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         uint192 amountQuote
     );
 
-    // GLOBAL VARIABLES
+    //order -> filledAmount
+    mapping(bytes32 => uint192) public filledAmounts;
 
-    struct Trade {
-        uint64 filledPrice;
-        uint192 filledAmount;
-        uint192 feePaid;
-        uint64 timestamp;
-    }
-
-    // Get trades by orderHash
-    mapping(bytes32 => Trade[]) public trades;
 
     // Get user balance by address and asset address
     mapping(address => mapping(address => int192)) private assetBalances;
@@ -250,35 +242,17 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
       return order.getTypeValueHash();
     }
 
-    /**
-     * @dev get trades for a specific order
-     */
-    function getOrderTrades(LibValidator.Order memory order)
-        public
-        view
-        returns (Trade[] memory)
-    {
-        bytes32 orderHash = order.getTypeValueHash();
-        return trades[orderHash];
-    }
 
     /**
      * @dev get trades for a specific order
      */
-    function getFilledAmounts(bytes32 orderHash)
+    function getFilledAmounts(bytes32 orderHash, LibValidator.Order memory order)
         public
         view
         returns (int192 totalFilled, int192 totalFeesPaid)
     {
-        Trade[] storage orderTrades = trades[orderHash];
-
-        for (uint16 i; i < orderTrades.length; i++) {
-            // Note while filledAmount and feePaid are int192
-            // they are guaranteed to be less that 2**156
-            // it is safe to add them without checks
-            totalFilled = totalFilled + int192(orderTrades[i].filledAmount);
-            totalFeesPaid = totalFeesPaid + int192(orderTrades[i].feePaid);
-        }
+        totalFilled = int192(filledAmounts[orderHash]); //It is safe to convert here: filledAmounts is result of ui112 additions
+        totalFeesPaid = int192(uint256(order.matcherFee)*uint112(totalFilled)/order.amount); //matcherFee is u64; safe multiplication here
     }
 
 
@@ -327,15 +301,19 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
 
         // --- UPDATES --- //
 
+        //updateFilledAmount
+        filledAmounts[buyOrderHash] += filledAmount; //it is safe to add ui112 to each other to get i192
+        filledAmounts[sellOrderHash] += filledAmount;
+        require(filledAmounts[buyOrderHash] <= buyOrder.amount, "E12B");
+        require(filledAmounts[sellOrderHash] <= sellOrder.amount, "E12S");
+
+
         // Update User's balances
         updateOrderBalance(buyOrder, filledAmount, amountQuote, true);
         updateOrderBalance(sellOrder, filledAmount, amountQuote, false);
         require(checkPosition(buyOrder.senderAddress), "Incorrect margin position for buyer");
         require(checkPosition(sellOrder.senderAddress), "Incorrect margin position for seller");
 
-        // Update trades
-        updateTrade(buyOrderHash, buyOrder, filledAmount, filledPrice);
-        updateTrade(sellOrderHash, sellOrder, filledAmount, filledPrice);
 
         emit NewTrade(
             buyOrder.senderAddress,
@@ -403,33 +381,6 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         assetBalances[order.matcherAddress][order.matcherFeeAsset] += order.matcherFee;
         //generalTransfer(order.matcherFeeAsset, order.matcherAddress, order.matcherFee, true);
         //IERC20(order.matcherFeeAsset).safeTransfer(order.matcherAddress, uint256(order.matcherFee)); //TODO not transfer, but add to balance
-    }
-
-    /**
-     *  @notice Store trade and update order
-     */
-    function updateTrade(
-        bytes32 orderHash,
-        LibValidator.Order memory order,
-        uint112 filledAmount,
-        uint64 filledPrice
-    ) internal {
-        // matcherFee: u64, filledAmount u128 => matcherFee*filledAmount fit u256
-        // result matcherFee fit u64
-        int192 matcherFee = int192(uint256(order.matcherFee)*filledAmount/order.amount);
-
-        (int192 totalFilled, int192 totalFeesPaid) = getFilledAmounts(orderHash);
-
-        uint256 afterFilled = uint256(totalFilled)+uint256(filledAmount);
-        uint256 afterFee = uint256(totalFeesPaid)+uint256(matcherFee);
-
-        require(afterFilled <= order.amount, "E3");
-        require(afterFee <= order.matcherFee, "E3");
-
-        // Store Trade
-        trades[orderHash].push(
-            Trade(filledPrice, uint192(filledAmount), uint192(matcherFee), uint64(now))
-        );
     }
 
     /**
