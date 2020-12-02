@@ -72,7 +72,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
         orion = await Orion.deployed();
         lib = await LibValidator.deployed();
         priceOracle = await PriceOracle.deployed();
-        orionVault = await OrionVault.deployed(orion.address);
+        orionVault = exchange; //await OrionVault.deployed(orion.address);
         marginalFunctionality = await MarginalFunctionality.deployed();
         oraclePub = user2; //Defined in migrations
         matcher = owner;
@@ -134,8 +134,8 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
     });
 
     it("broker stake some orion", async () => {
-      await orionVault.setExchangeAddress(exchange.address, {from:owner}).should.be
-            .fulfilled;
+      //await orionVault.setExchangeAddress(exchange.address, {from:owner}).should.be
+      //      .fulfilled;
       await orionVault.lockStake(stakeAmount, {from:broker}).should.be.fulfilled;
       await ChainManipulation.advanceTime(lockingDuration+1);
       await ChainManipulation.advanceBlock();
