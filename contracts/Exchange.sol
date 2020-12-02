@@ -78,7 +78,6 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
     uint64 public priceOverdue;
     uint64 public positionOverdue;
 
-    address _orionVaultContractAddress;
     IERC20 _orionToken;
     address _oracleAddress;
     address _allowedMatcher;
@@ -90,9 +89,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
     }
 
     function setBasicParams(address orionVaultContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
-      _orionVaultContractAddress = orionVaultContractAddress;
       _orionToken = IERC20(orionToken);
-      _orionToken.approve(_orionVaultContractAddress, 2**256-1);
       _oracleAddress = priceOracleAddress;
       _allowedMatcher = allowedMatcher;
     }
@@ -164,13 +161,13 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
 
         address user = msg.sender;
 
-        require(assetBalances[user][assetAddress]>=safeAmountDecimal && checkPosition(user), "E1"); //TODO
+        require(assetBalances[user][assetAddress]>=safeAmountDecimal && checkPosition(user), "E1w"); //TODO
         assetBalances[user][assetAddress] -= safeAmountDecimal;
         
         uint256 _amount = uint256(amount);
         if(assetAddress == address(0)) {
           (bool success, ) = user.call.value(_amount)("");
-          require(success, "E6");
+          require(success, "E6w");
         } else {
           IERC20(assetAddress).safeTransfer(user, _amount);
         }
@@ -179,17 +176,6 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         emit NewAssetTransaction(user, assetAddress, false, uint112(safeAmountDecimal), uint64(now));
     }
 
-
-    function moveToStake(address user, uint64 amount) public {
-      require(msg.sender == _orionVaultContractAddress, "Unauthorized moveToStake");
-      require(assetBalances[user][address(_orionToken)]>amount);
-      assetBalances[user][address(_orionToken)] -= amount;
-    }
-
-    function moveFromStake(address user, uint64 amount) public {
-      require(msg.sender == _orionVaultContractAddress, "Unauthorized moveFromStake");
-      assetBalances[user][address(_orionToken)] += amount;
-    }
 
     /**
      * @dev Get asset balance for a specific address
@@ -275,7 +261,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         // --- VARIABLES --- //
         // Amount of quote asset
         uint256 _amountQuote = uint256(filledAmount)*filledPrice/(10**8);
-        require(_amountQuote<2**112-1, "Wrong amount");
+        require(_amountQuote<2**112-1, "E12G");
         uint112 amountQuote = uint112(_amountQuote);
 
         // Order Hashes
@@ -295,7 +281,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
                 now,
                 _allowedMatcher
             ),
-            "E3"
+            "E3G"
         );
 
 
@@ -426,7 +412,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
              returns (MarginalFunctionality.UsedConstants memory) {
        return MarginalFunctionality.UsedConstants(user,
                                                   _oracleAddress,
-                                                  _orionVaultContractAddress,
+                                                  address(this),
                                                   address(_orionToken),
                                                   positionOverdue,
                                                   priceOverdue,
@@ -487,4 +473,100 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         E10: Incorrect state after liquidation
         E11: Amount overflow
     */
+
+// OrionVault part, will be moved in right place after successfull tests
+
+    enum StakePhase{ NOTSTAKED, LOCKING, LOCKED, RELEASING, READYTORELEASE, FROZEN }
+
+    struct Stake {
+      uint64 amount; // 100m ORN in circulation fits uint64
+      StakePhase phase;
+      uint64 lastActionTimestamp;
+    }
+
+    uint64 constant releasingDuration = 3600*24;
+    mapping(address => Stake) private stakingData;
+
+
+
+    function getStake(address user) public view returns (Stake memory){
+        Stake memory stake = stakingData[user];
+        if(stake.phase == StakePhase.LOCKING && (now - stake.lastActionTimestamp) > 0) {
+          stake.phase = StakePhase.LOCKED;
+        } else if(stake.phase == StakePhase.RELEASING && (now - stake.lastActionTimestamp) > releasingDuration) {
+          stake.phase = StakePhase.READYTORELEASE;
+        }
+        return stake;
+    }
+
+    function getStakeBalance(address user) public view returns (uint256) {
+        return getStake(user).amount;
+    }
+
+    function getStakePhase(address user) public view returns (StakePhase) {
+        return getStake(user).phase;
+    }
+
+    function getLockedStakeBalance(address user) public view returns (uint256) {
+      Stake memory stake = getStake(user);
+      if(stake.phase == StakePhase.LOCKED || stake.phase == StakePhase.FROZEN)
+        return stake.amount;
+      return 0;
+    }
+
+
+
+    function postponeStakeRelease(address user) external onlyOwner{
+        Stake storage stake = stakingData[user];
+        stake.phase = StakePhase.FROZEN;
+    }
+
+    function allowStakeRelease(address user) external onlyOwner {
+        Stake storage stake = stakingData[user];
+        stake.phase = StakePhase.READYTORELEASE;
+    }
+
+
+
+    function requestReleaseStake() public {
+        address user = _msgSender();
+        Stake memory current = getStake(user);
+        require(liabilities[user].length == 0, "Can not release stake: user has liabilities");
+        if(current.phase == StakePhase.LOCKING || current.phase == StakePhase.READYTORELEASE) {
+          Stake storage stake = stakingData[_msgSender()];
+          assetBalances[user][address(_orionToken)] += stake.amount;
+          stake.amount = 0;
+          stake.phase = StakePhase.NOTSTAKED;
+        } else if (current.phase == StakePhase.LOCKED) {
+          Stake storage stake = stakingData[_msgSender()];
+          stake.phase = StakePhase.RELEASING;
+          stake.lastActionTimestamp = uint64(now);
+        } else {
+          revert("Can not release funds from this phase");
+        }
+    }
+
+    function lockStake(uint64 amount) public {
+        address user = _msgSender();
+        require(assetBalances[user][address(_orionToken)]>amount, "E1S");
+        Stake storage stake = stakingData[user];
+
+        assetBalances[user][address(_orionToken)] -= amount;
+        stake.amount = amount;
+        
+        if(stake.phase != StakePhase.FROZEN) {
+          stake.phase = StakePhase.LOCKING; //what is frozen should stay frozen
+        }
+        stake.lastActionTimestamp = uint64(now);
+    }
+
+    function seizeFromStake(address user, address receiver, uint64 amount) public {
+        require(msg.sender == address(this), "E14");
+        Stake storage stake = stakingData[user];
+        require(stake.amount >= amount, "UX"); //TODO
+        stake.amount -= amount;
+        assetBalances[receiver][address(_orionToken)] += amount;
+    }
+
+
 }

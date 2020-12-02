@@ -29,13 +29,10 @@ contract("OrionVault", ([owner, user1, user2, user3]) => {
   describe("OrionVault::instance", () => {
     it("deploy", async () => {
       orion = await Orion.deployed();
-      orionVault = await OrionVault.deployed(orion.address);
-      exchange = await Exchange.deployed(orionVault.address, orion.address);
+      //orionVault = await OrionVault.deployed(orion.address);
+      exchange = await Exchange.deployed("0x0000000000000000000000000000000000000000", orion.address);
+      orionVault = exchange;
       lib = await LibValidator.deployed();
-    });
-    it("set params", async () => {
-      await orionVault.setExchangeAddress(exchange.address, {from:owner}).should.be
-            .fulfilled;
     });
   });
 
@@ -189,11 +186,6 @@ contract("OrionVault", ([owner, user1, user2, user3]) => {
       stakePhase.toString().should.be.equal(READYTORELEASE);
     });
 
-
-    it("non-admin user try set exchange", async () => {
-      await orionVault.setExchangeAddress(user1, {from:user1}).should.be
-            .rejected;
-    });
 
   });
 
