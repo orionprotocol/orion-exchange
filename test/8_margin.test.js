@@ -14,7 +14,6 @@ const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
 const WXRP = artifacts.require("WXRP");
 const Orion = artifacts.require("Orion");
-const OrionVault = artifacts.require("OrionVault");
 let PriceOracle = artifacts.require("PriceOracle");
 
 const LibValidator = artifacts.require("LibValidator");

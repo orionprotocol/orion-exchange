@@ -7,7 +7,6 @@ const ChainManipulation = require("./helpers/ChainManipulation");
 
 let Exchange = artifacts.require("Exchange");
 const Orion = artifacts.require("Orion");
-const OrionVault = artifacts.require("OrionVault");
 const LibValidator = artifacts.require("LibValidator");
 
 const depositedBalance = 10e8, stakedBalance = 8e8;
