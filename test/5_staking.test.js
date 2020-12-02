@@ -9,9 +9,10 @@ let Exchange = artifacts.require("Exchange");
 const Orion = artifacts.require("Orion");
 const LibValidator = artifacts.require("LibValidator");
 
-const depositedBalance = 10e8, stakedBalance = 8e8;
+const depositedBalance = 10e8;
+let stakedBalance = 8e8;
 const NOTSTAKED='0', LOCKING='1', LOCKED='2', RELEASING='3', READYTORELEASE='4', FROZEN='5';
-const lockingDuration = 3600*24, releasingDuration = 3600*24;
+const lockingDuration = 1, releasingDuration = 3600*24;
 let exchange, orion, orionVault;
 
 async function getLastEvent(eventName, user) {
@@ -75,14 +76,14 @@ contract("OrionVault", ([owner, user1, user2, user3]) => {
       stakeBalance.toString().should.be.equal(String(stakedBalance));
       stakePhase.toString().should.be.equal(String(LOCKING));
     });
-    it("locked stake value should be 0 for LOCKING phase", async () => {
+    /*it("locked stake value should be 0 for LOCKING phase", async () => {
       let lockedBalance = await orionVault.getLockedStakeBalance(user1);
       lockedBalance.toString().should.be.equal(String(0));
     });
 
 
     // Uncomment if locking period > 0
-    /*it("user1 unlock recently (before lock period) staked ORN", async () => {
+    it("user1 unlock recently (before lock period) staked ORN", async () => {
       await orionVault.requestReleaseStake({from:user1}).should.be.fulfilled;
       let stakeBalance = await orionVault.getStakeBalance(user1);
       let stakePhase = await orionVault.getStakePhase(user1);
@@ -92,6 +93,21 @@ contract("OrionVault", ([owner, user1, user2, user3]) => {
       orionBalance.toString()
               .should.be.equal(String(depositedBalance));
     });*/
+
+    it("user can add to stake", async () => {
+      let orionBalance = await exchange.getBalance(orion.address, user1);
+      await orionVault.lockStake(1, {from:user1}).should.be.fulfilled;
+      await ChainManipulation.advanceTime(lockingDuration+1);
+      await ChainManipulation.advanceBlock();
+      let stakePhase = await orionVault.getStakePhase(user1);
+      stakePhase.toString().should.be.equal(String(LOCKED));
+      stakedBalance+=1;
+      let lockedBalance = await orionVault.getLockedStakeBalance(user1);
+      lockedBalance.toString().should.be.equal(String(stakedBalance));
+      let afterOrionBalance = await exchange.getBalance(orion.address, user1);
+      (orionBalance-afterOrionBalance).should.be.equal(String('1'));
+    });
+
 
     it("locked stake value = staked value in LOCKED phase", async () => {
       await orionVault.lockStake(stakedBalance, {from:user2}).should.be.fulfilled;

@@ -554,7 +554,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         Stake storage stake = stakingData[user];
 
         assetBalances[user][address(_orionToken)] -= amount;
-        stake.amount = amount;
+        stake.amount += amount;
         
         if(stake.phase != StakePhase.FROZEN) {
           stake.phase = StakePhase.LOCKING; //what is frozen should stay frozen
