@@ -4,21 +4,21 @@ const HDWalletProvider = require("truffle-hdwallet-provider");
 module.exports = {
   compilers: {
     solc: {
-      version: "0.6.2",
-      // evmVersion: "byzantium",
-      optimizer: {
-        enabled: true,
-        runs: 200,
-      },
-    },
+      version: '0.7.4',
+      settings: {
+        optimizer: {
+          enabled: true,
+          runs: 1
+        }
+      }
+    }
   },
   networks: {
     development: {
       host: "127.0.0.1",
       port: 8545,
-      network_id: "999",
-      gas: 6721975,
-      from: "0x964a4993cDA8441c6f0b980107C4B6eFdE424de4"
+      network_id: "*",
+      gas: 6721975
     },
     ropsten: {
       provider: () => {

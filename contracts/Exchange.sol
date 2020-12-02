@@ -1,4 +1,4 @@
-pragma solidity ^0.6.0;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -140,7 +140,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         );
         assetBalances[user][assetAddress] += safeAmountDecimal;
         if(amount>0)
-          emit NewAssetTransaction(user, assetAddress, true, uint112(safeAmountDecimal), uint64(now));
+          emit NewAssetTransaction(user, assetAddress, true, uint112(safeAmountDecimal), uint64(block.timestamp));
         if(wasLiability)
           MarginalFunctionality.updateLiability(user, assetAddress, liabilities, uint112(safeAmountDecimal), assetBalances[user][assetAddress]);
 
@@ -166,14 +166,14 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         
         uint256 _amount = uint256(amount);
         if(assetAddress == address(0)) {
-          (bool success, ) = user.call.value(_amount)("");
+          (bool success, ) = user.call{value:_amount}("");
           require(success, "E6w");
         } else {
           IERC20(assetAddress).safeTransfer(user, _amount);
         }
 
 
-        emit NewAssetTransaction(user, assetAddress, false, uint112(safeAmountDecimal), uint64(now));
+        emit NewAssetTransaction(user, assetAddress, false, uint112(safeAmountDecimal), uint64(block.timestamp));
     }
 
 
@@ -278,7 +278,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
                 msg.sender,
                 filledAmount,
                 filledPrice,
-                now,
+                block.timestamp,
                 _allowedMatcher
             ),
             "E3G"
@@ -447,7 +447,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         liabilities[user].push(
           MarginalFunctionality.Liability({
                                              asset: asset,
-                                             timestamp: uint64(now),
+                                             timestamp: uint64(block.timestamp),
                                              outstandingAmount: uint192(-balance)})
         );
     }
@@ -493,9 +493,9 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
 
     function getStake(address user) public view returns (Stake memory){
         Stake memory stake = stakingData[user];
-        if(stake.phase == StakePhase.LOCKING && (now - stake.lastActionTimestamp) > 0) {
+        if(stake.phase == StakePhase.LOCKING && (block.timestamp - stake.lastActionTimestamp) > 0) {
           stake.phase = StakePhase.LOCKED;
-        } else if(stake.phase == StakePhase.RELEASING && (now - stake.lastActionTimestamp) > releasingDuration) {
+        } else if(stake.phase == StakePhase.RELEASING && (block.timestamp - stake.lastActionTimestamp) > releasingDuration) {
           stake.phase = StakePhase.READYTORELEASE;
         }
         return stake;
@@ -542,7 +542,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         } else if (current.phase == StakePhase.LOCKED) {
           Stake storage stake = stakingData[_msgSender()];
           stake.phase = StakePhase.RELEASING;
-          stake.lastActionTimestamp = uint64(now);
+          stake.lastActionTimestamp = uint64(block.timestamp);
         } else {
           revert("Can not release funds from this phase");
         }
@@ -559,7 +559,7 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         if(stake.phase != StakePhase.FROZEN) {
           stake.phase = StakePhase.LOCKING; //what is frozen should stay frozen
         }
-        stake.lastActionTimestamp = uint64(now);
+        stake.lastActionTimestamp = uint64(block.timestamp);
     }
 
     function seizeFromStake(address user, address receiver, uint64 amount) public {

@@ -1,4 +1,4 @@
-pragma solidity ^0.6.0;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 import "../PriceOracleInterface.sol";
 import "../OrionVaultInterface.sol";
@@ -74,7 +74,7 @@ library MarginalFunctionality {
             totalPosition += assetValue;
             // if assetValue == 0  ignore outdated price
             outdated = outdated ||
-                            ((timestamp + constants.priceOverdue) < now);
+                            ((timestamp + constants.priceOverdue) < block.timestamp);
           }
         }
         return (outdated, weightedPosition, totalPosition);
@@ -99,9 +99,9 @@ library MarginalFunctionality {
                                         );
           weightedPosition += liabilityValue; //already negative since balance is negative
           totalPosition += liabilityValue;
-          overdue = overdue || ((liability.timestamp + constants.positionOverdue) < now);
+          overdue = overdue || ((liability.timestamp + constants.positionOverdue) < block.timestamp);
           outdated = outdated ||
-                          ((timestamp + constants.priceOverdue) < now);
+                          ((timestamp + constants.priceOverdue) < block.timestamp);
         }
 
         return (outdated, overdue, weightedPosition, totalPosition);
@@ -195,7 +195,7 @@ library MarginalFunctionality {
           }
           else {
             liability.outstandingAmount = uint192(-currentBalance);
-            liability.timestamp = uint64(now);
+            liability.timestamp = uint64(block.timestamp);
           }
         } else {
             liability.outstandingAmount -= depositAmount;
@@ -222,7 +222,7 @@ library MarginalFunctionality {
         assetBalances[liquidator][redeemedAsset] -= amount;
         assetBalances[constants.user][redeemedAsset] += amount;
         (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
-        require((timestamp + constants.priceOverdue) > now, "E9"); //Price is outdated
+        require((timestamp + constants.priceOverdue) > block.timestamp, "E9"); //Price is outdated
 
         int64 orionAmount = reimburseLiquidator(amount, price, liquidator, assetBalances, constants);
         assetBalances[liquidator][constants._orionTokenAddress] += orionAmount;
