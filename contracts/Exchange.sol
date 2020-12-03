@@ -3,13 +3,12 @@ pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "./utils/ReentrancyGuard.sol";
 import "./libs/LibUnitConverter.sol";
 import "./libs/LibValidator.sol";
 import "./libs/MarginalFunctionality.sol";
-
+import "./OrionVault.sol";
 /**
  * @title Exchange
  * @dev Exchange contract for the Orion Protocol
@@ -35,7 +34,7 @@ import "./libs/MarginalFunctionality.sol";
   while amount*price/1e8 not only fit int192, but also can be added, subtracted
   without overflow checks: number of malicion operations to overflow ~1e13.
 */
-contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
+contract Exchange is OrionVault, ReentrancyGuard {
 
     using LibValidator for LibValidator.Order;
     using SafeERC20 for IERC20;
@@ -58,29 +57,6 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         uint192 filledAmount,
         uint192 amountQuote
     );
-
-    //order -> filledAmount
-    mapping(bytes32 => uint192) public filledAmounts;
-
-
-    // Get user balance by address and asset address
-    mapping(address => mapping(address => int192)) private assetBalances;
-    // List of assets with negative balance for each user
-    mapping(address => MarginalFunctionality.Liability[]) public liabilities;
-    // List of assets which can be used as collateral and risk coefficients for them
-    address[] private collateralAssets;
-    mapping(address => uint8) public assetRisks;
-    // Risk coefficient for locked ORN
-    uint8 public stakeRisk;
-    // Liquidation premium
-    uint8 public liquidationPremium;
-    // Delays after which price and position become outdated
-    uint64 public priceOverdue;
-    uint64 public positionOverdue;
-
-    IERC20 _orionToken;
-    address _oracleAddress;
-    address _allowedMatcher;
 
     // MAIN FUNCTIONS
 
@@ -475,100 +451,5 @@ contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
         E12: Incorrect filled amount, flavor G,B,S: general(overflow), buyer order overflow, seller order overflow
         E14: Authorization error, sfs - seizeFromStake
     */
-
-// OrionVault part, will be moved in right place after successfull tests
-
-    enum StakePhase{ NOTSTAKED, LOCKING, LOCKED, RELEASING, READYTORELEASE, FROZEN }
-
-    struct Stake {
-      uint64 amount; // 100m ORN in circulation fits uint64
-      StakePhase phase;
-      uint64 lastActionTimestamp;
-    }
-
-    uint64 constant releasingDuration = 3600*24;
-    mapping(address => Stake) private stakingData;
-
-
-
-    function getStake(address user) public view returns (Stake memory){
-        Stake memory stake = stakingData[user];
-        if(stake.phase == StakePhase.LOCKING && (block.timestamp - stake.lastActionTimestamp) > 0) {
-          stake.phase = StakePhase.LOCKED;
-        } else if(stake.phase == StakePhase.RELEASING && (block.timestamp - stake.lastActionTimestamp) > releasingDuration) {
-          stake.phase = StakePhase.READYTORELEASE;
-        }
-        return stake;
-    }
-
-    function getStakeBalance(address user) public view returns (uint256) {
-        return getStake(user).amount;
-    }
-
-    function getStakePhase(address user) public view returns (StakePhase) {
-        return getStake(user).phase;
-    }
-
-    function getLockedStakeBalance(address user) public view returns (uint256) {
-      Stake memory stake = getStake(user);
-      if(stake.phase == StakePhase.LOCKED || stake.phase == StakePhase.FROZEN)
-        return stake.amount;
-      return 0;
-    }
-
-
-
-    function postponeStakeRelease(address user) external onlyOwner{
-        Stake storage stake = stakingData[user];
-        stake.phase = StakePhase.FROZEN;
-    }
-
-    function allowStakeRelease(address user) external onlyOwner {
-        Stake storage stake = stakingData[user];
-        stake.phase = StakePhase.READYTORELEASE;
-    }
-
-
-
-    function requestReleaseStake() public {
-        address user = _msgSender();
-        Stake memory current = getStake(user);
-        require(liabilities[user].length == 0, "Can not release stake: user has liabilities");
-        if(current.phase == StakePhase.LOCKING || current.phase == StakePhase.READYTORELEASE) {
-          Stake storage stake = stakingData[_msgSender()];
-          assetBalances[user][address(_orionToken)] += stake.amount;
-          stake.amount = 0;
-          stake.phase = StakePhase.NOTSTAKED;
-        } else if (current.phase == StakePhase.LOCKED) {
-          Stake storage stake = stakingData[_msgSender()];
-          stake.phase = StakePhase.RELEASING;
-          stake.lastActionTimestamp = uint64(block.timestamp);
-        } else {
-          revert("Can not release funds from this phase");
-        }
-    }
-
-    function lockStake(uint64 amount) public {
-        address user = _msgSender();
-        require(assetBalances[user][address(_orionToken)]>amount, "E1S");
-        Stake storage stake = stakingData[user];
-
-        assetBalances[user][address(_orionToken)] -= amount;
-        stake.amount += amount;
-        
-        if(stake.phase != StakePhase.FROZEN) {
-          stake.phase = StakePhase.LOCKING; //what is frozen should stay frozen
-        }
-        stake.lastActionTimestamp = uint64(block.timestamp);
-    }
-
-    function seizeFromStake(address user, address receiver, uint64 amount) public {
-        require(msg.sender == address(this), "E14");
-        Stake storage stake = stakingData[user];
-        require(stake.amount >= amount, "UX"); //TODO
-        stake.amount -= amount;
-        assetBalances[receiver][address(_orionToken)] += amount;
-    }
-
 
 }

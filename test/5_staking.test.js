@@ -11,7 +11,7 @@ const LibValidator = artifacts.require("LibValidator");
 
 const depositedBalance = 10e8;
 let stakedBalance = 8e8;
-const NOTSTAKED='0', LOCKING='1', LOCKED='2', RELEASING='3', READYTORELEASE='4', FROZEN='5';
+const NOTSTAKED='0', LOCKED='1', RELEASING='2', READYTORELEASE='3', FROZEN='4';
 const lockingDuration = 1, releasingDuration = 3600*24;
 let exchange, orion, orionVault;
 
@@ -74,7 +74,7 @@ contract("OrionVault", ([owner, user1, user2, user3]) => {
       let stakeBalance = await orionVault.getStakeBalance(user1);
       let stakePhase = await orionVault.getStakePhase(user1);
       stakeBalance.toString().should.be.equal(String(stakedBalance));
-      stakePhase.toString().should.be.equal(String(LOCKING));
+      stakePhase.toString().should.be.equal(String(LOCKED));
     });
     /*it("locked stake value should be 0 for LOCKING phase", async () => {
       let lockedBalance = await orionVault.getLockedStakeBalance(user1);
