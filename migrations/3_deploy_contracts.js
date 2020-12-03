@@ -45,9 +45,12 @@ module.exports = async (deployer, network, accounts) => {
     await deployer.link(LibUnitConverter, Exchange);
     await deployer.link(MarginalFunctionality,Exchange);
 
-    let priceOracleInstance = await deployer.deploy(PriceOracle, oraclePubkey, Orion.address);
+    await deployer.deploy(PriceOracle, oraclePubkey, Orion.address);
+    let priceOracleInstance = await PriceOracle.deployed();
+
     let exchangeInstance = await deployProxy(Exchange, {unsafeAllowCustomTypes: true, unsafeAllowLinkedLibraries: true});
 
+    await priceOracleInstance.changePriceProviderAuthorization([oraclePubkey],[]);
     await exchangeInstance.setBasicParams("0x0000000000000000000000000000000000000000", Orion.address, PriceOracle.address, "0x1FF516E5ce789085CFF86d37fc27747dF852a80a");
   }
 };
