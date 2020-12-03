@@ -33,7 +33,7 @@ module.exports = async (deployer, network, accounts) => {
 
   }
   if (network === "ropsten") {
-    oraclePubkey = "0x00de7D7035D44Efb51618ebBE814EcACf0354387";
+    oraclePubkey = "0xC19D917a88e07e5040cD2443FB3a026838C3b852";
 
     await deployer.deploy(SafeMath);
     await deployer.deploy(LibValidator);
