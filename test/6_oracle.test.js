@@ -38,7 +38,7 @@ function generateMsgParams(prices) {
       };
 }
 
-contract("PriceOracle", ([owner, user1, oracle]) => {
+contract("PriceOracle", ([owner, user1, oracle, user2]) => {
   let just_staked_snapshot=0,
       requested_stake_snapshot = 0;
 
@@ -135,6 +135,48 @@ contract("PriceOracle", ([owner, user1, oracle]) => {
 
     });
     //TODO test timestamp ranges: too early, too late, etc
+
+  });
+
+  describe("PriceOracle::address authorization", () => {
+
+    it("unauthorized address can not provide data", async () => {
+      prices= {
+        assetAddresses: [asset2],
+        prices: [11],
+        timestamp: Date.now()
+      };
+      priceOracle.provideDataAddressAuthorization(prices).should.be.rejected;
+    });
+
+    it("not owner can not authorize providers", async () => {
+      priceOracle.changePriceProviderAuthorization([user2], [], {from: user2}).should.be.rejected;
+    });
+
+    it("owner can change providers authorization", async () => {
+      priceOracle.changePriceProviderAuthorization([user2, oracle], [], {from: owner}).should.be.fulfilled;
+       let user2Authorization = await priceOracle.priceProviderAuthorization(user2);
+       let oracleAuthorization = await priceOracle.priceProviderAuthorization(oracle);
+       user2Authorization.should.be.equal(true);
+       oracleAuthorization.should.be.equal(true);
+       priceOracle.changePriceProviderAuthorization([], [oracle], {from: owner}).should.be.fulfilled; 
+       oracleAuthorization = await priceOracle.priceProviderAuthorization(oracle);
+       oracleAuthorization.should.be.equal(false);
+    });
+    it("authorized provider can provide data", async () => {
+      let newPrice = 27;
+      let newTs = Date.now();
+      prices= {
+        assetAddresses: [asset2],
+        prices: [newPrice],
+        timestamp: newTs,
+        signature: "0x0"
+      };
+      priceOracle.provideDataAddressAuthorization(prices, {from: user2}).should.be.fulfilled;
+      let data = await priceOracle.givePrices([asset2]);
+      data[0].price.toString().should.be.equal(String(newPrice));
+      data[0].timestamp.toString().should.be.equal(String(newTs));
+    });
 
   });
 

@@ -105,7 +105,7 @@ contract("OrionVault", ([owner, user1, user2, user3]) => {
       let lockedBalance = await orionVault.getLockedStakeBalance(user1);
       lockedBalance.toString().should.be.equal(String(stakedBalance));
       let afterOrionBalance = await exchange.getBalance(orion.address, user1);
-      (orionBalance-afterOrionBalance).should.be.equal(String('1'));
+      (orionBalance-afterOrionBalance).toString().should.be.equal(String('1'));
     });
 
 

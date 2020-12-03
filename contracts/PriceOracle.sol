@@ -34,6 +34,7 @@ contract PriceOracle is EIP712Interface, Ownable {
     address public baseAsset;
     mapping(address => PriceDataOut) public assetPrices;
     mapping(address => address) public chainLinkUSDTAggregator;
+    mapping(address => bool) public priceProviderAuthorization;
 
     constructor(address publicKey, address _baseAsset) public {
         oraclePublicKey = publicKey;
@@ -86,6 +87,19 @@ contract PriceOracle is EIP712Interface, Ownable {
 
     function provideData(Prices memory priceFeed) public {
        require(checkPriceFeedSignature(priceFeed), "Wrong signature");
+       require(priceFeed.timestamp<block.timestamp+60, "Price data timestamp too far in the future");
+       for(uint8 i=0; i<priceFeed.assetAddresses.length; i++) {
+         PriceDataOut storage assetData = assetPrices[priceFeed.assetAddresses[i]];
+         if(assetData.timestamp<priceFeed.timestamp) {
+           assetData.price = priceFeed.prices[i];
+           assetData.timestamp = priceFeed.timestamp;
+         }
+       }
+    }
+
+    function provideDataAddressAuthorization(Prices memory priceFeed) public {
+       require(priceProviderAuthorization[msg.sender], "Unauthorized dataprovider");
+       require(priceFeed.timestamp<block.timestamp+60, "Price data timestamp too far in the future");
        for(uint8 i=0; i<priceFeed.assetAddresses.length; i++) {
          PriceDataOut storage assetData = assetPrices[priceFeed.assetAddresses[i]];
          if(assetData.timestamp<priceFeed.timestamp) {
@@ -156,6 +170,15 @@ contract PriceOracle is EIP712Interface, Ownable {
     function setChainLinkAggregators(address[] memory assets, address[] memory aggregatorAddresses) public onlyOwner {
       for(uint8 i=0; i<assets.length; i++) {
         chainLinkUSDTAggregator[assets[i]] = aggregatorAddresses[i];
+      }
+    }
+    
+    function changePriceProviderAuthorization(address[] memory added, address[] memory removed) public onlyOwner {
+      for(uint8 i=0; i<added.length; i++) {
+        priceProviderAuthorization[added[i]] = true;
+      }
+      for(uint8 i=0; i<removed.length; i++) {
+        priceProviderAuthorization[removed[i]] = false;
       }
     }
 }
