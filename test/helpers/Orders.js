@@ -1,6 +1,7 @@
 const sigUtil = require("eth-sig-util");
 const EIP712 = require("./EIP712.js");
 const eth_signTypedData = require("./GanacheSignatures.js");
+const ChainManipulation = require("./ChainManipulation");
 
 async function generateOrder( trader, matcher, buySide,
                         baseAsset = weth,
@@ -11,7 +12,7 @@ async function generateOrder( trader, matcher, buySide,
                         fee = Math.ceil(3.5e5),
                         nonce = undefined,
                         expiration = undefined) {
-      const NOW = Date.now();
+      const NOW = (await ChainManipulation.getBlokchainTime()) * 1000; 
       if(!nonce)
         nonce = NOW;
       if(!expiration)

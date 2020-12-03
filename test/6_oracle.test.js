@@ -6,6 +6,7 @@ require("chai")
 const sigUtil = require("eth-sig-util");
 const eth_signTypedData = require("./helpers/GanacheSignatures.js");
 const EIP712 = require("./helpers/EIP712.js");
+const ChainManipulation = require("./helpers/ChainManipulation");
 
 
 let PriceOracle = artifacts.require("PriceOracle");
@@ -52,7 +53,7 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
       let _oracle = await priceOracle.oraclePublicKey();
       _oracle.should.be.equal(oracle);
     });
-
+    /*
     it("Oracle sign price feed", async () => {
       prices= {
         assetAddresses: [asset0,asset1,asset2],
@@ -135,16 +136,16 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
 
     });
     //TODO test timestamp ranges: too early, too late, etc
-
+    */
   });
 
   describe("PriceOracle::address authorization", () => {
-
+    
     it("unauthorized address can not provide data", async () => {
       prices= {
         assetAddresses: [asset2],
         prices: [11],
-        timestamp: Date.now()
+        timestamp: Math.floor( Date.now()/1000)
       };
       priceOracle.provideDataAddressAuthorization(prices).should.be.rejected;
     });
@@ -165,7 +166,7 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
     });
     it("authorized provider can provide data", async () => {
       let newPrice = 27;
-      let newTs = Date.now();
+      let newTs = Math.floor(Date.now()/1000);
       prices= {
         assetAddresses: [asset2],
         prices: [newPrice],
@@ -176,6 +177,35 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
       let data = await priceOracle.givePrices([asset2]);
       data[0].price.toString().should.be.equal(String(newPrice));
       data[0].timestamp.toString().should.be.equal(String(newTs));
+    });
+
+    it("data with timestamp less than existing will not be overwritten", async () => {
+      let initialData = await priceOracle.givePrices([asset2]);
+      let newPrice = 0;
+      let newTs = Math.floor(Date.now()/1000);
+      prices= {
+        assetAddresses: [asset2],
+        prices: [newPrice],
+        timestamp: initialData[0].timestamp - 10,
+        signature: "0x0"
+      };
+      priceOracle.provideDataAddressAuthorization(prices, {from: user2}).should.be.fulfilled;
+      let data = await priceOracle.givePrices([asset2]);
+      data[0].price.toString().should.be.equal(String(initialData[0].price));
+      data[0].timestamp.toString().should.be.equal(String(initialData[0].timestamp));
+    });
+
+
+    it("can't provide data too far in the future", async () => {
+      let newPrice = 27;
+      let newTs = await ChainManipulation.getBlokchainTime() + 80;
+      prices= {
+        assetAddresses: [asset2],
+        prices: [newPrice],
+        timestamp: newTs,
+        signature: "0x0"
+      };
+      priceOracle.provideDataAddressAuthorization(prices, {from: user2}).should.be.rejected;
     });
 
   });

@@ -61,7 +61,7 @@ function calcCollateral(orionStake, orion, wbtc, weth, eth) {
                   Math.floor(eth* ETHPrice/1e8);
       return {weightedPosition: weighted, totalPosition: total};
 }
-contract("Exchange", ([owner, broker, user2, liquidator]) => {
+contract("Exchange", ([owner, broker, user2, liquidator, priceProvider]) => {
   describe("Exchange::instance", () => {
       it("deploy", async () => {
         exchange = await Exchange.deployed();
@@ -97,12 +97,17 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
         (balanceAsset-balanceBefore).toString().should.be.equal(String(amount));
   };
 
-  let generateData = async(assets,priceData) => {
+  let generateData = async(assets,priceData,signatureAuth) => {
       prices= {
         assetAddresses: assets,
         prices: priceData,
-        timestamp: await ChainManipulation.getBlokchainTime()
+        timestamp: await ChainManipulation.getBlokchainTime(),
+        signature: "0x0"
       };
+      if(!signatureAuth){
+        return prices;
+      }
+      //Use this code for Signature based price providers
       let msgParams = {
              types: {
                EIP712Domain: EIP712.domain,
@@ -143,9 +148,10 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
     it("admin provide price data", async () => {
       let _oracle = await priceOracle.oraclePublicKey();
       _oracle.should.be.equal(oraclePub);
+      await priceOracle.changePriceProviderAuthorization([priceProvider],[],{from: owner}).should.be.fulfilled;
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
                            [WETHPrice, WBTCPrice, OrionPrice, ETHPrice, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: broker }
+      await priceOracle.provideDataAddressAuthorization(prices, {from: priceProvider}
                                 ).should.be.fulfilled;
     });
 
@@ -424,7 +430,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
       await ChainManipulation.advanceBlock();
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS,wxrp.address],
                            [WETHPrice, WBTCPrice, OrionPrice, ETHPrice, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: broker }
+      await priceOracle.provideDataAddressAuthorization(prices, {from: priceProvider}
                                 ).should.be.fulfilled;
       let trades = [
                     [{address:ZERO_ADDRESS}, 1e8, ETHPrice]
@@ -455,7 +461,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
       await ChainManipulation.advanceBlock();
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
                            [WETHPrice, WBTCPrice, OrionPrice, ETHPrice, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: broker }
+      await priceOracle.provideDataAddressAuthorization(prices, {from: priceProvider}
                                 ).should.be.fulfilled;
       let trades = [
                     [weth, 1e8, WETHPrice]
@@ -488,7 +494,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
         await ChainManipulation.advanceBlock();
         prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
                              [WETHPrice, WBTCPrice, OrionPrice, ETHPrice, WXRPPrice]);
-        await priceOracle.provideData(prices, { from: broker }
+        await priceOracle.provideDataAddressAuthorization(prices, {from: priceProvider}
                                   ).should.be.fulfilled;
         let trades = [
                       [weth, amount, WETHPrice]
@@ -601,7 +607,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
     it("negative position can be liquidated", async () => {
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
                            [160e8, WBTCPrice, OrionPrice, 160e8, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: broker }
+      await priceOracle.provideDataAddressAuthorization(prices, {from: priceProvider}
                                 ).should.be.fulfilled;
       let position = await exchange.calcPosition(broker);
       position.state.should.be.equal(String(1)); //Negative
@@ -632,7 +638,7 @@ contract("Exchange", ([owner, broker, user2, liquidator]) => {
       //position.state.should.be.equal(String(3)); //OVERDUE
       prices= await generateData([weth.address, wbtc.address, orion.address, ZERO_ADDRESS, wxrp.address],
                            [160e8, WBTCPrice, OrionPrice, 160e8, WXRPPrice]);
-      await priceOracle.provideData(prices, { from: broker }
+      await priceOracle.provideDataAddressAuthorization(prices, {from: priceProvider}
                                 ).should.be.fulfilled;
       //position.state.should.be.equal(String(3)); //OVERDUE
       let liquidatorOrionAmount = await exchange.getBalance(orion.address, liquidator);

@@ -40,7 +40,7 @@ contract PriceOracle is EIP712Interface, Ownable {
         oraclePublicKey = publicKey;
         baseAsset = _baseAsset;
     }
-
+    /*
     function checkPriceFeedSignature(Prices memory priceFeed) public view returns (bool) {
         bytes32 digest = keccak256(
             abi.encodePacked(
@@ -96,7 +96,7 @@ contract PriceOracle is EIP712Interface, Ownable {
          }
        }
     }
-
+    */
     function provideDataAddressAuthorization(Prices memory priceFeed) public {
        require(priceProviderAuthorization[msg.sender], "Unauthorized dataprovider");
        require(priceFeed.timestamp<block.timestamp+60, "Price data timestamp too far in the future");
@@ -116,7 +116,7 @@ contract PriceOracle is EIP712Interface, Ownable {
       }
       return result;
     }
-    
+    /*
     function getPricesHash(Prices memory priceVector)
         public
         pure
@@ -132,7 +132,7 @@ contract PriceOracle is EIP712Interface, Ownable {
                 )
             );
     }
-
+    */
     function getChainLinkPriceData(address[] memory assets) public {
       address baseAggregator = chainLinkUSDTAggregator[baseAsset];
       if(baseAggregator == address(0))
