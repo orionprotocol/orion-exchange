@@ -1,11 +1,11 @@
-pragma solidity ^0.6.0;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
-import "./Utils.sol";
+import "./utils/ReentrancyGuard.sol";
 import "./libs/LibUnitConverter.sol";
 import "./libs/LibValidator.sol";
 import "./libs/MarginalFunctionality.sol";
@@ -35,7 +35,7 @@ import "./libs/MarginalFunctionality.sol";
   while amount*price/1e8 not only fit int192, but also can be added, subtracted
   without overflow checks: number of malicion operations to overflow ~1e13.
 */
-contract Exchange is Utils, Ownable {
+contract Exchange is ReentrancyGuard, OwnableUpgradeSafe {
 
     using LibValidator for LibValidator.Order;
     using SafeERC20 for IERC20;
@@ -59,17 +59,9 @@ contract Exchange is Utils, Ownable {
         uint192 amountQuote
     );
 
-    // GLOBAL VARIABLES
+    //order -> filledAmount
+    mapping(bytes32 => uint192) public filledAmounts;
 
-    struct Trade {
-        uint64 filledPrice;
-        uint192 filledAmount;
-        uint192 feePaid;
-        uint64 timestamp;
-    }
-
-    // Get trades by orderHash
-    mapping(bytes32 => Trade[]) public trades;
 
     // Get user balance by address and asset address
     mapping(address => mapping(address => int192)) private assetBalances;
@@ -86,17 +78,18 @@ contract Exchange is Utils, Ownable {
     uint64 public priceOverdue;
     uint64 public positionOverdue;
 
-    address _stakingContractAddress;
     IERC20 _orionToken;
     address _oracleAddress;
     address _allowedMatcher;
 
     // MAIN FUNCTIONS
 
-    constructor(address stakingContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public {
-      _stakingContractAddress = stakingContractAddress;
+    function initialize() public payable initializer {
+        OwnableUpgradeSafe.__Ownable_init();
+    }
+
+    function setBasicParams(address orionVaultContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
       _orionToken = IERC20(orionToken);
-      _orionToken.approve(_stakingContractAddress, 2**256-1);
       _oracleAddress = priceOracleAddress;
       _allowedMatcher = allowedMatcher;
     }
@@ -147,7 +140,7 @@ contract Exchange is Utils, Ownable {
         );
         assetBalances[user][assetAddress] += safeAmountDecimal;
         if(amount>0)
-          emit NewAssetTransaction(user, assetAddress, true, uint112(safeAmountDecimal), uint64(now));
+          emit NewAssetTransaction(user, assetAddress, true, uint112(safeAmountDecimal), uint64(block.timestamp));
         if(wasLiability)
           MarginalFunctionality.updateLiability(user, assetAddress, liabilities, uint112(safeAmountDecimal), assetBalances[user][assetAddress]);
 
@@ -168,32 +161,21 @@ contract Exchange is Utils, Ownable {
 
         address user = msg.sender;
 
-        require(assetBalances[user][assetAddress]>=safeAmountDecimal && checkPosition(user), "E1"); //TODO
+        require(assetBalances[user][assetAddress]>=safeAmountDecimal && checkPosition(user), "E1w"); //TODO
         assetBalances[user][assetAddress] -= safeAmountDecimal;
         
         uint256 _amount = uint256(amount);
         if(assetAddress == address(0)) {
-          (bool success, ) = user.call.value(_amount)("");
-          require(success, "E6");
+          (bool success, ) = user.call{value:_amount}("");
+          require(success, "E6w");
         } else {
           IERC20(assetAddress).safeTransfer(user, _amount);
         }
 
 
-        emit NewAssetTransaction(user, assetAddress, false, uint112(safeAmountDecimal), uint64(now));
+        emit NewAssetTransaction(user, assetAddress, false, uint112(safeAmountDecimal), uint64(block.timestamp));
     }
 
-
-    function moveToStake(address user, uint64 amount) public {
-      require(msg.sender == _stakingContractAddress, "Unauthorized moveToStake");
-      require(assetBalances[user][address(_orionToken)]>amount);
-      assetBalances[user][address(_orionToken)] -= amount;
-    }
-
-    function moveFromStake(address user, uint64 amount) public {
-      require(msg.sender == _stakingContractAddress, "Unauthorized moveFromStake");
-      assetBalances[user][address(_orionToken)] += amount;
-    }
 
     /**
      * @dev Get asset balance for a specific address
@@ -246,35 +228,17 @@ contract Exchange is Utils, Ownable {
       return order.getTypeValueHash();
     }
 
-    /**
-     * @dev get trades for a specific order
-     */
-    function getOrderTrades(LibValidator.Order memory order)
-        public
-        view
-        returns (Trade[] memory)
-    {
-        bytes32 orderHash = order.getTypeValueHash();
-        return trades[orderHash];
-    }
 
     /**
      * @dev get trades for a specific order
      */
-    function getFilledAmounts(bytes32 orderHash)
+    function getFilledAmounts(bytes32 orderHash, LibValidator.Order memory order)
         public
         view
         returns (int192 totalFilled, int192 totalFeesPaid)
     {
-        Trade[] storage orderTrades = trades[orderHash];
-
-        for (uint16 i; i < orderTrades.length; i++) {
-            // Note while filledAmount and feePaid are int192
-            // they are guaranteed to be less that 2**156
-            // it is safe to add them without checks
-            totalFilled = totalFilled + int192(orderTrades[i].filledAmount);
-            totalFeesPaid = totalFeesPaid + int192(orderTrades[i].feePaid);
-        }
+        totalFilled = int192(filledAmounts[orderHash]); //It is safe to convert here: filledAmounts is result of ui112 additions
+        totalFeesPaid = int192(uint256(order.matcherFee)*uint112(totalFilled)/order.amount); //matcherFee is u64; safe multiplication here
     }
 
 
@@ -297,7 +261,7 @@ contract Exchange is Utils, Ownable {
         // --- VARIABLES --- //
         // Amount of quote asset
         uint256 _amountQuote = uint256(filledAmount)*filledPrice/(10**8);
-        require(_amountQuote<2**112-1, "Wrong amount");
+        require(_amountQuote<2**112-1, "E12G");
         uint112 amountQuote = uint112(_amountQuote);
 
         // Order Hashes
@@ -314,14 +278,21 @@ contract Exchange is Utils, Ownable {
                 msg.sender,
                 filledAmount,
                 filledPrice,
-                now,
+                block.timestamp,
                 _allowedMatcher
             ),
-            "E3"
+            "E3G"
         );
 
 
         // --- UPDATES --- //
+
+        //updateFilledAmount
+        filledAmounts[buyOrderHash] += filledAmount; //it is safe to add ui112 to each other to get i192
+        filledAmounts[sellOrderHash] += filledAmount;
+        require(filledAmounts[buyOrderHash] <= buyOrder.amount, "E12B");
+        require(filledAmounts[sellOrderHash] <= sellOrder.amount, "E12S");
+
 
         // Update User's balances
         updateOrderBalance(buyOrder, filledAmount, amountQuote, true);
@@ -329,9 +300,6 @@ contract Exchange is Utils, Ownable {
         require(checkPosition(buyOrder.senderAddress), "Incorrect margin position for buyer");
         require(checkPosition(sellOrder.senderAddress), "Incorrect margin position for seller");
 
-        // Update trades
-        updateTrade(buyOrderHash, buyOrder, filledAmount, filledPrice);
-        updateTrade(sellOrderHash, sellOrder, filledAmount, filledPrice);
 
         emit NewTrade(
             buyOrder.senderAddress,
@@ -402,33 +370,6 @@ contract Exchange is Utils, Ownable {
     }
 
     /**
-     *  @notice Store trade and update order
-     */
-    function updateTrade(
-        bytes32 orderHash,
-        LibValidator.Order memory order,
-        uint112 filledAmount,
-        uint64 filledPrice
-    ) internal {
-        // matcherFee: u64, filledAmount u128 => matcherFee*filledAmount fit u256
-        // result matcherFee fit u64
-        int192 matcherFee = int192(uint256(order.matcherFee)*filledAmount/order.amount);
-
-        (int192 totalFilled, int192 totalFeesPaid) = getFilledAmounts(orderHash);
-
-        uint256 afterFilled = uint256(totalFilled)+uint256(filledAmount);
-        uint256 afterFee = uint256(totalFeesPaid)+uint256(matcherFee);
-
-        require(afterFilled <= order.amount, "E3");
-        require(afterFee <= order.matcherFee, "E3");
-
-        // Store Trade
-        trades[orderHash].push(
-            Trade(filledPrice, uint192(filledAmount), uint192(matcherFee), uint64(now))
-        );
-    }
-
-    /**
      * @notice users can cancel an order
      * @dev write an orderHash in the contract so that such an order cannot be filled (executed)
      */
@@ -471,7 +412,7 @@ contract Exchange is Utils, Ownable {
              returns (MarginalFunctionality.UsedConstants memory) {
        return MarginalFunctionality.UsedConstants(user,
                                                   _oracleAddress,
-                                                  _stakingContractAddress,
+                                                  address(this),
                                                   address(_orionToken),
                                                   positionOverdue,
                                                   priceOverdue,
@@ -506,7 +447,7 @@ contract Exchange is Utils, Ownable {
         liabilities[user].push(
           MarginalFunctionality.Liability({
                                              asset: asset,
-                                             timestamp: uint64(now),
+                                             timestamp: uint64(block.timestamp),
                                              outstandingAmount: uint192(-balance)})
         );
     }
@@ -520,10 +461,10 @@ contract Exchange is Utils, Ownable {
 
     /* Error Codes
 
-        E1: Insufficient Balance,
-        E2: Invalid Signature,
-        E3: Invalid Order Info,
-        E4: Order cancelled or expired,
+        E1: Insufficient Balance, flavor S - stake
+        E2: Invalid Signature, flavor B,S - buyer, seller
+        E3: Invalid Order Info, flavor G - general, M - wrong matcher, M2 unauthorized matcher, As - asset mismatch, AmB/AmS - amount mismatch (buyer,seller), PrB/PrS - price mismatch(buyer,seller), D - direction mismatch,
+        E4: Order expired, flavor B,S - buyer,seller
         E5: Contract not active,
         E6: Transfer error
         E7: Incorrect state prior to liquidation
@@ -531,5 +472,103 @@ contract Exchange is Utils, Ownable {
         E9: Data for liquidation handling is outdated
         E10: Incorrect state after liquidation
         E11: Amount overflow
+        E12: Incorrect filled amount, flavor G,B,S: general(overflow), buyer order overflow, seller order overflow
+        E14: Authorization error, sfs - seizeFromStake
     */
+
+// OrionVault part, will be moved in right place after successfull tests
+
+    enum StakePhase{ NOTSTAKED, LOCKING, LOCKED, RELEASING, READYTORELEASE, FROZEN }
+
+    struct Stake {
+      uint64 amount; // 100m ORN in circulation fits uint64
+      StakePhase phase;
+      uint64 lastActionTimestamp;
+    }
+
+    uint64 constant releasingDuration = 3600*24;
+    mapping(address => Stake) private stakingData;
+
+
+
+    function getStake(address user) public view returns (Stake memory){
+        Stake memory stake = stakingData[user];
+        if(stake.phase == StakePhase.LOCKING && (block.timestamp - stake.lastActionTimestamp) > 0) {
+          stake.phase = StakePhase.LOCKED;
+        } else if(stake.phase == StakePhase.RELEASING && (block.timestamp - stake.lastActionTimestamp) > releasingDuration) {
+          stake.phase = StakePhase.READYTORELEASE;
+        }
+        return stake;
+    }
+
+    function getStakeBalance(address user) public view returns (uint256) {
+        return getStake(user).amount;
+    }
+
+    function getStakePhase(address user) public view returns (StakePhase) {
+        return getStake(user).phase;
+    }
+
+    function getLockedStakeBalance(address user) public view returns (uint256) {
+      Stake memory stake = getStake(user);
+      if(stake.phase == StakePhase.LOCKED || stake.phase == StakePhase.FROZEN)
+        return stake.amount;
+      return 0;
+    }
+
+
+
+    function postponeStakeRelease(address user) external onlyOwner{
+        Stake storage stake = stakingData[user];
+        stake.phase = StakePhase.FROZEN;
+    }
+
+    function allowStakeRelease(address user) external onlyOwner {
+        Stake storage stake = stakingData[user];
+        stake.phase = StakePhase.READYTORELEASE;
+    }
+
+
+
+    function requestReleaseStake() public {
+        address user = _msgSender();
+        Stake memory current = getStake(user);
+        require(liabilities[user].length == 0, "Can not release stake: user has liabilities");
+        if(current.phase == StakePhase.LOCKING || current.phase == StakePhase.READYTORELEASE) {
+          Stake storage stake = stakingData[_msgSender()];
+          assetBalances[user][address(_orionToken)] += stake.amount;
+          stake.amount = 0;
+          stake.phase = StakePhase.NOTSTAKED;
+        } else if (current.phase == StakePhase.LOCKED) {
+          Stake storage stake = stakingData[_msgSender()];
+          stake.phase = StakePhase.RELEASING;
+          stake.lastActionTimestamp = uint64(block.timestamp);
+        } else {
+          revert("Can not release funds from this phase");
+        }
+    }
+
+    function lockStake(uint64 amount) public {
+        address user = _msgSender();
+        require(assetBalances[user][address(_orionToken)]>amount, "E1S");
+        Stake storage stake = stakingData[user];
+
+        assetBalances[user][address(_orionToken)] -= amount;
+        stake.amount += amount;
+        
+        if(stake.phase != StakePhase.FROZEN) {
+          stake.phase = StakePhase.LOCKING; //what is frozen should stay frozen
+        }
+        stake.lastActionTimestamp = uint64(block.timestamp);
+    }
+
+    function seizeFromStake(address user, address receiver, uint64 amount) public {
+        require(msg.sender == address(this), "E14");
+        Stake storage stake = stakingData[user];
+        require(stake.amount >= amount, "UX"); //TODO
+        stake.amount -= amount;
+        assetBalances[receiver][address(_orionToken)] += amount;
+    }
+
+
 }

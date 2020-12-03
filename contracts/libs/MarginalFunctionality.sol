@@ -1,7 +1,7 @@
-pragma solidity ^0.6.0;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 import "../PriceOracleInterface.sol";
-import "../StakingInterface.sol";
+import "../OrionVaultInterface.sol";
 
 
 library MarginalFunctionality {
@@ -38,7 +38,7 @@ library MarginalFunctionality {
     struct UsedConstants {
       address user;
       address _oracleAddress;
-      address _stakingContractAddress;
+      address _orionVaultContractAddress;
       address _orionTokenAddress;
       uint64 positionOverdue;
       uint64 priceOverdue;
@@ -56,7 +56,12 @@ library MarginalFunctionality {
           address asset = collateralAssets[i];
           if(assetBalances[constants.user][asset]<0)
               continue; // will be calculated in calcLiabilities
-          (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
+          (uint64 price, uint64 timestamp) = (1e8, 0xfffffff000000000);
+
+          if(asset != constants._orionTokenAddress) {
+            (price, timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
+          }
+
           // balance: i192, price u64 => balance*price fits i256
           // since generally balance <= N*maxInt112 (where N is number operations with it),
           // assetValue <= N*maxInt112*maxUInt64/1e8.
@@ -64,10 +69,13 @@ library MarginalFunctionality {
           int192 assetValue = int192(int256(assetBalances[constants.user][asset])*price/1e8);
           // Overflows logic holds here as well, except that N is the number of
           // operations for all assets
-          weightedPosition += uint8Percent(assetValue, assetRisks[asset]);
-          totalPosition += assetValue;
-          outdated = outdated ||
-                          ((timestamp + constants.priceOverdue) < now);
+          if(assetValue>0) {
+            weightedPosition += uint8Percent(assetValue, assetRisks[asset]);
+            totalPosition += assetValue;
+            // if assetValue == 0  ignore outdated price
+            outdated = outdated ||
+                            ((timestamp + constants.priceOverdue) < block.timestamp);
+          }
         }
         return (outdated, weightedPosition, totalPosition);
     }
@@ -91,9 +99,9 @@ library MarginalFunctionality {
                                         );
           weightedPosition += liabilityValue; //already negative since balance is negative
           totalPosition += liabilityValue;
-          overdue = overdue || ((liability.timestamp + constants.positionOverdue) < now);
+          overdue = overdue || ((liability.timestamp + constants.positionOverdue) < block.timestamp);
           outdated = outdated ||
-                          ((timestamp + constants.priceOverdue) < now);
+                          ((timestamp + constants.priceOverdue) < block.timestamp);
         }
 
         return (outdated, overdue, weightedPosition, totalPosition);
@@ -117,7 +125,7 @@ library MarginalFunctionality {
                            assetBalances,
                            constants
                            );
-        uint64 lockedAmount = StakingInterface(constants._stakingContractAddress)
+        uint64 lockedAmount = OrionVaultInterface(constants._orionVaultContractAddress)
                                   .getLockedStakeBalance(constants.user);
         int192 weightedStake = uint8Percent(int192(lockedAmount), constants.stakeRisk);
         weightedPosition += weightedStake;
@@ -187,7 +195,7 @@ library MarginalFunctionality {
           }
           else {
             liability.outstandingAmount = uint192(-currentBalance);
-            liability.timestamp = uint64(now);
+            liability.timestamp = uint64(block.timestamp);
           }
         } else {
             liability.outstandingAmount -= depositAmount;
@@ -214,7 +222,7 @@ library MarginalFunctionality {
         assetBalances[liquidator][redeemedAsset] -= amount;
         assetBalances[constants.user][redeemedAsset] += amount;
         (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
-        require((timestamp + constants.priceOverdue) > now, "E9"); //Price is outdated
+        require((timestamp + constants.priceOverdue) > block.timestamp, "E9"); //Price is outdated
 
         int64 orionAmount = reimburseLiquidator(amount, price, liquidator, assetBalances, constants);
         assetBalances[liquidator][constants._orionTokenAddress] += orionAmount;
@@ -255,7 +263,7 @@ library MarginalFunctionality {
           assetBalances[constants.user][constants._orionTokenAddress] -= int192(fromBalance);
         }
         if(fromStake>0) {
-          StakingInterface(constants._stakingContractAddress).seizeFromStake(constants.user, liquidator, uint64(orionAmount));
+          OrionVaultInterface(constants._orionVaultContractAddress).seizeFromStake(constants.user, liquidator, uint64(orionAmount));
         }
     }
 }

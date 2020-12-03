@@ -1,4 +1,4 @@
-pragma solidity ^0.6.0;
+pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
@@ -129,18 +129,18 @@ library LibValidator {
         uint256 currentTime,
         address allowedMatcher
     ) public pure returns (bool success) {
-        require(validateV3(buyOrder), "E2");
-        require(validateV3(sellOrder), "E2");
+        require(validateV3(buyOrder), "E2B");
+        require(validateV3(sellOrder), "E2S");
 
         // Same matcher address
         require(
             buyOrder.matcherAddress == sender &&
                 sellOrder.matcherAddress == sender,
-            "E3"
+            "E3M"
         );
 
         if(allowedMatcher != address(0)) {
-          require(buyOrder.matcherAddress == allowedMatcher, "E3");
+          require(buyOrder.matcherAddress == allowedMatcher, "E3M2");
         }
 
 
@@ -148,22 +148,22 @@ library LibValidator {
         require(
             buyOrder.baseAsset == sellOrder.baseAsset &&
                 buyOrder.quoteAsset == sellOrder.quoteAsset,
-            "E3"
+            "E3As"
         );
 
         // Check order amounts
-        require(filledAmount <= buyOrder.amount, "E3");
-        require(filledAmount <= sellOrder.amount, "E3");
+        require(filledAmount <= buyOrder.amount, "E3AmB");
+        require(filledAmount <= sellOrder.amount, "E3AmS");
 
         // Check Price values
         require(filledPrice <= buyOrder.price, "E3");
         require(filledPrice >= sellOrder.price, "E3");
 
         // Check Expiration Time. Convert to seconds first
-        require(buyOrder.expiration.div(1000) >= currentTime, "E4");
-        require(sellOrder.expiration.div(1000) >= currentTime, "E4");
+        require(buyOrder.expiration.div(1000) >= currentTime, "E4B");
+        require(sellOrder.expiration.div(1000) >= currentTime, "E4S");
 
-        require( buyOrder.buySide==1 && sellOrder.buySide==0, "EX");
+        require( buyOrder.buySide==1 && sellOrder.buySide==0, "E3D");
         success = true;
     }
 }
