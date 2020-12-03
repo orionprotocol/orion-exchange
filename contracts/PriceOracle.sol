@@ -10,7 +10,7 @@ import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
  * @dev Contract for storing and providing price data for the Orion Protocol
  * @author @EmelyanenkoK
  */
-contract PriceOracle is EIP712Interface, Ownable {
+contract PriceOracle is /* EIP712Interface, */ Ownable {
 
     struct Prices {
         address[] assetAddresses;
@@ -24,11 +24,11 @@ contract PriceOracle is EIP712Interface, Ownable {
         uint64 timestamp;
     }
 
-    bytes32 public constant PRICES_TYPEHASH = keccak256(
+    /*bytes32 public constant PRICES_TYPEHASH = keccak256(
         abi.encodePacked(
             "Prices(address[] assetAddresses,uint64[] prices,uint64 timestamp)"
         )
-    );
+    );*/
 
     address public oraclePublicKey;
     address public baseAsset;
