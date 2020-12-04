@@ -1,7 +1,7 @@
 pragma solidity ^0.7.0;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts-ethereum-package/contracts/access/Ownable.sol";
+import "./utils/Ownable.sol";
 import "./ExchangeStorage.sol";
 
 abstract contract OrionVault is ExchangeStorage, OwnableUpgradeSafe {
