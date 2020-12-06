@@ -137,9 +137,10 @@ contract Exchange is OrionVault, ReentrancyGuard {
 
         address user = msg.sender;
 
-        require(assetBalances[user][assetAddress]>=safeAmountDecimal && checkPosition(user), "E1w"); //TODO
         assetBalances[user][assetAddress] -= safeAmountDecimal;
         
+        require(assetBalances[user][assetAddress]>=0 && checkPosition(user), "E1w"); //TODO
+
         uint256 _amount = uint256(amount);
         if(assetAddress == address(0)) {
           (bool success, ) = user.call{value:_amount}("");

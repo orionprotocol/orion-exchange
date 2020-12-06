@@ -16,12 +16,10 @@ let oraclePubkey = "";
 module.exports = async (deployer, network, accounts) => {
   if (network === "development") {
     oraclePubkey = accounts[2];
-    await deployer.deploy(SafeMath);
     await deployer.deploy(LibValidator);
     await deployer.deploy(LibUnitConverter);
     await deployer.deploy(MarginalFunctionality);
 
-    await deployer.link(SafeMath, Exchange);
     await deployer.link(LibValidator, Exchange);
     await deployer.link(LibUnitConverter, Exchange);
     await deployer.link(MarginalFunctionality,Exchange);
@@ -35,12 +33,10 @@ module.exports = async (deployer, network, accounts) => {
   if (network === "ropsten") {
     oraclePubkey = "0xC19D917a88e07e5040cD2443FB3a026838C3b852";
 
-    await deployer.deploy(SafeMath);
     await deployer.deploy(LibValidator);
     await deployer.deploy(LibUnitConverter);
     await deployer.deploy(MarginalFunctionality);
 
-    await deployer.link(SafeMath, Exchange);
     await deployer.link(LibValidator, Exchange);
     await deployer.link(LibUnitConverter, Exchange);
     await deployer.link(MarginalFunctionality,Exchange);
@@ -56,4 +52,5 @@ module.exports = async (deployer, network, accounts) => {
     await exchangeInstance.updateAssetRisks(["0x0000000000000000000000000000000000000000", "0xfc1cd13a7f126efd823e373c4086f69beb8611c2","0xfc25454ac2db9f6ab36bc0b0b034b41061c00982"], [190, 180, 191]);
 
   }
+
 };

@@ -260,6 +260,7 @@ contract("Exchange", ([owner, broker, user2, liquidator, priceProvider]) => {
           from: broker
         }).should.be.rejected;
     });
+
     it("correct broker position after marginal trade", async () => {
       let brokerPosition = await exchange.calcPosition(broker);
       let expectedLiability = -(WBTCPrice*1e5/1e8);
@@ -278,6 +279,56 @@ contract("Exchange", ([owner, broker, user2, liquidator, priceProvider]) => {
       brokerPosition.weightedPosition.toString().should.be.equal(String(expectedWeightedPosition));
       brokerPosition.totalPosition.toString().should.be.equal(String(expectedTotalPosition));
     });
+
+    it("can not withdraw if negative position after", async () => {
+
+      //make position deep enough to make stake alone insufficient for collateral
+      sellOrder  = await orders.generateOrder(broker, matcher, 0,
+                                             wbtc, orion, orion,
+                                             1e7,
+                                             WBTCPrice,
+                                             0);
+      buyOrder  = await orders.generateOrder(user2, matcher, 1,
+                                             wbtc, orion, orion,
+                                             1e7,
+                                             WBTCPrice,
+                                             0);
+      await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          WBTCPrice,
+          1e7,
+          { from: matcher }
+        ).should.be.fulfilled;
+
+
+      let orionAmount = await exchange.getBalance(orion.address, broker);
+      await exchange.withdraw(orion.address, orionAmount, {
+          from: broker
+        }).should.be.rejected;
+
+      //return back
+
+      sellOrder  = await orders.generateOrder(broker, matcher, 1,
+                                             wbtc, orion, orion,
+                                             1e7,
+                                             WBTCPrice,
+                                             0);
+      buyOrder  = await orders.generateOrder(user2, matcher, 0,
+                                             wbtc, orion, orion,
+                                             1e7,
+                                             WBTCPrice,
+                                             0);
+      await exchange.fillOrders(
+          sellOrder.order,
+          buyOrder.order,
+          WBTCPrice,
+          1e7,
+          { from: matcher }
+        ).should.be.fulfilled;
+    });
+
+
     it("correct liability list after marginal trade", async () => {
       let l1 = await exchange.liabilities(broker,0);
       await exchange.liabilities(broker,1).should.be.rejected;
