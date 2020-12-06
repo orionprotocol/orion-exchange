@@ -10,6 +10,8 @@ const ChainManipulation = require("./helpers/ChainManipulation");
 
 
 let PriceOracle = artifacts.require("PriceOracle");
+const Orion = artifacts.require("Orion");
+let AggregatorV3InterfaceStub = artifacts.require("AggregatorV3InterfaceStub");
 
 let priceOracle;
 
@@ -18,6 +20,9 @@ const asset0="0x0000000000000000000000000000000000000000",
       asset2="0x0000000000000000000000000000000000000002";
 let prices, msgParams1, msgParams2;
 
+let ornAggregator, a2Aggregator, a3Aggregator;
+let orion;
+let orn2eth, a2_2_eth, a3_2_eth, tm;
 
 async function getLastEvent(eventName, user) {
   let events = await priceOracle.getPastEvents(eventName, {
@@ -140,7 +145,7 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
   });
 
   describe("PriceOracle::address authorization", () => {
-    
+
     it("unauthorized address can not provide data", async () => {
       prices= {
         assetAddresses: [asset2],
@@ -206,6 +211,47 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
         signature: "0x0"
       };
       priceOracle.provideDataAddressAuthorization(prices, {from: user2}).should.be.rejected;
+    });
+
+  });
+
+  describe("PriceOracle::ChainLink", async () => {
+    it("Init Chainlink stubs", async () => {
+      orion = await Orion.deployed();
+      orn2eth = Math.floor(0.00575e18);
+      a2_2_eth = '1681000000000000'; //usdt
+      a3_2_eth = '32130000000000000000'; //btc
+      tm = await ChainManipulation.getBlokchainTime();
+      let ornAggregator = await AggregatorV3InterfaceStub.new();
+      let a2Aggregator = await AggregatorV3InterfaceStub.new();
+      let a3Aggregator = await AggregatorV3InterfaceStub.new();
+      await ornAggregator.setData(0,orn2eth, tm ,tm,0, 18);
+      await a2Aggregator.setData(0,a2_2_eth, tm ,tm,0, 18);
+      await a3Aggregator.setData(0,a3_2_eth, tm ,tm,0, 18);
+      await priceOracle.setChainLinkAggregators([orion.address, asset1, asset2],
+                   [ornAggregator.address, a2Aggregator.address, a3Aggregator.address]).
+                   should.be.fulfilled;
+    });
+
+    it("Collect data from ChainLink", async () => {
+       await priceOracle.getChainLinkPriceData([asset1, asset2]).should.be.fulfilled;
+    });
+
+    it("Check correct data", async () => {
+      let data = await priceOracle.givePrices([asset0, asset1, asset2]);
+
+      //ORN/ETH = 1e8/0.00575 = 17391304347 (173 ORN for 1 ETH)
+      //ORN/USDT = 29234782 (0.292 ORN for 1 USDT)
+      //ORN/BTC = 558782608695 ( 5582 ORN per 1 BTC)
+
+      let _returnedPrices = [];
+      let _returnedTS = [];
+      for (let i of data) {
+        _returnedPrices.push(parseInt(i.price));
+        _returnedTS.push(parseInt(i.timestamp));
+      }
+      JSON.stringify(_returnedPrices).should.be.equal(JSON.stringify([17391304347,29234782,558782608695]));
+      JSON.stringify(_returnedTS).should.be.equal(JSON.stringify([tm,tm,tm]));
     });
 
   });

@@ -33,7 +33,7 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
     address public oraclePublicKey;
     address public baseAsset;
     mapping(address => PriceDataOut) public assetPrices;
-    mapping(address => address) public chainLinkUSDTAggregator;
+    mapping(address => address) public chainLinkETHAggregator;
     mapping(address => bool) public priceProviderAuthorization;
 
     constructor(address publicKey, address _baseAsset) public {
@@ -134,42 +134,57 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
     }
     */
     function getChainLinkPriceData(address[] memory assets) public {
-      address baseAggregator = chainLinkUSDTAggregator[baseAsset];
+      address baseAggregator = chainLinkETHAggregator[baseAsset];
       if(baseAggregator == address(0))
         return;
       (
-          uint80 roundID, 
-          int basePrice,
+          uint80 roundID,
+          int _basePrice,
           uint startedAt,
           uint timestamp,
           uint80 answeredInRound
       ) = AggregatorV3Interface(baseAggregator).latestRoundData();
+      require(_basePrice>=0, "Negative base price is not allowed");
+      uint basePrice = uint(_basePrice);
+      
+      //ETH/ORN  
+      PriceDataOut storage baseAssetData = assetPrices[address(0)];
+      if(baseAssetData.timestamp<timestamp) {
+          uint price = ( (10**AggregatorV3Interface(baseAggregator).decimals()) *1e8)/basePrice;
+          require(price<2**64-1, "Too big price");
+          baseAssetData.price = uint64(price);
+          baseAssetData.timestamp = uint64(timestamp);
+      }
+        
       for(uint8 i=0; i<assets.length; i++) {
         address currentAsset = assets[i];
-        address currentAggregator = chainLinkUSDTAggregator[currentAsset];
-        if( currentAggregator == address(0)) 
+        address currentAggregator = chainLinkETHAggregator[currentAsset];
+        if( currentAggregator == address(0))
           continue;
         (
-            uint80 aRoundID, 
-            int aBasePrice,
+            uint80 aRoundID,
+            int _aPrice,
             uint aStartedAt,
             uint aTimestamp,
             uint80 aAnsweredInRound
         ) = AggregatorV3Interface(currentAggregator).latestRoundData();
+        require(_aPrice>=0, "Negative price is not allowed");
+        uint aPrice = uint(_aPrice);
         uint newTimestamp = timestamp > aTimestamp? aTimestamp : timestamp;
-        
+
         PriceDataOut storage assetData = assetPrices[currentAsset];
         if(assetData.timestamp<newTimestamp) {
-          assetData.price = uint64((aBasePrice *1e8)/basePrice);
+          uint price = (aPrice *1e8)/basePrice;
+          require(price<2**64-1, "Too big price");
+          assetData.price = uint64(price);
           assetData.timestamp = uint64(newTimestamp);
         }
 
       }
-    }
-    
+    }    
     function setChainLinkAggregators(address[] memory assets, address[] memory aggregatorAddresses) public onlyOwner {
       for(uint8 i=0; i<assets.length; i++) {
-        chainLinkUSDTAggregator[assets[i]] = aggregatorAddresses[i];
+        chainLinkETHAggregator[assets[i]] = aggregatorAddresses[i];
       }
     }
     
