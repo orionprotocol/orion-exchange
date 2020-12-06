@@ -9,7 +9,7 @@ library LibValidator {
 
     string public constant DOMAIN_NAME = "Orion Exchange";
     string public constant DOMAIN_VERSION = "1";
-    uint256 public constant CHAIN_ID = 3;
+    uint256 public constant CHAIN_ID = 1;
     bytes32
         public constant DOMAIN_SALT = 0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557;
 

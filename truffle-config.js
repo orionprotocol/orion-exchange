@@ -1,5 +1,11 @@
 require("dotenv").config();
 const HDWalletProvider = require("@truffle/hdwallet-provider");
+const providerFactory = (network) =>
+    new HDWalletProvider(
+        process.env.MNEMONIC,
+        `https://${network}.infura.io/v3/${process.env.INFURA_API_KEY}`,
+        Number(process.env.MNEMONIC_ADDRESS_INDEX)
+    );
 
 module.exports = {
   compilers: {
@@ -8,8 +14,8 @@ module.exports = {
       settings: {
         optimizer: {
           enabled: true,
-          runs: 1
-        }
+          runs: 200
+        },
       }
     }
   },
@@ -21,16 +27,17 @@ module.exports = {
       gas: 6721975
     },
     ropsten: {
-      provider: () => {
-        return new HDWalletProvider(
-          process.env.MNEMOMIC,
-          `https://ropsten.infura.io/v3/${process.env.INFURA_API_KEY}`
-        );
-      },
+      provider: () => providerFactory("ropsten"),
       network_id: "3",
       gasPrice: 25e9,
       gas: 6721975,
     },
+    mainnet: {
+      provider: () => providerFactory("mainnet"),
+      network_id: "1",
+      gasPrice: 32e9,
+      gas: 6721975,
+    }
   },
   mocha: {
     enableTimeouts: false,

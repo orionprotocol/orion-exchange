@@ -54,18 +54,18 @@ module.exports = async (deployer, network, accounts) => {
   }
 
 
- if (network === "live") {
-    let oracleAddress = "???";
+ if (network === "mainnet") {
+    let oracleAddress = "0x3b9E04C53B45A9386de378ab9c27dddd4E15725F";
     let allowedMatcher = "0x15E030E12cD2C949181BFf268cbEF26F524d7929"
 
     let ORN = "0x0258F474786DdFd37ABCE6df6BBb1Dd5dfC4434a"
     let ETH = "0x0000000000000000000000000000000000000000"
     let USDT = "0xdac17f958d2ee523a2206206994597c13d831ec7"
 
-    let stakedOrionWeight = 242; // 242/255
-    let orionWeight = 190; // 190/255
-    let ethWeight = 190; // 190/255
-    let usdtWeight = 180; // 180/255
+    let stakedOrionWeight = 242; // 242/255 94.9%
+    let orionWeight = 190; // 190/255 74.5%
+    let ethWeight = 190; // 190/255 74.5%
+    let usdtWeight = 180; // 180/255 70.6%
 
     let liquidatorPremium = 12;
     let priceOverdue = 3 * 3600; // Time after which we need fresh prices
