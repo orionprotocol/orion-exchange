@@ -27,7 +27,7 @@ module.exports = async (deployer, network, accounts) => {
     let priceOracleInstance = await deployer.deploy(PriceOracle, oraclePubkey, Orion.address);
     let exchangeInstance = await deployProxy(Exchange, {unsafeAllowCustomTypes: true, unsafeAllowLinkedLibraries: true});
 
-    await exchangeInstance.setBasicParams("0x0000000000000000000000000000000000000000", Orion.address, PriceOracle.address, accounts[0]);
+    await exchangeInstance.setBasicParams(Orion.address, PriceOracle.address, accounts[0]);
 
   }
   if (network === "ropsten") {
@@ -47,7 +47,7 @@ module.exports = async (deployer, network, accounts) => {
     let exchangeInstance = await deployProxy(Exchange, {unsafeAllowCustomTypes: true, unsafeAllowLinkedLibraries: true});
 
     await priceOracleInstance.changePriceProviderAuthorization([oraclePubkey],[]);
-    await exchangeInstance.setBasicParams("0x0000000000000000000000000000000000000000", Orion.address, priceOracleInstance.address, "0x1FF516E5ce789085CFF86d37fc27747dF852a80a");
+    await exchangeInstance.setBasicParams(Orion.address, priceOracleInstance.address, "0x1FF516E5ce789085CFF86d37fc27747dF852a80a");
     await exchangeInstance.updateMarginalSettings(["0x0000000000000000000000000000000000000000", "0xfc1cd13a7f126efd823e373c4086f69beb8611c2", "0xfc25454ac2db9f6ab36bc0b0b034b41061c00982"], 242, 12, 3600*3, 3600*24);
     await exchangeInstance.updateAssetRisks(["0x0000000000000000000000000000000000000000", "0xfc1cd13a7f126efd823e373c4086f69beb8611c2","0xfc25454ac2db9f6ab36bc0b0b034b41061c00982"], [190, 180, 191]);
 
@@ -85,8 +85,8 @@ module.exports = async (deployer, network, accounts) => {
     let exchangeInstance = await deployProxy(Exchange, {unsafeAllowCustomTypes: true, unsafeAllowLinkedLibraries: true});
 
     await priceOracleInstance.changePriceProviderAuthorization([oracleAddress],[]);
-    await exchangeInstance.setBasicParams("0x0000000000000000000000000000000000000000", Orion.address, priceOracleInstance.address, allowedMatcher);
-    await exchangeInstance.updateMarginalSettings([ORN, ETH, USDT], stakedOrionWeight, liquidatorPremium, priceOverdue, 3600*24);
+    await exchangeInstance.setBasicParams(Orion.address, priceOracleInstance.address, allowedMatcher);
+    await exchangeInstance.updateMarginalSettings([ORN, ETH, USDT], stakedOrionWeight, liquidatorPremium, priceOverdue, positionOverdue);
     await exchangeInstance.updateAssetRisks([ORN, ETH, USDT], [orionWeight, ethWeight, usdtWeight]);
 
   }

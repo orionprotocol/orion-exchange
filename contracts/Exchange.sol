@@ -64,7 +64,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
         OwnableUpgradeSafe.__Ownable_init();
     }
 
-    function setBasicParams(address orionVaultContractAddress, address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
+    function setBasicParams(address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
       _orionToken = IERC20(orionToken);
       _oracleAddress = priceOracleAddress;
       _allowedMatcher = allowedMatcher;
