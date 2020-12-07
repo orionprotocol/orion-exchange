@@ -20,11 +20,4 @@ module.exports = async (deployer, network) => {
 
 
   }
-  if (network === "ropsten") {
-    await deployer.deploy(WXRP);
-    await deployer.deploy(WBTC);
-    await deployer.deploy(WETH);
-    await deployer.deploy(Orion);
-
-  }
 };

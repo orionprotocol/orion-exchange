@@ -35,7 +35,7 @@ module.exports = {
     mainnet: {
       provider: () => providerFactory("mainnet"),
       network_id: "1",
-      gasPrice: 32e9,
+      gasPrice: 37e9,
       gas: 6721975,
     }
   },
