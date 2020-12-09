@@ -221,7 +221,7 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
       orn2eth = Math.floor(0.00575e18);
       a2_2_eth = '1681000000000000'; //usdt
       a3_2_eth = '32130000000000000000'; //btc
-      tm = await ChainManipulation.getBlokchainTime();
+      tm = await ChainManipulation.getBlokchainTime()-600;
       let ornAggregator = await AggregatorV3InterfaceStub.new();
       let a2Aggregator = await AggregatorV3InterfaceStub.new();
       let a3Aggregator = await AggregatorV3InterfaceStub.new();
@@ -251,7 +251,16 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
         _returnedTS.push(parseInt(i.timestamp));
       }
       JSON.stringify(_returnedPrices).should.be.equal(JSON.stringify([17391304347,29234782,558782608695]));
-      JSON.stringify(_returnedTS).should.be.equal(JSON.stringify([tm,tm,tm]));
+      let ctm = await ChainManipulation.getBlokchainTime();
+      (Math.abs(ctm-_returnedTS[0])<3).should.be.equal(true);
+    });
+
+    it("After 24h timestamp stops autoupdate", async () => {
+       await ChainManipulation.advanceTime(24*3600);
+       await priceOracle.getChainLinkPriceData([asset1, asset2]).should.be.fulfilled;
+       let data = await priceOracle.givePrices([asset0, asset1, asset2]);
+       let ctm = await ChainManipulation.getBlokchainTime();
+       (Math.abs(ctm-parseInt(data[0].timestamp))>23*3600).should.be.equal(true);
     });
 
   });

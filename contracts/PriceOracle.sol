@@ -144,6 +144,10 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
           uint timestamp,
           uint80 answeredInRound
       ) = AggregatorV3Interface(baseAggregator).latestRoundData();
+      uint now = block.timestamp;
+      if(now - timestamp < 24 hours) {
+        timestamp = now;
+      }
       require(_basePrice>=0, "Negative base price is not allowed");
       uint basePrice = uint(_basePrice);
       
@@ -169,6 +173,9 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
             uint80 aAnsweredInRound
         ) = AggregatorV3Interface(currentAggregator).latestRoundData();
         require(_aPrice>=0, "Negative price is not allowed");
+        if(now - timestamp < 24 hours) {
+          aTimestamp = now;
+        }
         uint aPrice = uint(_aPrice);
         uint newTimestamp = timestamp > aTimestamp? aTimestamp : timestamp;
 
