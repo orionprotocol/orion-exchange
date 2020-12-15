@@ -1,6 +1,7 @@
 const WXRP = artifacts.require("WXRP");
 const WBTC = artifacts.require("WBTC");
 const WETH = artifacts.require("WETH");
+const USDT = artifacts.require("USDT");
 const Orion = artifacts.require("Orion");
 const PriceOracle = artifacts.require("PriceOracle");
 const Exchange = artifacts.require("Exchange");
@@ -17,6 +18,7 @@ module.exports = async (deployer, network) => {
     await deployer.deploy(WBTC);
     await deployer.deploy(WETH);
     await deployer.deploy(Orion);
+    await deployer.deploy(USDT);
 
 
   }
