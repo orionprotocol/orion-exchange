@@ -377,7 +377,7 @@ contract("Exchange", ([owner, broker, user2, liquidator, priceProvider]) => {
       brokerPosition.totalPosition.toString().should.be.equal(String(expectedTotalPosition));
     });
 
-    it("broker can't open 4 liabilities", async () => {
+    /*it("broker can't open 4 liabilities", async () => {
       let trades = [
                     [{address:ZERO_ADDRESS}, 1e8, ETHPrice]
                    ];
@@ -401,7 +401,7 @@ contract("Exchange", ([owner, broker, user2, liquidator, priceProvider]) => {
         ).should.be.rejected;
       }
       await exchange.liabilities(broker,2).should.be.fulfilled;
-    });
+    });*/ //TODO move to 9_
 
     it("broker can reimburse liability via deposit", async () => {
       await depositAsset(wbtc, 2e5, broker);
