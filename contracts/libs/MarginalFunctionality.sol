@@ -134,7 +134,7 @@ library MarginalFunctionality {
         weightedPosition += _weightedPosition;
         totalPosition += _totalPosition;
         outdatedPrice = outdatedPrice || _outdatedPrice;
-        bool incorrect = (liabilities[constants.user].length > 3) ||
+        bool incorrect = (liabilities[constants.user].length > 10) ||
                          ((liabilities[constants.user].length>0) && (lockedAmount==0));
         Position memory result;
         if(_totalPosition<0) {
