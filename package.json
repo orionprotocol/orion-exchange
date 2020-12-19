@@ -5,13 +5,16 @@
   "main": "truffle-config.js",
   "scripts": {
     "compile": "truffle compile --all",
-    "deploy": "truffle migrate --reset --network gwan",
-    "test-balances": "truffle test test/2_balances.test.js --network gwan",
-    "test-orders": "truffle test test/3_orders.test.js --network gwan",
+    "deploy": "truffle migrate --reset --network development",
+    "deployTestnet": "truffle migrate --network testnet",
+    "deployMainnet": "truffle migrate --network mainnet",
+    "test-balances": "truffle test test/2_balances.test.js",
+    "test-orders": "truffle test test/3_orders.test.js",
     "test-orders-dev": "truffle test test/3_orders.test.js",
     "test-proxy-dev": "truffle test test/4_proxy.test.js",
     "flow": "node scripts/completeFlow.js",
-    "ganache": "ganache-cli --port 8544 --networkId 999 -m 'uphold wide shed another couch focus hidden soup lazy top salon salute'"
+    "ganache": "ganache-cli -i 666 -p 8545 -m 'uphold wide shed another couch focus hidden soup lazy top salon salute'",
+    "validate": "node scripts/validateV3"
   },
   "repository": {
     "type": "git",
@@ -25,22 +28,25 @@
   },
   "homepage": "https://github.com/orionprotocol/orion-exchange#readme",
   "dependencies": {
-    "@openzeppelin/contracts": "^2.4.0",
-    "@waves/waves-transactions": "^3.19.0",
-    "dotenv": "^8.1.0",
-    "eth-sig-util": "^2.5.0",
+    "@openzeppelin/contracts": "^3.3.0",
+    "@openzeppelin/contracts-ethereum-package": "^3.0.0",
+    "@chainlink/contracts": "^0.0.11",
+    "@truffle/hdwallet-provider": "^1.2.0",
+    "eth-sig-util": "^2.5.3",
     "ethers": "^4.0.37",
-    "iwan-sdk": "^1.1.1",
     "long": "^4.0.0",
-    "truffle-hdwallet-provider": "^1.0.17",
-    "wanchainjs-tx": "^1.5.0",
-    "web3": "^1.2.2"
+    "truffle-contract-size": "^2.0.0",
+    "web3": "^1.2.6"
   },
   "devDependencies": {
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
     "chai-shallow-deep-equal": "^1.4.6",
+    "dotenv": "^8.2.0",
     "eth-gas-reporter": "^0.2.11",
-    "truffle": "5.0.5"
+    "@openzeppelin/truffle-upgrades": "^1.1.1",
+    "truffle": "^5.1.55",
+    "truffle-contract-size": "^2.0.1",
+    "truffle-flattener": "^1.5.0"
   }
 }

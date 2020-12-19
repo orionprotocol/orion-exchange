@@ -1,34 +1,42 @@
+require("dotenv").config();
+const HDWalletProvider = require("@truffle/hdwallet-provider");
+const providerFactory = (network) =>
+    new HDWalletProvider(
+        process.env.MNEMONIC,
+        `https://${network}.infura.io/v3/${process.env.INFURA_API_KEY}`,
+        Number(process.env.MNEMONIC_ADDRESS_INDEX)
+    );
+
 module.exports = {
   compilers: {
     solc: {
-      version: "0.5.10",
-      // evmVersion: "byzantium",
-      optimizer: {
-        enabled: true,
-        runs: 200
+      version: '0.7.4',
+      settings: {
+        optimizer: {
+          enabled: true,
+          runs: 200
+        },
       }
     }
   },
   networks: {
-    gwan: {
-      host: "localhost",
-      port: 8545,
-      network_id: "*",
-      gas: 4712388,
-      gasPrice: 180e9,
-      from: "0xb35d39bb41c69e4377a16c08eda54999175c1cdd" // change this to the unlocked account in your gwan node
-    },
-    wanache: {
-      host: "127.0.0.1",
-      port: 7545,
-      network_id: "5777",
-      gas: 6721975
-    },
     development: {
       host: "127.0.0.1",
-      port: 8544,
-      network_id: "999",
-      gas: 6000000
+      port: 8545,
+      network_id: "*",
+      gas: 6721975
+    },
+    ropsten: {
+      provider: () => providerFactory("ropsten"),
+      network_id: "3",
+      gasPrice: 25e9,
+      gas: 6721975,
+    },
+    mainnet: {
+      provider: () => providerFactory("mainnet"),
+      network_id: "1",
+      gasPrice: 37e9,
+      gas: 6721975,
     }
   },
   mocha: {
@@ -37,7 +45,7 @@ module.exports = {
     reporter: "eth-gas-reporter",
     reporterOptions: {
       currency: "USD",
-      gasPrice: 10
-    }
-  }
+      gasPrice: 10,
+    },
+  },
 };

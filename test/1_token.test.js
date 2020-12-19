@@ -63,4 +63,5 @@ contract("WETH", ([owner, user1, user2, newMinter, random]) => {
         .fulfilled;
     });
   });
+
 });
