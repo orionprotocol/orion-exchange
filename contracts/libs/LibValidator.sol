@@ -49,6 +49,9 @@ library LibValidator {
         bytes signature;
     }
 
+    /**
+     * @dev validate order signature
+     */
     function validateV3(Order memory order) public pure returns (bool) {
         bytes32 domainSeparator = DOMAIN_SEPARATOR;
 
@@ -94,6 +97,9 @@ library LibValidator {
         return ecrecover(digest, v, r, s) == order.senderAddress;
     }
 
+    /**
+     * @returns hash order
+     */
     function getTypeValueHash(Order memory _order)
         internal
         pure
@@ -120,6 +126,9 @@ library LibValidator {
             );
     }
 
+    /**
+     * @dev basic checks of matching orders against each other
+     */
     function checkOrdersInfo(
         Order memory buyOrder,
         Order memory sellOrder,

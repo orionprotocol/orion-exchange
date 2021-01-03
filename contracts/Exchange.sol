@@ -60,15 +60,34 @@ contract Exchange is OrionVault, ReentrancyGuard {
 
     // MAIN FUNCTIONS
 
+    /**
+     * @dev Since Exchange will work behind the Proxy contract it can not have constructor
+     */
     function initialize() public payable initializer {
         OwnableUpgradeSafe.__Ownable_init();
     }
 
+    /**
+     * @dev set basic Exchange params
+     * @param orionToken - base token address
+     * @param priceOracleAddress - adress of PriceOracle contract
+     * @param allowedMatcher - address which has authorization to match orders
+     */
     function setBasicParams(address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
       _orionToken = IERC20(orionToken);
       _oracleAddress = priceOracleAddress;
       _allowedMatcher = allowedMatcher;
     }
+
+
+    /**
+     * @dev set marginal settings
+     * @param _collateralAssets - list of addresses of assets which may be used as collateral
+     * @param _stakeRisk - risk coefficient for staken orion as uint8 (0=0, 255=1)
+     * @param _liquidationPremium - premium for liquidator as uint8 (0=0, 255=1)
+     * @param _priceOverdue - time after that price became outdated
+     * @param _positionOverdue - time after that liabilities became overdue and may be liquidated
+     */
 
     function updateMarginalSettings(address[] memory _collateralAssets,
                                     uint8 _stakeRisk,
@@ -82,6 +101,11 @@ contract Exchange is OrionVault, ReentrancyGuard {
       positionOverdue = _positionOverdue;
     }
 
+    /**
+     * @dev set risk coefficients for collateral assets
+     * @param assets - list of assets
+     * @param risks - list of risks as uint8 (0=0, 255=1)
+     */
     function updateAssetRisks(address[] memory assets, uint8[] memory risks) public onlyOwner {
         for(uint16 i; i< assets.length; i++)
          assetRisks[assets[i]] = risks[i];
@@ -107,6 +131,9 @@ contract Exchange is OrionVault, ReentrancyGuard {
         generalDeposit(address(0), uint112(msg.value));
     }
 
+    /**
+     * @dev internal implementation of deposits
+     */
     function generalDeposit(address assetAddress, uint112 amount) internal {
         address user = msg.sender;
         bool wasLiability = assetBalances[user][assetAddress]<0;
@@ -185,6 +212,10 @@ contract Exchange is OrionVault, ReentrancyGuard {
         return balances;
     }
 
+    /**
+     * @dev Batch query of asset liabilities for a user
+     * @param user user address to query
+     */
     function getLiabilities(address user)
         public
         view
@@ -193,13 +224,16 @@ contract Exchange is OrionVault, ReentrancyGuard {
         return liabilities[user];
     }
     
-
+    /**
+     * @dev Return list of assets which can be used for collateral
+     */
     function getCollateralAssets() public view returns (address[] memory) {
         return collateralAssets;
     }
 
     /**
      * @dev get hash for an order
+     * @dev we use order hash as order id to prevent double matching of the same order
      */
     function getOrderHash(LibValidator.Order memory order) public pure returns (bytes32){
       return order.getTypeValueHash();
@@ -207,7 +241,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
 
 
     /**
-     * @dev get trades for a specific order
+     * @dev get filled amounts for a specific order
      */
     function getFilledAmounts(bytes32 orderHash, LibValidator.Order memory order)
         public
@@ -289,6 +323,9 @@ contract Exchange is OrionVault, ReentrancyGuard {
         );
     }
 
+    /**
+     * @dev wrapper for LibValidator methods, may be deleted.
+     */
     function validateOrder(LibValidator.Order memory order)
         public
         pure
@@ -342,8 +379,6 @@ contract Exchange is OrionVault, ReentrancyGuard {
             setLiability(user, order.matcherFeeAsset, temp);
         }
         assetBalances[order.matcherAddress][order.matcherFeeAsset] += order.matcherFee;
-        //generalTransfer(order.matcherFeeAsset, order.matcherAddress, order.matcherFee, true);
-        //IERC20(order.matcherFeeAsset).safeTransfer(order.matcherAddress, uint256(order.matcherFee)); //TODO not transfer, but add to balance
     }
 
     /**
@@ -377,12 +412,21 @@ contract Exchange is OrionVault, ReentrancyGuard {
     }
     */
 
+    /**
+     * @dev check user marginal position (compare assets and liabilities)
+     * @returns isPositive - boolean whether liabilities are covered by collateral or not
+     */
     function checkPosition(address user) public view returns (bool) {
         if(liabilities[user].length == 0)
           return true;
         return calcPosition(user).state == MarginalFunctionality.PositionState.POSITIVE;
     }
 
+    /**
+     * @dev internal methods which collect all variables used my MarginalFunctionality to one structure
+     * @param user
+     * @returns UsedConstants - MarginalFunctionality.UsedConstants structure
+     */
     function getConstants(address user)
              internal
              view
@@ -397,6 +441,11 @@ contract Exchange is OrionVault, ReentrancyGuard {
                                                   liquidationPremium);
     }
 
+    /**
+     * @dev calc user marginal position (compare assets and liabilities)
+     * @param user
+     * @returns position - MarginalFunctionality.Position structure
+     */
     function calcPosition(address user) public view returns (MarginalFunctionality.Position memory) {
         MarginalFunctionality.UsedConstants memory constants =
           getConstants(user);
@@ -408,6 +457,13 @@ contract Exchange is OrionVault, ReentrancyGuard {
 
     }
 
+    /**
+     * @dev method to cover some of overdue broker liabilities and get ORN in exchange
+            same as liquidation or margin call
+     * @param broker - broker which will be liquidated
+     * @param redeemedAsset - asset, liability of which will be covered
+     * @param amount - amount of covered asset
+     */
     function partiallyLiquidate(address broker, address redeemedAsset, uint112 amount) public {
         MarginalFunctionality.UsedConstants memory constants =
           getConstants(broker);
@@ -420,6 +476,12 @@ contract Exchange is OrionVault, ReentrancyGuard {
                                            amount);
     }
 
+    /**
+     * @dev method to add liability
+     * @param user - user which created liability
+     * @param asset - liability asset
+     * @param balance - current negative balance
+     */
     function setLiability(address user, address asset, int192 balance) internal {
         liabilities[user].push(
           MarginalFunctionality.Liability({
