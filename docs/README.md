@@ -30,10 +30,10 @@ Price oracle works as cache of prices obtained from various sources. Initially t
 
 ## Workflows
 
-Standart workflow is shown below:
+Standart workflow is shown below. `Mono` font labels on arrows are contract method names for corresponding actions:
 
-![TradeWorkflow](./workflow1.png)
+![TradeWorkflow](./workflow1.svg)
 
 However, if broker failed to cover short-term loans in timely manner the liquidator will cover them for broker, however at expense of addiional liquidation premium:
 
-![LiquidationWorkflow](./workflow2.png)
+![LiquidationWorkflow](./workflow2.svg)
