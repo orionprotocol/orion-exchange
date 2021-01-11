@@ -5,7 +5,7 @@ require("chai")
 
 const ChainManipulation = require("./helpers/ChainManipulation");
 
-let Exchange = artifacts.require("Exchange");
+let Exchange = artifacts.require("ExchangeWithUniswap");
 const Orion = artifacts.require("Orion");
 const LibValidator = artifacts.require("LibValidator");
 

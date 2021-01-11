@@ -237,7 +237,7 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable {
     /**
      * @dev Method to update list of ChainLink aggregators
      * @param assets - set of assets
-     * @param address - set of AggregatorV3Interface addresses
+     * @param aggregatorAddresses - set of AggregatorV3Interface addresses
      * List of available aggregators: https://docs.chain.link/docs/ethereum-addresses
      */
     function setChainLinkAggregators(address[] memory assets, address[] memory aggregatorAddresses) public onlyOwner {

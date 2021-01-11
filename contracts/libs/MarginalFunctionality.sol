@@ -61,10 +61,9 @@ library MarginalFunctionality {
      * @dev method to calc weighted and absolute collateral value
      * @notice it only count for assets in collateralAssets list, all other
                assets will add 0 to position.
-     * @returns (outdated, weightedPosition, totalPosition)
-                  - wether any price is outdated
-                  - weightedPosition in ORN
-                  - totalPosition in ORN
+     * @return outdated wether any price is outdated
+     * @return weightedPosition in ORN
+     * @return totalPosition in ORN
      */
     function calcAssets(address[] storage collateralAssets,
                         mapping(address => mapping(address => int192)) storage assetBalances,
@@ -102,11 +101,10 @@ library MarginalFunctionality {
 
     /**
      * @dev method to calc liabilities
-     * @returns (outdated, overdue, weightedPosition, totalPosition)
-                  - wether any price is outdated
-                  - wether any liability is overdue
-                  - weightedLiability == totalLiability in ORN
-                  - totalLiability in ORN
+     * @return outdated wether any price is outdated
+     * @return overdue wether any liability is overdue
+     * @return weightedPosition weightedLiability == totalLiability in ORN
+     * @return totalPosition totalLiability in ORN
      */
     function calcLiabilities(mapping(address => Liability[]) storage liabilities,
                              mapping(address => mapping(address => int192)) storage assetBalances,
@@ -137,7 +135,7 @@ library MarginalFunctionality {
 
     /**
      * @dev method to calc Position
-     * @returns position structure
+     * @return position structure
      */
     function calcPosition(
                         address[] storage collateralAssets,

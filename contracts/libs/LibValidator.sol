@@ -98,7 +98,7 @@ library LibValidator {
     }
 
     /**
-     * @returns hash order
+     * @return hash order
      */
     function getTypeValueHash(Order memory _order)
         internal
@@ -174,5 +174,26 @@ library LibValidator {
 
         require( buyOrder.buySide==1 && sellOrder.buySide==0, "E3D");
         success = true;
+    }
+
+    function checkOrderSingleMatch(
+        Order memory buyOrder,
+        address sender,
+        address allowedMatcher,
+        uint112 filledAmount,
+        uint256 currentTime,
+        address[] memory path
+    ) public pure returns (bool success) {
+        require(validateV3(buyOrder), "E2B");
+        require(buyOrder.matcherAddress == sender && buyOrder.matcherAddress == allowedMatcher, "E3M2");
+        require(
+            buyOrder.baseAsset == path[path.length-1] &&
+            buyOrder.quoteAsset == path[0],
+            "E3As"
+        );
+        require(filledAmount <= buyOrder.amount, "E3AmB");
+        require(buyOrder.expiration/1000 >= currentTime, "E4B");
+        require( buyOrder.buySide==1, "E3D");
+
     }
 }

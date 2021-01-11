@@ -3,7 +3,7 @@ require("chai")
   .use(require("chai-as-promised"))
   .should();
 
-const Exchange = artifacts.require("Exchange");
+const Exchange = artifacts.require("ExchangeWithUniswap");
 const LibValidator = artifacts.require("LibValidator");
 
 let exchange, lib;

@@ -7,7 +7,7 @@ const sigUtil = require("eth-sig-util");
 const privKeyHelper = require("./helpers/PrivateKeys.js");
 const orders = require("./helpers/Orders.js");
 
-const Exchange = artifacts.require("Exchange");
+const Exchange = artifacts.require("ExchangeWithUniswap");
 const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
 const LibValidator = artifacts.require("LibValidator");

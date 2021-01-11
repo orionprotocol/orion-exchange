@@ -414,7 +414,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
 
     /**
      * @dev check user marginal position (compare assets and liabilities)
-     * @returns isPositive - boolean whether liabilities are covered by collateral or not
+     * @return isPositive - boolean whether liabilities are covered by collateral or not
      */
     function checkPosition(address user) public view returns (bool) {
         if(liabilities[user].length == 0)
@@ -424,8 +424,8 @@ contract Exchange is OrionVault, ReentrancyGuard {
 
     /**
      * @dev internal methods which collect all variables used my MarginalFunctionality to one structure
-     * @param user
-     * @returns UsedConstants - MarginalFunctionality.UsedConstants structure
+     * @param user user address to query
+     * @return UsedConstants - MarginalFunctionality.UsedConstants structure
      */
     function getConstants(address user)
              internal
@@ -443,8 +443,8 @@ contract Exchange is OrionVault, ReentrancyGuard {
 
     /**
      * @dev calc user marginal position (compare assets and liabilities)
-     * @param user
-     * @returns position - MarginalFunctionality.Position structure
+     * @param user user address to query
+     * @return position - MarginalFunctionality.Position structure
      */
     function calcPosition(address user) public view returns (MarginalFunctionality.Position memory) {
         MarginalFunctionality.UsedConstants memory constants =
