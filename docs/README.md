@@ -27,3 +27,13 @@ To have ability to upgrade contract, exchange is developed behind the Proxy. We 
 
 ### PriceOracle
 Price oracle works as cache of prices obtained from various sources. Initially there were three possible methods to provide price data 1) signed data by oraclePublicKey, 2) data provided by authorized address, 3) chainlink aggregators. Currently, first option is commented out. Price oracle retrieve prices, if necessary, calculates prices relative to ORN from other pairs and stores them to be consimed by Exchange contract.
+
+## Workflows
+
+Standart workflow is shown below. `Mono` font labels on arrows are contract method names for corresponding actions:
+
+![TradeWorkflow](./workflow1.svg)
+
+However, if broker failed to cover short-term loans in timely manner the liquidator will cover them for broker, however at expense of addiional liquidation premium:
+
+![LiquidationWorkflow](./workflow2.svg)
