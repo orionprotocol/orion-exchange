@@ -49,7 +49,7 @@ let generateData = async(assets,priceData) => {
         assetAddresses: assets,
         prices: priceData,
         timestamp: await ChainManipulation.getBlokchainTime(),
-        signature: "0x0"
+        signature: "0x00"
       };
       return prices;
 }      
