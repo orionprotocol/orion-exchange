@@ -102,7 +102,7 @@ contract("Exchange", ([owner, broker, user2, liquidator, priceProvider]) => {
         assetAddresses: assets,
         prices: priceData,
         timestamp: await ChainManipulation.getBlokchainTime(),
-        signature: "0x0"
+        signature: "0x00"
       };
       if(!signatureAuth){
         return prices;
@@ -131,7 +131,7 @@ contract("Exchange", ([owner, broker, user2, liquidator, priceProvider]) => {
         await depositAsset(weth, initialWETHBalance, user);
         await depositAsset(wxrp, initialWXRPBalance, user);
 
-        exchange.deposit({ from: user, value: String(initialRawETHBalance) });
+        await exchange.deposit({ from: user, value: String(initialRawETHBalance) });
         let balanceAsset = await exchange.getBalance(ZERO_ADDRESS, user);
         balanceAsset.toString().should.be.equal(String(initialETHBalance));
       }
