@@ -176,7 +176,7 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
         assetAddresses: [asset2],
         prices: [newPrice],
         timestamp: newTs,
-        signature: "0x0"
+        signature: "0x00"
       };
       priceOracle.provideDataAddressAuthorization(prices, {from: user2}).should.be.fulfilled;
       let data = await priceOracle.givePrices([asset2]);
@@ -192,7 +192,7 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
         assetAddresses: [asset2],
         prices: [newPrice],
         timestamp: initialData[0].timestamp - 10,
-        signature: "0x0"
+        signature: "0x00"
       };
       priceOracle.provideDataAddressAuthorization(prices, {from: user2}).should.be.fulfilled;
       let data = await priceOracle.givePrices([asset2]);
@@ -208,7 +208,7 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
         assetAddresses: [asset2],
         prices: [newPrice],
         timestamp: newTs,
-        signature: "0x0"
+        signature: "0x00"
       };
       priceOracle.provideDataAddressAuthorization(prices, {from: user2}).should.be.rejected;
     });
