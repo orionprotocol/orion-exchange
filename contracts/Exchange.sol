@@ -315,7 +315,6 @@ contract Exchange is OrionVault, ReentrancyGuard {
         if(!isBuyer)
           (filledAmount, amountQuote) = (amountQuote, filledAmount);
 
-        bool feeAssetInLiabilities  = assetBalances[user][order.matcherFeeAsset]<0;
         (address firstAsset, address secondAsset) = isBuyer?
                                                      (order.quoteAsset, order.baseAsset):
                                                      (order.baseAsset, order.quoteAsset);
@@ -336,6 +335,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
         }
 
         // User pay for fees
+        bool feeAssetInLiabilities  = assetBalances[user][order.matcherFeeAsset]<0;
         temp = assetBalances[user][order.matcherFeeAsset] - order.matcherFee;
         assetBalances[user][order.matcherFeeAsset] = temp;
         if(!feeAssetInLiabilities && (temp<0)) {
