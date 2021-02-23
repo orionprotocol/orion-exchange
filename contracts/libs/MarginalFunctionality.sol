@@ -219,13 +219,15 @@ library MarginalFunctionality {
                 initialPosition.state == PositionState.OVERDUE  , "E7");
         address liquidator = msg.sender;
         require(assetBalances[liquidator][redeemedAsset]>=amount,"E8");
+        require(assetBalances[constants.user][redeemedAsset]<0,"E15");
         assetBalances[liquidator][redeemedAsset] -= amount;
         assetBalances[constants.user][redeemedAsset] += amount;
+        if(assetBalances[constants.user][redeemedAsset] >= 0) 
+          removeLiability(constants.user, redeemedAsset, liabilities);
         (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
         require((timestamp + constants.priceOverdue) > block.timestamp, "E9"); //Price is outdated
 
-        int64 orionAmount = reimburseLiquidator(amount, price, liquidator, assetBalances, constants);
-        assetBalances[liquidator][constants._orionTokenAddress] += orionAmount;
+        reimburseLiquidator(amount, price, liquidator, assetBalances, constants);
         Position memory finalPosition = calcPosition(collateralAssets,
                                            liabilities,
                                            assetBalances,
@@ -246,11 +248,11 @@ library MarginalFunctionality {
                        mapping(address => mapping(address => int192)) storage assetBalances,
                        UsedConstants memory constants)
              internal
-             returns (int64 orionAmount) {
+             {
         int192 _orionAmount = int192(int256(amount)*price/1e8);
         _orionAmount += uint8Percent(_orionAmount,constants.liquidationPremium); //Liquidation premium
         require(_orionAmount == int64(_orionAmount), "E11");
-        orionAmount = int64(_orionAmount);
+        int64 orionAmount = int64(_orionAmount);
         // There is only 100m Orion tokens, fits i64
         int64 onBalanceOrion = int64(assetBalances[constants.user][constants._orionTokenAddress]);
         (int64 fromBalance, int64 fromStake) = (onBalanceOrion>orionAmount)?
@@ -261,6 +263,7 @@ library MarginalFunctionality {
 
         if(fromBalance>0) {
           assetBalances[constants.user][constants._orionTokenAddress] -= int192(fromBalance);
+          assetBalances[liquidator][constants._orionTokenAddress] += int192(fromBalance);
         }
         if(fromStake>0) {
           OrionVaultInterface(constants._orionVaultContractAddress).seizeFromStake(constants.user, liquidator, uint64(orionAmount));
