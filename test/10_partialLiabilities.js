@@ -135,6 +135,8 @@ contract("Exchange", ([owner, broker, user3, user4, user5, user6, user7]) => {
                 { from: matcher }
             ).should.be.fulfilled;
 
+            let user7XrpBalance = await exchange.getBalance(Wxrp.address, user7);
+
             let sellOrder2  = await orders.generateOrder(user6, matcher, 0,
                 wxrp, orion, orion,
                 10000000,
