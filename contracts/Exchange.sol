@@ -332,6 +332,8 @@ contract Exchange is OrionVault, ReentrancyGuard {
         }
         if(secondInLiabilities && (assetBalances[user][secondAsset]>=0)) {
           MarginalFunctionality.removeLiability(user, secondAsset, liabilities);
+        }else if(secondInLiabilities && (assetBalances[user][secondAsset]<0)){
+          MarginalFunctionality.updateLiability(user, secondAsset, liabilities, filledAmount, assetBalances[user][secondAsset]);
         }
 
         // User pay for fees
