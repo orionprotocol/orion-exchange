@@ -58,7 +58,7 @@ let generateData = async(assets,priceData) => {
     };
     return prices;
 }
-contract("Exchange", ([owner, broker, user3, user4, user5, user6, user7]) => {
+contract("Exchange", ([owner, broker, oracle, user]) => {
     describe("Exchange::instance", () => {
         it("deploy", async () => {
             exchange = await Exchange.deployed();
@@ -66,7 +66,7 @@ contract("Exchange", ([owner, broker, user3, user4, user5, user6, user7]) => {
             wbtc = await Wbtc.deployed();
             wxrp = await Wxrp.deployed();
             priceOracle = await PriceOracle.deployed();
-            priceProvider = oraclePub = user5; //Defined in migrations
+            priceProvider = oraclePub = oracle; //Defined in migrations
             matcher = owner;
         });
         it("set collaterals & oracle prices", async () => {
@@ -85,8 +85,8 @@ contract("Exchange", ([owner, broker, user3, user4, user5, user6, user7]) => {
                 timestamp: newTs,
                 signature: "0x00"
             };
-            priceOracle.changePriceProviderAuthorization([user3], [], {from: owner}).should.be.fulfilled;
-            priceOracle.provideDataAddressAuthorization(prices, {from: user3}).should.be.fulfilled;
+            priceOracle.changePriceProviderAuthorization([oracle], [], {from: owner}).should.be.fulfilled;
+            priceOracle.provideDataAddressAuthorization(prices, {from: oracle}).should.be.fulfilled;
             await exchange.updateAssetRisks([wbtc.address, wxrp.address, orion.address], [250, 250, 250], {from: owner});
         });
 
@@ -107,21 +107,21 @@ contract("Exchange", ([owner, broker, user3, user4, user5, user6, user7]) => {
         };
 
         it("users deposit assets to exchange", async () => {
-            for (let user of [broker, user6, user7]) {
-                await depositAsset(orion, initialOrionBalance*100, user);
-                await exchange.lockStake(initialOrionBalance*50, {from:user}).should.be.fulfilled;
-                await depositAsset(wbtc, initialWbcBalance*100, user);
-                await depositAsset(wxrp, initialWxrpBalance*500, user);
+            for (let _user of [broker, user]) {
+                await depositAsset(orion, initialOrionBalance*100, _user);
+                await exchange.lockStake(initialOrionBalance*50, {from:_user}).should.be.fulfilled;
+                await depositAsset(wbtc, initialWbcBalance*100, _user);
+                await depositAsset(wxrp, initialWxrpBalance*500, _user);
             }
         });
 
         it("make liability", async () => {
 
-            let sellOrder  = await orders.generateOrder(user6, matcher, 0,
+            let sellOrder  = await orders.generateOrder(user, matcher, 0,
                 wbtc, wxrp, orion,
                 0.2*10e8,
                 10940919037199); // 1/0.00000914*10^8
-            let buyOrder  = await orders.generateOrder(user7, matcher, 1,
+            let buyOrder  = await orders.generateOrder(broker, matcher, 1,
                 wbtc, wxrp, orion,
                 0.2*10e8,
                 10940919037199
@@ -135,30 +135,31 @@ contract("Exchange", ([owner, broker, user3, user4, user5, user6, user7]) => {
                 { from: matcher }
             ).should.be.fulfilled;
 
-            let user7XrpBalance = await exchange.getBalance(Wxrp.address, user7);
+            let brokerXrpBalance = await exchange.getBalance(Wxrp.address, broker);
+            const amount = 0.05e8, price=10*1e8;
 
-            let sellOrder2  = await orders.generateOrder(user6, matcher, 0,
+            let sellOrder2  = await orders.generateOrder(user, matcher, 0,
                 wxrp, orion, orion,
                 10000000,
-                1*10e8);
-            let buyOrder2  = await orders.generateOrder(user7, matcher, 1,
+                price);
+            let buyOrder2  = await orders.generateOrder(broker, matcher, 1,
                 wxrp, orion, orion,
                 10000000,
-                1*10e8
+                price
             );
 
             await exchange.fillOrders(
                 buyOrder2.order,
                 sellOrder2.order,
-                1*10e8,
-                0.005*10e8,
+                price,
+                amount,
                 { from: matcher }
             ).should.be.fulfilled;
 
-            let user7Liabilities2 = await exchange.getLiabilities(user7);
-            let user7XrpBalance2 = await exchange.getBalance(Wxrp.address, user7);
-            (user7XrpBalance2 - user7XrpBalance).toString().should.be.equal("5000000");
-            (user7Liabilities2[0].outstandingAmount*1 + user7XrpBalance2*1).should.be.equal(0);
+            let brokerLiabilities2 = await exchange.getLiabilities(broker);
+            let brokerXrpBalance2 = await exchange.getBalance(Wxrp.address, broker);
+            (brokerXrpBalance2 - brokerXrpBalance).toString().should.be.equal(String(amount));
+            (brokerLiabilities2[0].outstandingAmount*1 + brokerXrpBalance2*1).should.be.equal(0);
         });
 
     });
