@@ -264,7 +264,7 @@ library MarginalFunctionality {
           assetBalances[liquidator][constants._orionTokenAddress] += int192(fromBalance);
         }
         if(fromStake>0) {
-          OrionVaultInterface(constants._orionVaultContractAddress).seizeFromStake(constants.user, liquidator, uint64(orionAmount));
+          OrionVaultInterface(constants._orionVaultContractAddress).seizeFromStake(constants.user, liquidator, uint64(fromStake));
         }
     }
 }
