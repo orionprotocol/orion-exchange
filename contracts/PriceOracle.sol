@@ -37,6 +37,7 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
     mapping(address => bool) public priceProviderAuthorization;
 
     constructor(address publicKey, address _baseAsset) public {
+        require(oraclePublicKey != address(0) && baseAsset != address(0), "Wrong constructor params");
         oraclePublicKey = publicKey;
         baseAsset = _baseAsset;
     }
