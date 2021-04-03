@@ -74,6 +74,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param allowedMatcher - address which has authorization to match orders
      */
     function setBasicParams(address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
+      require(orionToken != address(0) && priceOracleAddress != address(0), "E15");
       _orionToken = IERC20(orionToken);
       _oracleAddress = priceOracleAddress;
       _allowedMatcher = allowedMatcher;
@@ -515,6 +516,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
         E11: Amount overflow
         E12: Incorrect filled amount, flavor G,B,S: general(overflow), buyer order overflow, seller order overflow
         E14: Authorization error, sfs - seizeFromStake
+        E15: Wrong passed params
     */
 
 }

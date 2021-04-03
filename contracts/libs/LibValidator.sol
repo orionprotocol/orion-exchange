@@ -183,7 +183,7 @@ library LibValidator {
         uint112 filledAmount,
         uint256 currentTime,
         address[] memory path
-    ) public pure returns (bool success) {
+    ) public pure {
         require(validateV3(buyOrder), "E2B");
         require(buyOrder.matcherAddress == sender && buyOrder.matcherAddress == allowedMatcher, "E3M2");
         require(
