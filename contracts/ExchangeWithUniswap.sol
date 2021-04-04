@@ -28,7 +28,7 @@ contract ExchangeWithUniswap is Exchange {
                             address uniswapRouter) 
              public onlyOwner 
              {
-      require(orionToken != address(0) && priceOracleAddress != address(0) && uniswapRouter != address(0), "E15");
+      require((orionToken != address(0)) && (priceOracleAddress != address(0)) && (uniswapRouter != address(0)), "E15");
       _orionToken = IERC20(orionToken);
       _oracleAddress = priceOracleAddress;
       _allowedMatcher = allowedMatcher;

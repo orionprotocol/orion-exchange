@@ -408,8 +408,9 @@ contract("Exchange", ([owner, broker, user2, liquidator, priceProvider]) => {
       await exchange.liabilities(broker,2).should.be.rejected;
       let fL = await exchange.liabilities(broker,0);
       let sL = await exchange.liabilities(broker,1);
-      fL.asset.toString().should.be.equal(weth.address);
-      sL.asset.toString().should.be.equal(wxrp.address);
+      // Note: due to new remove Liability mechanism, order is not preserved
+      sL.asset.toString().should.be.equal(weth.address);
+      fL.asset.toString().should.be.equal(wxrp.address);
       let wbtcAmount = await exchange.getBalance(wbtc.address, broker);
       wbtcAmount.toString().should.be.equal(String(1e5)); //-1e5+2e5
     });
