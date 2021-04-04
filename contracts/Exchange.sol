@@ -65,7 +65,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
     }
 
     function setBasicParams(address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
-      require(orionToken != address(0) && priceOracleAddress != address(0), "E15");
+      require((orionToken != address(0)) && (priceOracleAddress != address(0)), "E15");
       _orionToken = IERC20(orionToken);
       _oracleAddress = priceOracleAddress;
       _allowedMatcher = allowedMatcher;

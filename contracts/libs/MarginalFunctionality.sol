@@ -46,20 +46,40 @@ library MarginalFunctionality {
       uint8 liquidationPremium;
     }
 
+
+    /**
+     * @dev method to multiply numbers with uint8 based percent numbers
+     */
+    function uint8Percent(int192 _a, uint8 b) internal pure returns (int192 c) {
+        int a = int256(_a);
+        int d = 255;
+        c = int192((a>65536) ? (a/d)*b : a*b/d );
+    }
+
+    /**
+     * @dev method to calc weighted and absolute collateral value
+     * @notice it only count for assets in collateralAssets list, all other
+               assets will add 0 to position.
+     * @return outdated wether any price is outdated
+     * @return weightedPosition in ORN
+     * @return totalPosition in ORN
+     */
     function calcAssets(address[] storage collateralAssets,
                         mapping(address => mapping(address => int192)) storage assetBalances,
                         mapping(address => uint8) storage assetRisks,
                         UsedConstants memory constants)
              internal view returns
         (bool outdated, int192 weightedPosition, int192 totalPosition) {
-        for(uint8 i = 0; i < collateralAssets.length; i++) {
+        uint256 collateralAssetsLength = collateralAssets.length;
+        for(uint256 i = 0; i < collateralAssetsLength; i++) {
           address asset = collateralAssets[i];
           if(assetBalances[constants.user][asset]<0)
               continue; // will be calculated in calcLiabilities
           (uint64 price, uint64 timestamp) = (1e8, 0xfffffff000000000);
 
           if(asset != constants._orionTokenAddress) {
-            (price, timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
+            PriceOracleInterface.PriceDataOut memory assetPriceData = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
+            (price, timestamp) = (assetPriceData.price, assetPriceData.timestamp);
           }
 
           // balance: i192, price u64 => balance*price fits i256
@@ -86,9 +106,11 @@ library MarginalFunctionality {
                              )
              internal view returns
         (bool outdated, bool overdue, int192 weightedPosition, int192 totalPosition) {
-        for(uint8 i = 0; i < liabilities[constants.user].length; i++) {
+        uint256 liabilitiesLength = liabilities[constants.user].length;
+        for(uint256 i = 0; i < liabilitiesLength; i++) {
           Liability storage liability = liabilities[constants.user][i];
-          (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(liability.asset);//TODO givePrices
+          PriceOracleInterface.PriceDataOut memory assetPriceData = PriceOracleInterface(constants._oracleAddress).assetPrices(liability.asset);//TODO givePrices
+          (uint64 price, uint64 timestamp) = (assetPriceData.price, assetPriceData.timestamp);
           // balance: i192, price u64 => balance*price fits i256
           // since generally balance <= N*maxInt112 (where N is number operations with it),
           // assetValue <= N*maxInt112*maxUInt64/1e8.
@@ -107,6 +129,10 @@ library MarginalFunctionality {
         return (outdated, overdue, weightedPosition, totalPosition);
     }
 
+    /**
+     * @dev method to calc Position
+     * @return result position structure
+     */
     function calcPosition(
                         address[] storage collateralAssets,
                         mapping(address => Liability[]) storage liabilities,
@@ -114,7 +140,7 @@ library MarginalFunctionality {
                         mapping(address => uint8) storage assetRisks,
                         UsedConstants memory constants
                         )
-             public view returns (Position memory) {
+             public view returns (Position memory result) {
         (bool outdatedPrice, int192 weightedPosition, int192 totalPosition) =
           calcAssets(collateralAssets,
                      assetBalances,
@@ -135,7 +161,6 @@ library MarginalFunctionality {
         totalPosition += _totalPosition;
         outdatedPrice = outdatedPrice || _outdatedPrice;
         bool incorrect = (liabilities[constants.user].length>0) && (lockedAmount==0);
-        Position memory result;
         if(_totalPosition<0) {
           result.totalLiabilities = _totalPosition;
         }
@@ -153,27 +178,20 @@ library MarginalFunctionality {
         }
         result.weightedPosition = weightedPosition;
         result.totalPosition = totalPosition;
-        return result;
     }
 
     function removeLiability(address user,
                              address asset,
                              mapping(address => Liability[]) storage liabilities)
         public      {
-        bool shift = false;
-        uint8 i;
-        for(; i<liabilities[user].length-1; i++) {
-          if(liabilities[user][i].asset == asset) {
-            shift = true;
+        uint256 length = liabilities[user].length;
+        for (uint256 i = 0; i < length; i++) {
+          if (liabilities[user][i].asset == asset) {
+            liabilities[user][i] = liabilities[user][length - 1];
+            liabilities[user].pop();
+            break;
           }
-          if(shift)
-            liabilities[user][i] = liabilities[user][i+1];
         }
-        if(liabilities[user][i].asset == asset) {
-            shift = true;
-        }
-        if(shift)
-          liabilities[user].pop();
     }
 
     function updateLiability(address user,
@@ -182,21 +200,23 @@ library MarginalFunctionality {
                              uint112 depositAmount,
                              int192 currentBalance)
         public      {
-        if(currentBalance>=0) {
+        uint256 i;
+        uint256 liabilitiesLength=liabilities[user].length;
+        for(; i<liabilitiesLength-1; i++) {
+            if(liabilities[user][i].asset == asset)
+              break;
+          }
+        Liability storage liability = liabilities[user][i];
+        if(depositAmount>=liability.outstandingAmount) {
+          if(currentBalance>=0) {
             removeLiability(user,asset,liabilities);
+          }
+          else {
+            liability.outstandingAmount = uint192(-currentBalance);
+            liability.timestamp = uint64(block.timestamp);
+          }
         } else {
-            uint8 i;
-            for(; i<liabilities[user].length-1; i++) {
-                if(liabilities[user][i].asset == asset)
-                  break;
-              }
-            Liability storage liability = liabilities[user][i];
-            if(depositAmount>=liability.outstandingAmount) {
-                liability.outstandingAmount = uint192(-currentBalance);
-                liability.timestamp = uint64(block.timestamp);
-            } else {
-                liability.outstandingAmount -= depositAmount;
-            }
+            liability.outstandingAmount -= depositAmount;
         }
     }
 
@@ -222,7 +242,8 @@ library MarginalFunctionality {
         assetBalances[constants.user][redeemedAsset] += amount;
         if(assetBalances[constants.user][redeemedAsset] >= 0)
           removeLiability(constants.user, redeemedAsset, liabilities);
-        (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
+        PriceOracleInterface.PriceDataOut memory assetPriceData = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
+        (uint64 price, uint64 timestamp) = (assetPriceData.price, assetPriceData.timestamp);
         require((timestamp + constants.priceOverdue) > block.timestamp, "E9"); //Price is outdated
 
         reimburseLiquidator(amount, price, liquidator, assetBalances, constants);

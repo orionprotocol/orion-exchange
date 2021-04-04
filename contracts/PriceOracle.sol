@@ -4,13 +4,14 @@ pragma experimental ABIEncoderV2;
 import "./libs/EIP712Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
+import "./PriceOracleDataTypes.sol";
 
 /**
  * @title PriceOracle
  * @dev Contract for storing and providing price data for the Orion Protocol
  * @author @EmelyanenkoK
  */
-contract PriceOracle is /* EIP712Interface, */ Ownable {
+contract PriceOracle is /* EIP712Interface, */ Ownable, PriceOracleDataTypes {
 
     struct Prices {
         address[] assetAddresses;
@@ -25,6 +26,8 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
     }
 
     /*bytes32 public constant PRICES_TYPEHASH = keccak256(
+    /* SignedPriceApproach
+    bytes32 public constant PRICES_TYPEHASH = keccak256(
         abi.encodePacked(
             "Prices(address[] assetAddresses,uint64[] prices,uint64 timestamp)"
         )
@@ -37,7 +40,7 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
     mapping(address => bool) public priceProviderAuthorization;
 
     constructor(address publicKey, address _baseAsset) public {
-        require(oraclePublicKey != address(0) && baseAsset != address(0), "Wrong constructor params");
+        require((publicKey != address(0)) && (_baseAsset != address(0)), "Wrong constructor params");
         oraclePublicKey = publicKey;
         baseAsset = _baseAsset;
     }
@@ -83,7 +86,7 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
         }
 
         return ecrecover(digest, v, r, s) == oraclePublicKey;
-    
+
     }
 
     function provideData(Prices memory priceFeed) public {
@@ -101,7 +104,7 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
     function provideDataAddressAuthorization(Prices memory priceFeed) public {
        require(priceProviderAuthorization[msg.sender], "Unauthorized dataprovider");
        require(priceFeed.timestamp<block.timestamp+60, "Price data timestamp too far in the future");
-       for(uint8 i=0; i<priceFeed.assetAddresses.length; i++) {
+       for(uint256 i=0; i<priceFeed.assetAddresses.length; i++) {
          PriceDataOut storage assetData = assetPrices[priceFeed.assetAddresses[i]];
          if(assetData.timestamp<priceFeed.timestamp) {
            assetData.price = priceFeed.prices[i];
@@ -110,12 +113,16 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
        }
     }
 
-    function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory) {
-      PriceDataOut[] memory result = new PriceDataOut[](assetAddresses.length);
-      for(uint8 i=0; i<assetAddresses.length; i++) {
+    /**
+     * @dev price data getter (note prices are relative to basicAsset, ORN)
+     * @param assetAddresses - set of assets
+     * @return result PriceDataOut[] - set of prices
+     */
+    function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory result) {
+      result = new PriceDataOut[](assetAddresses.length);
+      for(uint256 i=0; i<assetAddresses.length; i++) {
         result[i] = assetPrices[assetAddresses[i]];
       }
-      return result;
     }
     /*
     function getPricesHash(Prices memory priceVector)
@@ -151,8 +158,8 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
       }
       require(_basePrice>=0, "Negative base price is not allowed");
       uint basePrice = uint(_basePrice);
-      
-      //ETH/ORN  
+
+      //ETH/ORN
       PriceDataOut storage baseAssetData = assetPrices[address(0)];
       if(baseAssetData.timestamp<timestamp) {
           uint price = ( (10**AggregatorV3Interface(baseAggregator).decimals()) *1e8)/basePrice;
@@ -160,8 +167,8 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
           baseAssetData.price = uint64(price);
           baseAssetData.timestamp = uint64(timestamp);
       }
-        
-      for(uint8 i=0; i<assets.length; i++) {
+
+      for(uint256 i=0; i<assets.length; i++) {
         address currentAsset = assets[i];
         address currentAggregator = chainLinkETHAggregator[currentAsset];
         if( currentAggregator == address(0))
@@ -189,18 +196,18 @@ contract PriceOracle is /* EIP712Interface, */ Ownable {
         }
 
       }
-    }    
+    }
     function setChainLinkAggregators(address[] memory assets, address[] memory aggregatorAddresses) public onlyOwner {
-      for(uint8 i=0; i<assets.length; i++) {
+      for(uint256 i=0; i<assets.length; i++) {
         chainLinkETHAggregator[assets[i]] = aggregatorAddresses[i];
       }
     }
-    
+
     function changePriceProviderAuthorization(address[] memory added, address[] memory removed) public onlyOwner {
-      for(uint8 i=0; i<added.length; i++) {
+      for(uint256 i=0; i<added.length; i++) {
         priceProviderAuthorization[added[i]] = true;
       }
-      for(uint8 i=0; i<removed.length; i++) {
+      for(uint256 i=0; i<removed.length; i++) {
         priceProviderAuthorization[removed[i]] = false;
       }
     }
