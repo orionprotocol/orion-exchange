@@ -8,9 +8,16 @@ const providerFactory = (network) =>
     );
 
 module.exports = {
+  plugins: [
+    'truffle-plugin-verify'
+  ],
+  api_keys: {
+    bscscan: process.env.BSCSCANAPIKEY
+  },
   compilers: {
     solc: {
-      version: '0.7.4',
+      version: '0.7.6',
+      parser: "solcjs",
       settings: {
         optimizer: {
           enabled: true,
@@ -37,7 +44,28 @@ module.exports = {
       network_id: "1",
       gasPrice: 37e9,
       gas: 6721975,
-    }
+    },
+    bsc_testnet: {
+      provider: () => new HDWalletProvider(
+          process.env.MNEMONIC,
+          `https://data-seed-prebsc-1-s2.binance.org:8545`,
+          Number(process.env.MNEMONIC_ADDRESS_INDEX)),
+      network_id: 97,
+      timeoutBlocks: 200,
+      skipDryRun: true,
+      production: true
+    },
+    bsc: {
+      provider: () => new HDWalletProvider(
+          process.env.MNEMONIC,
+          `https://bsc-dataseed3.binance.org/`,
+          Number(process.env.MNEMONIC_ADDRESS_INDEX)),
+      network_id: 56,
+      timeoutBlocks: 200,
+      skipDryRun: true,
+      gasPrice: 20e9,
+      gas: 6721975
+    },
   },
   mocha: {
     enableTimeouts: false,

@@ -138,7 +138,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
         address user = msg.sender;
 
         assetBalances[user][assetAddress] -= safeAmountDecimal;
-        
+
         require(assetBalances[user][assetAddress]>=0 && checkPosition(user), "E1w"); //TODO
 
         uint256 _amount = uint256(amount);
@@ -192,7 +192,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
     {
         return liabilities[user];
     }
-    
+
 
     function getCollateralAssets() public view returns (address[] memory) {
         return collateralAssets;
@@ -330,9 +330,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
         if(!firstInLiabilities && (temp<0)){
           setLiability(user, firstAsset, temp);
         }
-        if(secondInLiabilities && (assetBalances[user][secondAsset]>=0)) {
-          MarginalFunctionality.removeLiability(user, secondAsset, liabilities);
-        }else if(secondInLiabilities && (assetBalances[user][secondAsset]<0)){
+        if(secondInLiabilities) {
           MarginalFunctionality.updateLiability(user, secondAsset, liabilities, filledAmount, assetBalances[user][secondAsset]);
         }
 

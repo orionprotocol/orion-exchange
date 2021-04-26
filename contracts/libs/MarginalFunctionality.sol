@@ -134,8 +134,7 @@ library MarginalFunctionality {
         weightedPosition += _weightedPosition;
         totalPosition += _totalPosition;
         outdatedPrice = outdatedPrice || _outdatedPrice;
-        bool incorrect = (liabilities[constants.user].length > 10) ||
-                         ((liabilities[constants.user].length>0) && (lockedAmount==0));
+        bool incorrect = (liabilities[constants.user].length>0) && (lockedAmount==0);
         Position memory result;
         if(_totalPosition<0) {
           result.totalLiabilities = _totalPosition;
@@ -183,22 +182,21 @@ library MarginalFunctionality {
                              uint112 depositAmount,
                              int192 currentBalance)
         public      {
-        uint8 i;
-        for(; i<liabilities[user].length-1; i++) {
-            if(liabilities[user][i].asset == asset)
-              break;
-          }
-        Liability storage liability = liabilities[user][i];
-        if(depositAmount>=liability.outstandingAmount) {
-          if(currentBalance>=0) {
+        if(currentBalance>=0) {
             removeLiability(user,asset,liabilities);
-          }
-          else {
-            liability.outstandingAmount = uint192(-currentBalance);
-            liability.timestamp = uint64(block.timestamp);
-          }
         } else {
-            liability.outstandingAmount -= depositAmount;
+            uint8 i;
+            for(; i<liabilities[user].length-1; i++) {
+                if(liabilities[user][i].asset == asset)
+                  break;
+              }
+            Liability storage liability = liabilities[user][i];
+            if(depositAmount>=liability.outstandingAmount) {
+                liability.outstandingAmount = uint192(-currentBalance);
+                liability.timestamp = uint64(block.timestamp);
+            } else {
+                liability.outstandingAmount -= depositAmount;
+            }
         }
     }
 
@@ -222,7 +220,7 @@ library MarginalFunctionality {
         require(assetBalances[constants.user][redeemedAsset]<0,"E15");
         assetBalances[liquidator][redeemedAsset] -= amount;
         assetBalances[constants.user][redeemedAsset] += amount;
-        if(assetBalances[constants.user][redeemedAsset] >= 0) 
+        if(assetBalances[constants.user][redeemedAsset] >= 0)
           removeLiability(constants.user, redeemedAsset, liabilities);
         (uint64 price, uint64 timestamp) = PriceOracleInterface(constants._oracleAddress).assetPrices(redeemedAsset);
         require((timestamp + constants.priceOverdue) > block.timestamp, "E9"); //Price is outdated

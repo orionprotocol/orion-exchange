@@ -28,25 +28,29 @@
   },
   "homepage": "https://github.com/orionprotocol/orion-exchange#readme",
   "dependencies": {
-    "@openzeppelin/contracts": "^3.3.0",
-    "@openzeppelin/contracts-ethereum-package": "^3.0.0",
     "@chainlink/contracts": "^0.0.11",
-    "@truffle/hdwallet-provider": "^1.2.0",
     "eth-sig-util": "^2.5.3",
     "ethers": "^4.0.37",
     "long": "^4.0.0",
-    "truffle-contract-size": "^2.0.0",
     "web3": "^1.2.6"
   },
   "devDependencies": {
-    "chai": "^4.2.0",
+    "@openzeppelin/contracts": "^3.4.0",
+    "@openzeppelin/contracts-upgradeable": "^3.4.0",
+    "@openzeppelin/test-environment": "^0.1.9",
+    "@openzeppelin/truffle-upgrades": "^1.5.0",
+    "@truffle/hdwallet-provider": "1.2.3",
+    "chai": "^4.3.4",
     "chai-as-promised": "^7.1.1",
     "chai-shallow-deep-equal": "^1.4.6",
     "dotenv": "^8.2.0",
     "eth-gas-reporter": "^0.2.11",
-    "@openzeppelin/truffle-upgrades": "^1.1.1",
-    "truffle": "^5.1.55",
+    "ganache-cli": "^6.12.2",
+    "mocha": "^8.3.2",
+    "truffle": "5.1.65",
     "truffle-contract-size": "^2.0.1",
-    "truffle-flattener": "^1.5.0"
+    "truffle-flattener": "^1.5.0",
+    "truffle-plugin-verify": "^0.5.4",
+    "zeppelin-solidity": "^1.12.0"
   }
 }
