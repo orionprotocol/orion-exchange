@@ -27,14 +27,6 @@ library MarginalFunctionality {
         int256 totalLiabilities;
     }
 
-    function uint8Percent(int192 _a, uint8 b) internal pure returns (int192) {
-        int a = int256(_a);
-        int d = 255;
-        int192 c = int192((a>65536) ? (a/d)*b : a*b/d );
-
-        return c;
-    }
-
     struct UsedConstants {
       address user;
       address _oracleAddress;

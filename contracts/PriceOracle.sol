@@ -20,11 +20,6 @@ contract PriceOracle is /* EIP712Interface, */ Ownable, PriceOracleDataTypes {
         bytes signature;
     }
 
-    struct PriceDataOut {
-        uint64 price;
-        uint64 timestamp;
-    }
-
     /*bytes32 public constant PRICES_TYPEHASH = keccak256(
     /* SignedPriceApproach
     bytes32 public constant PRICES_TYPEHASH = keccak256(
