@@ -179,7 +179,9 @@ library MarginalFunctionality {
         uint256 length = liabilities[user].length;
         for (uint256 i = 0; i < length; i++) {
           if (liabilities[user][i].asset == asset) {
-            liabilities[user][i] = liabilities[user][length - 1];
+            if (length>1) {
+              liabilities[user][i] = liabilities[user][length - 1];
+            }
             liabilities[user].pop();
             break;
           }
@@ -192,23 +194,22 @@ library MarginalFunctionality {
                              uint112 depositAmount,
                              int192 currentBalance)
         public      {
-        uint256 i;
-        uint256 liabilitiesLength=liabilities[user].length;
-        for(; i<liabilitiesLength-1; i++) {
-            if(liabilities[user][i].asset == asset)
-              break;
-          }
-        Liability storage liability = liabilities[user][i];
-        if(depositAmount>=liability.outstandingAmount) {
-          if(currentBalance>=0) {
+        if(currentBalance>=0) {
             removeLiability(user,asset,liabilities);
-          }
-          else {
-            liability.outstandingAmount = uint192(-currentBalance);
-            liability.timestamp = uint64(block.timestamp);
-          }
         } else {
-            liability.outstandingAmount -= depositAmount;
+            uint256 i;
+            uint256 liabilitiesLength=liabilities[user].length;
+            for(; i<liabilitiesLength-1; i++) {
+                if(liabilities[user][i].asset == asset)
+                  break;
+              }
+            Liability storage liability = liabilities[user][i];
+            if(depositAmount>=liability.outstandingAmount) {
+                liability.outstandingAmount = uint192(-currentBalance);
+                liability.timestamp = uint64(block.timestamp);
+            } else {
+                liability.outstandingAmount -= depositAmount;
+            }
         }
     }
 

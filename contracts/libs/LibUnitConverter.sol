@@ -24,7 +24,7 @@ library LibUnitConverter {
 
           result = amount.mul(10**decimals).div(10**8);
         }
-        
+
         require(result < uint256(type(int112).max), "LibUnitConverter: Too big value");
         baseValue = int112(result);
     }
@@ -42,7 +42,7 @@ library LibUnitConverter {
             ERC20 asset = ERC20(assetAddress);
             uint decimals = asset.decimals();
 
-            result = uint64(amount.mul(10**8).div(10**decimals));
+            result = amount.mul(10**8).div(10**decimals);
         }
         require(result < uint256(type(int112).max), "LibUnitConverter: Too big value");
         decimalValue = int112(result);
