@@ -77,7 +77,8 @@ library MarginalFunctionality {
           (uint64 price, uint64 timestamp) = (1e8, 0xfffffff000000000);
 
           if(asset != constants._orionTokenAddress) {
-            PriceOracleInterface.PriceDataOut memory assetPriceData = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);//TODO givePrices
+            // Note: batch givePrices([]) instead per asset assetPrices may be used
+            PriceOracleInterface.PriceDataOut memory assetPriceData = PriceOracleInterface(constants._oracleAddress).assetPrices(asset);
             (price, timestamp) = (assetPriceData.price, assetPriceData.timestamp);
           }
 
@@ -115,7 +116,8 @@ library MarginalFunctionality {
         uint256 liabilitiesLength = liabilities[constants.user].length;
         for(uint256 i = 0; i < liabilitiesLength; i++) {
           Liability storage liability = liabilities[constants.user][i];
-          PriceOracleInterface.PriceDataOut memory assetPriceData = PriceOracleInterface(constants._oracleAddress).assetPrices(liability.asset);//TODO givePrices
+          // Note: batch givePrices([]) instead per asset assetPrices may be used
+          PriceOracleInterface.PriceDataOut memory assetPriceData = PriceOracleInterface(constants._oracleAddress).assetPrices(liability.asset);
           (uint64 price, uint64 timestamp) = (assetPriceData.price, assetPriceData.timestamp);
           // balance: i192, price u64 => balance*price fits i256
           // since generally balance <= N*maxInt112 (where N is number operations with it),
@@ -197,7 +199,9 @@ library MarginalFunctionality {
         uint256 length = liabilities[user].length;
         for (uint256 i = 0; i < length; i++) {
           if (liabilities[user][i].asset == asset) {
-            liabilities[user][i] = liabilities[user][length - 1];
+            if(length > 1) {
+              liabilities[user][i] = liabilities[user][length - 1];
+            }
             liabilities[user].pop();
             break;
           }
