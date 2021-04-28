@@ -67,6 +67,7 @@ async function generateOrderPersonalSign( sender, matcher, buySide,
         expiration = NOW + 29 * 24 * 60 * 60 * 1000;
 
     const message = web3.utils.soliditySha3(
+        'order',
         sender,
         matcher,
         baseAsset.address,

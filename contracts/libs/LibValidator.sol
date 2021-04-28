@@ -141,6 +141,7 @@ library LibValidator {
         return
             keccak256(
                 abi.encodePacked(
+                    "order",
                     _order.senderAddress,
                     _order.matcherAddress,
                     _order.baseAsset,
