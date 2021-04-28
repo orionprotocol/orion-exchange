@@ -1,9 +1,11 @@
 pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
-import "@openzeppelin/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/cryptography/ECDSA.sol";
 
 library LibValidator {
+
+    using ECDSA for bytes32;
 
     string public constant DOMAIN_NAME = "Orion Exchange";
     string public constant DOMAIN_VERSION = "1";
@@ -44,6 +46,7 @@ library LibValidator {
         uint64 nonce;
         uint64 expiration;
         uint8 buySide; // buy or sell
+        bool isPersonalSign;
         bytes signature;
     }
 
@@ -58,38 +61,7 @@ library LibValidator {
             )
         );
 
-        if (order.signature.length != 65) {
-            revert("ECDSA: invalid signature length");
-        }
-
-        // Divide the signature in r, s and v variables
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-
-        bytes memory signature = order.signature;
-
-        // ecrecover takes the signature parameters, and the only way to get them
-        // currently is to use assembly.
-        // solhint-disable-next-line no-inline-assembly
-        assembly {
-            r := mload(add(signature, 0x20))
-            s := mload(add(signature, 0x40))
-            v := byte(0, mload(add(signature, 0x60)))
-        }
-
-        if (
-            uint256(s) >
-            0x7FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF5D576E7357A4501DDFE92F46681B20A0
-        ) {
-            revert("ECDSA: invalid signature 's' value");
-        }
-
-        if (v != 27 && v != 28) {
-            revert("ECDSA: invalid signature 'v' value");
-        }
-
-        return ecrecover(digest, v, r, s) == order.senderAddress;
+        return digest.recover(order.signature) == order.senderAddress;
     }
 
     function getTypeValueHash(Order memory _order)
@@ -127,8 +99,8 @@ library LibValidator {
         uint256 currentTime,
         address allowedMatcher
     ) public pure returns (bool success) {
-        require(validateV3(buyOrder), "E2B");
-        require(validateV3(sellOrder), "E2S");
+        buyOrder.isPersonalSign ? require(validatePersonal(buyOrder), "E2BP") : require(validateV3(buyOrder), "E2B");
+        sellOrder.isPersonalSign ? require(validatePersonal(sellOrder), "E2SP") : require(validateV3(sellOrder), "E2S");
 
         // Same matcher address
         require(
@@ -163,5 +135,30 @@ library LibValidator {
 
         require( buyOrder.buySide==1 && sellOrder.buySide==0, "E3D");
         success = true;
+    }
+
+    function getEthSignedOrderHash(Order memory _order) public pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked(
+                    _order.senderAddress,
+                    _order.matcherAddress,
+                    _order.baseAsset,
+                    _order.quoteAsset,
+                    _order.matcherFeeAsset,
+                    _order.amount,
+                    _order.price,
+                    _order.matcherFee,
+                    _order.nonce,
+                    _order.expiration,
+                    _order.buySide
+                )
+            ).toEthSignedMessageHash();
+    }
+
+    function validatePersonal(Order memory order) public pure returns (bool) {
+
+        bytes32 digest = getEthSignedOrderHash(order);
+        return digest.recover(order.signature) == order.senderAddress;
     }
 }

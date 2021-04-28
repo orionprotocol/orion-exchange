@@ -154,6 +154,29 @@ contract("Exchange", ([matcher, user1, user2]) => {
       isValid.should.be.true;
     });
 
+    it("validate buy order personal sign", async () => {
+      const buyOrderPersonal = await orders.generateOrderPersonalSign(user1, matcher, 1,
+          weth, wbtc, wbtc,
+          350000000, //3.5 ETH * 10^8
+          2100000, //0.021 WBTC/WETH * 10^8
+          350000);
+
+      let isValid = await exchange.validateOrder(buyOrderPersonal, { from: user1 });
+      isValid.should.be.true;
+    });
+
+    it("validate sell order personal sign", async () => {
+      const sellOrderPersonal = await orders.generateOrderPersonalSign(user2, matcher, 0,
+          weth, wbtc,
+          {address:"0x0000000000000000000000000000000000000000"}, //fee in bare eth
+          150000000,
+          2000000,
+          150000);
+
+      let isValid = await exchange.validateOrder(sellOrderPersonal, { from: user1 });
+      isValid.should.be.true;
+    });
+
     it("incorrect fill price should be rejected", async () => {
       await exchange.fillOrders(
         buyOrder.order,
@@ -326,7 +349,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("correct total exchange balance in ETH after trade", async () => {
-      // ETH = depositUser1 + depositUser2 
+      // ETH = depositUser1 + depositUser2
       // ETH = 1 ETH + 1 ETH - 0.0015 ETH
       let WETHbalance = await web3.eth.getBalance(exchange.address);
       WETHbalance.toString().should.be.equal(

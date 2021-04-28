@@ -294,7 +294,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
         pure
         returns (bool isValid)
     {
-        isValid = LibValidator.validateV3(order);
+        isValid = order.isPersonalSign ? LibValidator.validatePersonal(order) : LibValidator.validateV3(order);
     }
 
     /**
