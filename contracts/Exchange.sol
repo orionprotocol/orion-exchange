@@ -122,21 +122,12 @@ contract Exchange is OrionVault, ReentrancyGuard {
           MarginalFunctionality.updateLiability(user, assetAddress, liabilities, uint112(safeAmountDecimal), assetBalances[user][assetAddress]);
 
     }
-    /**
-     * @dev Withdrawal of remaining funds from the contract back to the address
-     * @param assetAddress address of the asset to withdraw
-     * @param amount asset amount to withdraw in its base unit
-     */
-    function withdraw(address assetAddress, uint112 amount)
-        external
-        nonReentrant
-    {
+
+    function _withdraw(address user, address assetAddress, uint112 amount) internal {
         int112 safeAmountDecimal = LibUnitConverter.baseUnitToDecimal(
             assetAddress,
             amount
         );
-
-        address user = msg.sender;
 
         assetBalances[user][assetAddress] -= safeAmountDecimal;
 
@@ -154,6 +145,18 @@ contract Exchange is OrionVault, ReentrancyGuard {
         emit NewAssetTransaction(user, assetAddress, false, uint112(safeAmountDecimal), uint64(block.timestamp));
     }
 
+    /**
+    * @dev Withdrawal of remaining funds from the contract back to the address
+    * @param assetAddress address of the asset to withdraw
+    * @param amount asset amount to withdraw in its base unit
+    */
+    function withdraw(address assetAddress, uint112 amount) external nonReentrant {
+        _withdraw(msg.sender, assetAddress, amount);
+    }
+
+    function adminWithdraw(address user, address assetAddress, uint112 amount) external onlyOwner nonReentrant {
+        _withdraw(user, assetAddress, amount);
+    }
 
     /**
      * @dev Get asset balance for a specific address
