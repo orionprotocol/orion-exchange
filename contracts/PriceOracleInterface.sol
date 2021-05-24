@@ -1,16 +1,9 @@
-pragma solidity ^0.7.0;
+pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
-// TODO should be made interface
-contract PriceOracleInterface {
+import "./PriceOracleDataTypes.sol";
 
-    struct PriceDataOut {
-        uint64 price;
-        uint64 timestamp;
-    }
-
-    mapping(address => PriceDataOut) public assetPrices;
-
-    function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory) {
-    }
+interface PriceOracleInterface is PriceOracleDataTypes {
+    function assetPrices(address) external view returns (PriceDataOut memory);
+    function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory);
 }

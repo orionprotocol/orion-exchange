@@ -1,4 +1,4 @@
-pragma solidity ^0.7.0;
+pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
 import "./utils/Ownable.sol";
@@ -24,12 +24,11 @@ abstract contract OrionVault is ExchangeStorage, OwnableUpgradeSafe {
      * @dev Note StakePhase may depend on time for some phases.
      * @param user address
      */
-    function getStake(address user) public view returns (Stake memory){
-        Stake memory stake = stakingData[user];
+    function getStake(address user) public view returns (Stake memory stake){
+        stake = stakingData[user];
         if(stake.phase == StakePhase.RELEASING && (block.timestamp - stake.lastActionTimestamp) > releasingDuration) {
           stake.phase = StakePhase.READYTORELEASE;
         }
-        return stake;
     }
 
     /**
@@ -91,13 +90,12 @@ abstract contract OrionVault is ExchangeStorage, OwnableUpgradeSafe {
         address user = _msgSender();
         Stake memory current = getStake(user);
         require(liabilities[user].length == 0, "Can not release stake: user has liabilities");
+        Stake storage stake = stakingData[_msgSender()];
         if(current.phase == StakePhase.READYTORELEASE) {
-          Stake storage stake = stakingData[_msgSender()];
           assetBalances[user][address(_orionToken)] += stake.amount;
           stake.amount = 0;
           stake.phase = StakePhase.NOTSTAKED;
         } else if (current.phase == StakePhase.LOCKED) {
-          Stake storage stake = stakingData[_msgSender()];
           stake.phase = StakePhase.RELEASING;
           stake.lastActionTimestamp = uint64(block.timestamp);
         } else {

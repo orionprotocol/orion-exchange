@@ -1,4 +1,4 @@
-pragma solidity ^0.7.0;
+pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -74,6 +74,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param allowedMatcher - address which has authorization to match orders
      */
     function setBasicParams(address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
+      require((orionToken != address(0)) && (priceOracleAddress != address(0)), "E15");
       _orionToken = IERC20(orionToken);
       _oracleAddress = priceOracleAddress;
       _allowedMatcher = allowedMatcher;
@@ -89,7 +90,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param _positionOverdue - time after that liabilities became overdue and may be liquidated
      */
 
-    function updateMarginalSettings(address[] memory _collateralAssets,
+    function updateMarginalSettings(address[] calldata _collateralAssets,
                                     uint8 _stakeRisk,
                                     uint8 _liquidationPremium,
                                     uint64 _priceOverdue,
@@ -106,8 +107,8 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param assets - list of assets
      * @param risks - list of risks as uint8 (0=0, 255=1)
      */
-    function updateAssetRisks(address[] memory assets, uint8[] memory risks) public onlyOwner {
-        for(uint16 i; i< assets.length; i++)
+    function updateAssetRisks(address[] calldata assets, uint8[] calldata risks) public onlyOwner {
+        for(uint256 i; i< assets.length; i++)
          assetRisks[assets[i]] = risks[i];
     }
 
@@ -189,7 +190,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
     function getBalance(address assetAddress, address user)
         public
         view
-        returns (int192 assetBalance)
+        returns (int192)
     {
         return assetBalances[user][assetAddress];
     }
@@ -197,19 +198,18 @@ contract Exchange is OrionVault, ReentrancyGuard {
 
     /**
      * @dev Batch query of asset balances for a user
-     * @param assetsAddresses array of addresses of teh assets to query
+     * @param assetsAddresses array of addresses of the assets to query
      * @param user user address to query
      */
     function getBalances(address[] memory assetsAddresses, address user)
         public
         view
-        returns (int192[] memory)
+        returns (int192[] memory balances)
     {
-        int192[] memory balances = new int192[](assetsAddresses.length);
-        for (uint16 i; i < assetsAddresses.length; i++) {
+        balances = new int192[](assetsAddresses.length);
+        for (uint256 i; i < assetsAddresses.length; i++) {
             balances[i] = assetBalances[user][assetsAddresses[i]];
         }
-        return balances;
     }
 
     /**
@@ -515,6 +515,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
         E11: Amount overflow
         E12: Incorrect filled amount, flavor G,B,S: general(overflow), buyer order overflow, seller order overflow
         E14: Authorization error, sfs - seizeFromStake
+        E15: Wrong passed params
     */
 
 }

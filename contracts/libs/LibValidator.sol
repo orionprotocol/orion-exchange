@@ -1,11 +1,9 @@
-pragma solidity ^0.7.0;
+pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/math/SafeMath.sol";
 
 library LibValidator {
-    using SafeMath for uint256;
-    using SafeMath for uint64;
 
     string public constant DOMAIN_NAME = "Orion Exchange";
     string public constant DOMAIN_VERSION = "1";
@@ -169,8 +167,8 @@ library LibValidator {
         require(filledPrice >= sellOrder.price, "E3");
 
         // Check Expiration Time. Convert to seconds first
-        require(buyOrder.expiration.div(1000) >= currentTime, "E4B");
-        require(sellOrder.expiration.div(1000) >= currentTime, "E4S");
+        require(buyOrder.expiration/1000 >= currentTime, "E4B");
+        require(sellOrder.expiration/1000 >= currentTime, "E4S");
 
         require( buyOrder.buySide==1 && sellOrder.buySide==0, "E3D");
         success = true;
@@ -183,7 +181,7 @@ library LibValidator {
         uint112 filledAmount,
         uint256 currentTime,
         address[] memory path
-    ) public pure returns (bool success) {
+    ) public pure {
         require(validateV3(buyOrder), "E2B");
         require(buyOrder.matcherAddress == sender && buyOrder.matcherAddress == allowedMatcher, "E3M2");
         require(

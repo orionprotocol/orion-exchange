@@ -1,9 +1,10 @@
-pragma solidity ^0.7.0;
+pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
 import "./libs/EIP712Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
+import "./PriceOracleDataTypes.sol";
 
 /**
  * @title PriceOracle
@@ -16,7 +17,7 @@ import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
         Currently, first option is commented out.
  * @author @EmelyanenkoK
  */
-contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable {
+contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable, PriceOracleDataTypes {
 
     // Prices as they got to the contract
     struct Prices {
@@ -24,12 +25,6 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable {
         uint64[] prices;
         uint64 timestamp;
         bytes signature;
-    }
-
-    // Prices as they given to the consumer
-    struct PriceDataOut {
-        uint64 price;
-        uint64 timestamp;
     }
 
     /* SignedPriceApproach
@@ -52,6 +47,7 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable {
     mapping(address => bool) public priceProviderAuthorization;
 
     constructor(address publicKey, address _baseAsset) public {
+        require((publicKey != address(0)) && (_baseAsset != address(0)), "Wrong constructor params");
         oraclePublicKey = publicKey;
         baseAsset = _baseAsset;
     }
@@ -121,7 +117,7 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable {
     function provideDataAddressAuthorization(Prices memory priceFeed) public {
        require(priceProviderAuthorization[msg.sender], "Unauthorized dataprovider");
        require(priceFeed.timestamp<block.timestamp+60, "Price data timestamp too far in the future");
-       for(uint8 i=0; i<priceFeed.assetAddresses.length; i++) {
+       for(uint256 i=0; i<priceFeed.assetAddresses.length; i++) {
          PriceDataOut storage assetData = assetPrices[priceFeed.assetAddresses[i]];
          if(assetData.timestamp<priceFeed.timestamp) {
            assetData.price = priceFeed.prices[i];
@@ -133,14 +129,13 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable {
     /**
      * @dev price data getter (note prices are relative to basicAsset, ORN)
      * @param assetAddresses - set of assets
-     * @return PriceDataOut[] - set of prices
+     * @return result PriceDataOut[] - set of prices
      */
-    function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory) {
-      PriceDataOut[] memory result = new PriceDataOut[](assetAddresses.length);
-      for(uint8 i=0; i<assetAddresses.length; i++) {
+    function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory result) {
+      result = new PriceDataOut[](assetAddresses.length);
+      for(uint256 i=0; i<assetAddresses.length; i++) {
         result[i] = assetPrices[assetAddresses[i]];
       }
-      return result;
     }
 
     /* SignedPriceApproach
@@ -204,7 +199,7 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable {
       }
         
       // Retrieve */ETH price data for all assets
-      for(uint8 i=0; i<assets.length; i++) {
+      for(uint256 i=0; i<assets.length; i++) {
         address currentAsset = assets[i];
         address currentAggregator = chainLinkETHAggregator[currentAsset];
         if( currentAggregator == address(0))
@@ -241,7 +236,7 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable {
      * List of available aggregators: https://docs.chain.link/docs/ethereum-addresses
      */
     function setChainLinkAggregators(address[] memory assets, address[] memory aggregatorAddresses) public onlyOwner {
-      for(uint8 i=0; i<assets.length; i++) {
+      for(uint256 i=0; i<assets.length; i++) {
         chainLinkETHAggregator[assets[i]] = aggregatorAddresses[i];
       }
     }
@@ -252,10 +247,10 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable {
      * @param removed - set of addresses for which we forbid authorization
      */
     function changePriceProviderAuthorization(address[] memory added, address[] memory removed) public onlyOwner {
-      for(uint8 i=0; i<added.length; i++) {
+      for(uint256 i=0; i<added.length; i++) {
         priceProviderAuthorization[added[i]] = true;
       }
-      for(uint8 i=0; i<removed.length; i++) {
+      for(uint256 i=0; i<removed.length; i++) {
         priceProviderAuthorization[removed[i]] = false;
       }
     }

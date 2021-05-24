@@ -1,14 +1,12 @@
-pragma solidity ^0.7.0;
+pragma solidity 0.7.4;
 
-// TODO should be made interface
-contract OrionVaultInterface {
+interface OrionVaultInterface {
 
     /**
      * @dev Returns locked or frozen stake balance only
      * @param user address
      */
-    function getLockedStakeBalance(address user) public view returns (uint64) {
-    }
+    function getLockedStakeBalance(address user) external view returns (uint64);
 
     /**
      * @dev send some orion from user's stake to receiver balance
@@ -18,7 +16,6 @@ contract OrionVaultInterface {
      * @param receiver - user which get orions
      * @param amount - amount of withdrawn tokens
      */
-    function seizeFromStake(address user, address receiver, uint64 amount) external {
-    }
+    function seizeFromStake(address user, address receiver, uint64 amount) external;
 
 }
