@@ -15,10 +15,13 @@ module.exports = async (deployer, network, accounts) => {
     await deployer.link(LibUnitConverter, Exchange);
     await deployer.link(MarginalFunctionality,Exchange);
 
-    let priceOracleInstance = await deployer.deploy(PriceOracle, oraclePubkey, Orion.address);
+    var orn = await Orion.deployed();
+    let priceOracleInstance = await deployer.deploy(PriceOracle, oraclePubkey, orn.address);
     let exchangeInstance = await deployProxy(Exchange, {unsafeAllowCustomTypes: true, unsafeAllowLinkedLibraries: true});
+    await exchangeInstance.setBasicParams(orn.address, priceOracleInstance.address, accounts[0]);
+  }
 
-    await exchangeInstance.setBasicParams(Orion.address, PriceOracle.address, accounts[0]);
+  if (network === "binanceTestnet") {
 
   }
 

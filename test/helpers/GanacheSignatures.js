@@ -23,4 +23,28 @@ const eth_signTypedData = (userAddress, signatureData) => {
   });
 };
 
-module.exports = eth_signTypedData;
+const eth_signTypedData_v4 = (userAddress, signatureData) => {
+  return new Promise(function (resolve, reject) {
+    web3.currentProvider.send(
+        {
+          method: "eth_signTypedData_v4",
+          params: [userAddress, signatureData],
+          from: userAddress,
+        },
+        function (err, result) {
+          if (err) {
+            reject(err);
+          } else if (result.error) {
+            reject(result.error);
+          } else {
+            resolve(result.result);
+          }
+        }
+    );
+  });
+};
+
+module.exports = {
+  eth_signTypedData,
+  eth_signTypedData_v4
+};

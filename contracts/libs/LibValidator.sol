@@ -50,6 +50,9 @@ library LibValidator {
         bytes signature;
     }
 
+    /**
+     * @dev validate order signature
+     */
     function validateV3(Order memory order) public pure returns (bool) {
         bytes32 domainSeparator = DOMAIN_SEPARATOR;
 
@@ -64,6 +67,9 @@ library LibValidator {
         return digest.recover(order.signature) == order.senderAddress;
     }
 
+    /**
+     * @return hash order
+     */
     function getTypeValueHash(Order memory _order)
         internal
         pure
@@ -90,6 +96,9 @@ library LibValidator {
             );
     }
 
+    /**
+     * @dev basic checks of matching orders against each other
+     */
     function checkOrdersInfo(
         Order memory buyOrder,
         Order memory sellOrder,
@@ -161,5 +170,35 @@ library LibValidator {
 
         bytes32 digest = getEthSignedOrderHash(order);
         return digest.recover(order.signature) == order.senderAddress;
+    }
+
+    function checkOrderSingleMatch(
+        Order memory buyOrder,
+        address sender,
+        address allowedMatcher,
+        uint112 filledAmount,
+        uint256 currentTime,
+        address[] memory path,
+        uint8 isBuySide
+    ) public pure returns (bool success) {
+        buyOrder.isPersonalSign ? require(validatePersonal(buyOrder), "E2BP") : require(validateV3(buyOrder), "E2B");
+        require(buyOrder.matcherAddress == sender && buyOrder.matcherAddress == allowedMatcher, "E3M2");
+        if(buyOrder.buySide==1){
+            require(
+                buyOrder.baseAsset == path[path.length-1] &&
+                buyOrder.quoteAsset == path[0],
+                "E3As"
+            );
+        }else{
+            require(
+                buyOrder.quoteAsset == path[path.length-1] &&
+                buyOrder.baseAsset == path[0],
+                "E3As"
+            );
+        }
+        require(filledAmount <= buyOrder.amount, "E3AmB");
+        require(buyOrder.expiration/1000 >= currentTime, "E4B");
+        require( buyOrder.buySide==isBuySide, "E3D");
+
     }
 }

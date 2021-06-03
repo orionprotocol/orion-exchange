@@ -9,7 +9,7 @@ const EIP712 = require("./helpers/EIP712.js");
 const ChainManipulation = require("./helpers/ChainManipulation");
 const eth_signTypedData = require("./helpers/GanacheSignatures.js");
 
-const Exchange = artifacts.require("Exchange");
+const Exchange = artifacts.require("ExchangeWithOrionPool");
 const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
 const WXRP = artifacts.require("WXRP");

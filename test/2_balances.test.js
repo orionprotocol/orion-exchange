@@ -3,7 +3,7 @@ require("chai")
   .use(require("chai-as-promised"))
   .should();
 
-let Exchange = artifacts.require("Exchange");
+let Exchange = artifacts.require("ExchangeWithOrionPool");
 let WETH = artifacts.require("WETH");
 let WBTC = artifacts.require("WBTC");
 let USDT = artifacts.require("USDT");

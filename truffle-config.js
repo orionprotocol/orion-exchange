@@ -12,7 +12,8 @@ module.exports = {
     'truffle-plugin-verify'
   ],
   api_keys: {
-    bscscan: process.env.BSCSCANAPIKEY
+    bscscan: process.env.BSCSCANAPIKEY,
+    etherscan: process.env.ETHERSCANAPIKEY
   },
   compilers: {
     solc: {
@@ -36,8 +37,8 @@ module.exports = {
     ropsten: {
       provider: () => providerFactory("ropsten"),
       network_id: "3",
-      gasPrice: 25e9,
-      gas: 6721975,
+      gasPrice: 50e9,
+      gas:  3705056,
     },
     mainnet: {
       provider: () => providerFactory("mainnet"),
@@ -48,10 +49,10 @@ module.exports = {
     bsc_testnet: {
       provider: () => new HDWalletProvider(
           process.env.MNEMONIC,
-          `https://data-seed-prebsc-1-s2.binance.org:8545`,
+          `https://data-seed-prebsc-2-s2.binance.org:8545/`,
           Number(process.env.MNEMONIC_ADDRESS_INDEX)),
       network_id: 97,
-      timeoutBlocks: 200,
+      //  timeoutBlocks: 200,
       skipDryRun: true,
       production: true
     },

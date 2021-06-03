@@ -7,7 +7,7 @@ const sigUtil = require("eth-sig-util");
 const privKeyHelper = require("./helpers/PrivateKeys.js");
 const orders = require("./helpers/Orders.js");
 
-const Exchange = artifacts.require("Exchange");
+const Exchange = artifacts.require("ExchangeWithOrionPool");
 const WETH = artifacts.require("WETH");
 const WBTC = artifacts.require("WBTC");
 const LibValidator = artifacts.require("LibValidator");
@@ -56,7 +56,9 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("user1 deposits 1 ETH to exchange", async () => {
-      exchange.deposit({ from: user1, value: String(1e18) });
+      await exchange.deposit({ from: user1, value: 1e18 });
+      // let balance = await web3.eth.getBalance(user1);
+      // console.log(web3.utils.fromWei(balance));
 
       let balanceAsset = await exchange.getBalance(ZERO_ADDRESS, user1);
       balanceAsset.toString().should.be.equal(String(1e8));
@@ -79,7 +81,7 @@ contract("Exchange", ([matcher, user1, user2]) => {
     });
 
     it("user2 deposits 1 ETH to exchange", async () => {
-      exchange.deposit({ from: user2, value: String(1e18) });
+      await exchange.deposit({ from: user2, value: String(1e18) });
 
       let balanceAsset = await exchange.getBalance(ZERO_ADDRESS, user2);
       balanceAsset.toString().should.be.equal(String(1e8));

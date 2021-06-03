@@ -160,12 +160,12 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
     });
 
     it("owner can change providers authorization", async () => {
-      priceOracle.changePriceProviderAuthorization([user2, oracle], [], {from: owner}).should.be.fulfilled;
+      await priceOracle.changePriceProviderAuthorization([user2, oracle], [], {from: owner}).should.be.fulfilled;
        let user2Authorization = await priceOracle.priceProviderAuthorization(user2);
        let oracleAuthorization = await priceOracle.priceProviderAuthorization(oracle);
        user2Authorization.should.be.equal(true);
        oracleAuthorization.should.be.equal(true);
-       priceOracle.changePriceProviderAuthorization([], [oracle], {from: owner}).should.be.fulfilled; 
+       await priceOracle.changePriceProviderAuthorization([], [oracle], {from: owner}).should.be.fulfilled;
        oracleAuthorization = await priceOracle.priceProviderAuthorization(oracle);
        oracleAuthorization.should.be.equal(false);
     });
@@ -178,7 +178,7 @@ contract("PriceOracle", ([owner, user1, oracle, user2]) => {
         timestamp: newTs,
         signature: "0x00"
       };
-      priceOracle.provideDataAddressAuthorization(prices, {from: user2}).should.be.fulfilled;
+      await priceOracle.provideDataAddressAuthorization(prices, {from: user2}).should.be.fulfilled;
       let data = await priceOracle.givePrices([asset2]);
       data[0].price.toString().should.be.equal(String(newPrice));
       data[0].timestamp.toString().should.be.equal(String(newTs));
