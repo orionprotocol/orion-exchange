@@ -9,7 +9,7 @@ const EIP712 = require("./helpers/EIP712.js");
 const ChainManipulation = require("./helpers/ChainManipulation");
 const eth_signTypedData = require("./helpers/GanacheSignatures.js");
 
-const Exchange = artifacts.require("Exchange");
+const Exchange = artifacts.require("ExchangeWithOrionPool");
 const Token = artifacts.require("WETH");
 const Orion = artifacts.require("Orion");
 let PriceOracle = artifacts.require("PriceOracle");

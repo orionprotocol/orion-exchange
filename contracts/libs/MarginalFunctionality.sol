@@ -6,6 +6,12 @@ import "../OrionVaultInterface.sol";
 
 library MarginalFunctionality {
 
+    // We have the following approach: when liability is created we store
+    // timestamp and size of liability. If the subsequent trade will deepen
+    // this liability or won't fully cover it timestamp will not change.
+    // However once outstandingAmount is covered we check wether balance on
+    // that asset is positive or not. If not, liability still in the place but
+    // time counter is dropped and timestamp set to `now`.
     struct Liability {
         address asset;
         uint64 timestamp;
@@ -17,16 +23,17 @@ library MarginalFunctionality {
         NEGATIVE, // weighted position below 0
         OVERDUE,  // liability is not returned for too long
         NOPRICE,  // some assets has no price or expired
-        INCORRECT // some of the basic requirements are not met:
-                  // too many liabilities, no locked stake, etc
-    }
-    struct Position {
-        PositionState state;
-        int256 weightedPosition;
-        int256 totalPosition;
-        int256 totalLiabilities;
+        INCORRECT // some of the basic requirements are not met: too many liabilities, no locked stake, etc
     }
 
+    struct Position {
+        PositionState state;
+        int256 weightedPosition; // sum of weighted collateral minus liabilities
+        int256 totalPosition; // sum of unweighted (total) collateral minus liabilities
+        int256 totalLiabilities; // total liabilities value
+    }
+
+    // Constants from Exchange contract used for calculations
     struct UsedConstants {
       address user;
       address _oracleAddress;
@@ -92,6 +99,13 @@ library MarginalFunctionality {
         return (outdated, weightedPosition, totalPosition);
     }
 
+    /**
+     * @dev method to calc liabilities
+     * @return outdated wether any price is outdated
+     * @return overdue wether any liability is overdue
+     * @return weightedPosition weightedLiability == totalLiability in ORN
+     * @return totalPosition totalLiability in ORN
+     */
     function calcLiabilities(mapping(address => Liability[]) storage liabilities,
                              mapping(address => mapping(address => int192)) storage assetBalances,
                              UsedConstants memory constants
@@ -172,6 +186,9 @@ library MarginalFunctionality {
         result.totalPosition = totalPosition;
     }
 
+    /**
+     * @dev method removes liability
+     */
     function removeLiability(address user,
                              address asset,
                              mapping(address => Liability[]) storage liabilities)
@@ -188,6 +205,10 @@ library MarginalFunctionality {
         }
     }
 
+    /**
+     * @dev method update liability
+     * @notice implement logic for outstandingAmount (see Liability description)
+     */
     function updateLiability(address user,
                              address asset,
                              mapping(address => Liability[]) storage liabilities,
@@ -213,6 +234,11 @@ library MarginalFunctionality {
         }
     }
 
+
+    /**
+     * @dev partially liquidate, that is cover some asset liability to get
+            ORN from meisbehaviour broker
+     */
     function partiallyLiquidate(address[] storage collateralAssets,
                                 mapping(address => Liability[]) storage liabilities,
                                 mapping(address => mapping(address => int192)) storage assetBalances,
@@ -253,6 +279,9 @@ library MarginalFunctionality {
 
     }
 
+    /**
+     * @dev reimburse liquidator with ORN: first from stake, than from broker balance
+     */
     function reimburseLiquidator(
                        uint112 amount,
                        uint64 price,

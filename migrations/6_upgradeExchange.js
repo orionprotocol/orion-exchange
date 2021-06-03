@@ -8,6 +8,11 @@ const MarginalFunctionality = artifacts.require("MarginalFunctionality");
 module.exports = async (deployer, network, accounts) => {
   if (network === "development") {
   }
+
+  if (network === "binanceTestnet") {
+
+  }
+
   if (network === "ropsten") {
     await deployer.deploy(MarginalFunctionality);
     await deployer.link(MarginalFunctionality,Exchange);
