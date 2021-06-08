@@ -76,6 +76,7 @@ contract ExchangeWithOrionPool is Exchange {
     {
         uint64      filledPrice;
         uint112     amountQuote;
+        uint        tx_value;
     }
 
     function fillThroughOrionPool(
@@ -105,7 +106,10 @@ contract ExchangeWithOrionPool is Exchange {
                 order.matcherFee = blockchainFee;
 
             _safeIncreaseAllowance(order.quoteAsset);
-            try IOrionPoolV2Router02Ext(_orionpoolRouter).swapTokensForExactTokensAutoRoute(
+            if(order.quoteAsset == address(0))
+                exec_data.tx_value = uint(amountQuoteBaseUnits);
+
+            try IOrionPoolV2Router02Ext(_orionpoolRouter).swapTokensForExactTokensAutoRoute{value: exec_data.tx_value}(
                                                         uint(filledAmountBaseUnits),
                                                         uint(amountQuoteBaseUnits),
                                                         path,
@@ -148,7 +152,10 @@ contract ExchangeWithOrionPool is Exchange {
             );
 
             _safeIncreaseAllowance(order.baseAsset);
-            try IOrionPoolV2Router02Ext(_orionpoolRouter).swapExactTokensForTokensAutoRoute(
+            if(order.baseAsset == address(0))
+                exec_data.tx_value = uint(amountQuoteBaseUnits);
+
+            try IOrionPoolV2Router02Ext(_orionpoolRouter).swapExactTokensForTokensAutoRoute{value: exec_data.tx_value}(
                 uint(amountQuoteBaseUnits),
                 uint(filledAmountBaseUnits),
                 path,
