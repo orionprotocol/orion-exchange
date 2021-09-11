@@ -530,6 +530,16 @@ contract Exchange is OrionVault, ReentrancyGuard {
     }
 
     /**
+     * @dev method to update liability forcing removing any liabilities if balance > 0
+     * @param assetAddress - liability asset
+     */
+    function forceUpdateLiability(address assetAddress) public {
+        address user = msg.sender;
+        MarginalFunctionality.updateLiability(user, assetAddress, liabilities, 0, assetBalances[user][assetAddress]);
+    }
+
+
+    /**
      *  @dev  revert on fallback function
      */
     fallback() external {

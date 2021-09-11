@@ -16,6 +16,7 @@
     "test-pool-swap": "npx truffle test ./test/13_swap_through_pool.js --compile-none",
     "test-orionpool": "hardhat test hardhat-tests/11_orionpool_hardhat.js",
     "deploy-test": "truffle migrate --f 11 --to 11 --network bsc_testnet",
+    "deploy-test_9": "truffle migrate --f 9 --to 9 --network mainnet_kucoin",
     "test-all": "npx truffle test --compile-none",
     "flow": "node scripts/completeFlow.js",
     "ganache": "ganache-cli -i 666 -p 8545 -m \"uphold wide shed another couch focus hidden soup lazy top salon salute\"",

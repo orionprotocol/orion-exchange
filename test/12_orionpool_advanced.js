@@ -24,7 +24,7 @@ const Pair = artifacts.require("OrionPoolV2Pair");
 let exchangeWithOrionPool, router, orion, usdt, weth9, priceOracle, lib, marginalFunctionality, matcher, factory;
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-const FEE_DIVIDER = 0.998;
+const FEE_DIVIDER = 0.997;
 
 //  Just random address
 const FAKE_TOKEN_ADDRESS = '0x32Be343B94f860124dC4fEe278FDCBD38C102D88';
@@ -410,7 +410,7 @@ contract("ExchangeWithOrionPool", ([owner, broker, user1, balancer, user4]) => {
               .toString().should.be.equal(ToORN(buy_orn).sub(orn_gas_fee).toString());
 
           //    3. user1 should give away ABOUT (buy_orn * actual_quote) in USDT.
-          //        Knowing 
+          //        Knowing
           (user1_usdt_balance_before_order - await exchangeWithOrionPool.getBalance(usdt.address, user1))
               .should.be.bnEquals(ToExchAny(CalcAmountIn(buy_orn)));
 

@@ -22,11 +22,7 @@ library OrionPoolV2Library {
                 hex'ff',
                 factory,
                 keccak256(abi.encodePacked(token0, token1)),
-                //hex'96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f' // init code hash
-                //hex'2e1df2e4e84180ba37f92fbe64b233891bf723bf7c4006440c8efe805e1c2039'
-                //hex'bc620f3e7512288d076e4cbbf4f5105c76620509af6d402807611ad892ddbf2e'
-                hex'014e691048701dc6e0290533ebabdcfd6ec0c131d8098a02c5407fc5fe1ef11f'
-                //hex'f1e662fe50104c63fe3a196ce95a7ea69ab6c35f783f0e743fc01b47191cbdec'
+                hex'0c591b9bd08f1704b700bd0b662cd000c1bf71b54704b340e7442d09778ed7c7' // init code hash
             ))));
     }
 
@@ -48,7 +44,7 @@ library OrionPoolV2Library {
     function getAmountOut(uint amountIn, uint reserveIn, uint reserveOut) internal pure returns (uint amountOut) {
         require(amountIn > 0, 'OrionPoolV2Library: INSUFFICIENT_INPUT_AMOUNT');
         require(reserveIn > 0 && reserveOut > 0, 'OrionPoolV2Library: INSUFFICIENT_LIQUIDITY');
-        uint amountInWithFee = amountIn.mul(998);
+        uint amountInWithFee = amountIn.mul(997);
         uint numerator = amountInWithFee.mul(reserveOut);
         uint denominator = reserveIn.mul(1000).add(amountInWithFee);
         amountOut = numerator / denominator;
@@ -59,7 +55,7 @@ library OrionPoolV2Library {
         require(amountOut > 0, 'OrionPoolV2Library: INSUFFICIENT_OUTPUT_AMOUNT');
         require(reserveIn > 0 && reserveOut > 0, 'OrionPoolV2Library: INSUFFICIENT_LIQUIDITY');
         uint numerator = reserveIn.mul(amountOut).mul(1000);
-        uint denominator = reserveOut.sub(amountOut).mul(998);
+        uint denominator = reserveOut.sub(amountOut).mul(997);
         amountIn = (numerator / denominator).add(1);
     }
 

@@ -106,7 +106,50 @@ module.exports = async (deployer, network, accounts) => {
     let router = await OrionPoolRouter.deployed();
     console.log("Router deployed at:"+router.address);
   }
-  if (network === "mainnet") {
+
+  if (network==="bsc") {
+
+    //  Example: npx truffle migrate --f 7 --to 7 --network bsc
+    let wbnb = {address: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c'};
+    console.log("Account:" + accounts[0]);
+
+    console.log("Deployer:" + accounts[0]);
+
+    //  STEP BY STEP:
+    await deployer.deploy(OrionPoolFactory, accounts[0], {from: accounts[0]});
+    let orionpoolFactory = await OrionPoolFactory.deployed();
+    console.log("orionpoolFactory ", orionpoolFactory.address);
+
+    await deployer.deploy(OrionPoolLibrary);
+    let orionPoolLibrary = await OrionPoolLibrary.deployed();
+    console.log("orionPoolLibrary ", orionPoolLibrary.address);
+
+    await deployer.link(OrionPoolLibrary, OrionPoolRouter);
+    await deployer.deploy(OrionPoolRouter, orionpoolFactory.address, wbnb.address, {from: accounts[0]});
+    let router = await OrionPoolRouter.deployed();
+    console.log("Router deployed at:" + router.address);
   }
 
+  if (network==="mainnet") {
+
+    //  Example: npx truffle migrate --f 7 --to 7 --network mainnet
+    let wbnb = {address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2'};
+    console.log("Account:" + accounts[0]);
+
+    console.log("Deployer:" + accounts[0]);
+
+    //  STEP BY STEP:
+    await deployer.deploy(OrionPoolFactory, accounts[0], {from: accounts[0]});
+    let orionpoolFactory = await OrionPoolFactory.deployed();
+    console.log("orionpoolFactory ", orionpoolFactory.address);
+
+    await deployer.deploy(OrionPoolLibrary);
+    let orionPoolLibrary = await OrionPoolLibrary.deployed();
+    console.log("orionPoolLibrary ", orionPoolLibrary.address);
+
+    await deployer.link(OrionPoolLibrary, OrionPoolRouter);
+    await deployer.deploy(OrionPoolRouter, orionpoolFactory.address, wbnb.address, {from: accounts[0]});
+    let router = await OrionPoolRouter.deployed();
+    console.log("Router deployed at:" + router.address);
+  }
 };

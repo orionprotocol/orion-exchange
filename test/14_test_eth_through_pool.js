@@ -24,7 +24,7 @@ const Pair = artifacts.require("OrionPoolV2Pair");
 let exchangeWithOrionPool, router, orion, usdt, weth9, priceOracle, lib, marginalFunctionality, matcher, factory;
 
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
-const FEE_DIVIDER = 0.998;
+const FEE_DIVIDER = 0.997;
 
 //  Just random address
 const FAKE_TOKEN_ADDRESS = '0x32Be343B94f860124dC4fEe278FDCBD38C102D88';

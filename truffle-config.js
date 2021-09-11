@@ -43,8 +43,20 @@ module.exports = {
     mainnet: {
       provider: () => providerFactory("mainnet"),
       network_id: "1",
-      gasPrice: 37e9,
+      gasPrice: 15e9,
       gas: 6721975,
+      timeoutBlocks: 200,
+      skipDryRun: true,
+      production: true,
+    },
+    mainnet_kucoin: {
+      provider: () => providerFactory("mainnet"),
+      network_id: "1",
+      gasPrice: 35e9,
+      gas: 6721975,
+      timeoutBlocks: 2000,
+      skipDryRun: true,
+      production: true,
     },
     bsc_testnet: {
       provider: () => new HDWalletProvider(
@@ -64,7 +76,18 @@ module.exports = {
       network_id: 56,
       timeoutBlocks: 200,
       skipDryRun: true,
-      gasPrice: 20e9,
+      gasPrice: 5e9,
+      gas: 6721975
+    },
+    bsc2: {
+      provider: () => new HDWalletProvider(
+          process.env.MNEMONIC,
+          `https://bsc-dataseed3.binance.org/`,
+          Number(process.env.MNEMONIC_ADDRESS_INDEX)),
+      network_id: 56,
+      timeoutBlocks: 200,
+      skipDryRun: true,
+      gasPrice: 5e9,
       gas: 6721975
     },
   },
