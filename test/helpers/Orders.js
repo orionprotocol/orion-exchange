@@ -42,9 +42,25 @@ async function generateOrder( trader, matcher, buySide,
              message: order,
            };
 
-      let msg = { data: msgParams };
       order.signature = await (isV4 ? eth_signTypedData_v4(trader, msgParams) : eth_signTypedData(trader, msgParams));
-      return {order:order, msgParams: msgParams};
+      return { order, msgParams };
+}
+
+async function generateOrderV4(trader, matcher, buySide,
+                              baseAsset = weth,
+                              quoteAsset = wbtc,
+                              feeAsset = wbtc,
+                              amount = Math.ceil(3.5e8),
+                              price = Math.ceil(0.021e8),
+                              fee = Math.ceil(3.5e5),
+                              nonce = undefined,
+                              expiration = undefined) {
+    trader = typeof trader === 'string' ?  trader : trader.address;
+    matcher = typeof matcher === 'string' ?  matcher : matcher.address;
+    amount = amount.toString();
+    price = price.toString();
+    fee = fee.toString();
+    return generateOrder(trader, matcher, buySide, baseAsset, quoteAsset, feeAsset, amount, price, fee, nonce, expiration, true)
 }
 
 async function generateOrderWithPrivateKey( traderPrivateKey, matcher, buySide,
@@ -151,6 +167,7 @@ async function generateOrderPersonalSign( sender, matcher, buySide,
 
 module.exports = Object({
     generateOrder:generateOrder,
+    generateOrderV4:generateOrderV4,
     generateOrderPersonalSign:generateOrderPersonalSign,
     generateOrderWithPrivateKey: generateOrderWithPrivateKey
 });

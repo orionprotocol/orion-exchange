@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
@@ -5,9 +6,9 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "./libs/MarginalFunctionality.sol";
 
 // Base contract which contain state variable of the first version of Exchange
-// deployed on mainnet. Changes of the state variables should be introduced 
+// deployed on mainnet. Changes of the state variables should be introduced
 // not in that contract but down the inheritance chain, to allow safe upgrades
-// More info about safe upgrades here: 
+// More info about safe upgrades here:
 // https://blog.openzeppelin.com/the-state-of-smart-contract-upgrades/#upgrade-patterns
 
 contract ExchangeStorage {
@@ -37,7 +38,6 @@ contract ExchangeStorage {
     address _oracleAddress;
     // Address from which matching of orders is allowed
     address _allowedMatcher;
-
 
 }
 

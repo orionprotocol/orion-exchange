@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
@@ -10,9 +11,9 @@ abstract contract OrionVault is ExchangeStorage, OwnableUpgradeSafe {
 
 
     struct Stake {
-      uint64 amount; // 100m ORN in circulation fits uint64
-      StakePhase phase;
-      uint64 lastActionTimestamp;
+        uint64 amount; // 100m ORN in circulation fits uint64
+        StakePhase phase;
+        uint64 lastActionTimestamp;
     }
 
     uint64 constant releasingDuration = 3600*24;
@@ -27,7 +28,7 @@ abstract contract OrionVault is ExchangeStorage, OwnableUpgradeSafe {
     function getStake(address user) public view returns (Stake memory stake){
         stake = stakingData[user];
         if(stake.phase == StakePhase.RELEASING && (block.timestamp - stake.lastActionTimestamp) > releasingDuration) {
-          stake.phase = StakePhase.READYTORELEASE;
+            stake.phase = StakePhase.READYTORELEASE;
         }
     }
 
@@ -53,10 +54,10 @@ abstract contract OrionVault is ExchangeStorage, OwnableUpgradeSafe {
      * @param user address
      */
     function getLockedStakeBalance(address user) public view returns (uint256) {
-      Stake memory stake = getStake(user);
-      if(stake.phase == StakePhase.LOCKED || stake.phase == StakePhase.FROZEN)
-        return stake.amount;
-      return 0;
+        Stake memory stake = getStake(user);
+        if(stake.phase == StakePhase.LOCKED || stake.phase == StakePhase.FROZEN)
+            return stake.amount;
+        return 0;
     }
 
 
@@ -89,17 +90,17 @@ abstract contract OrionVault is ExchangeStorage, OwnableUpgradeSafe {
     function requestReleaseStake() public {
         address user = _msgSender();
         Stake memory current = getStake(user);
-        require(liabilities[user].length == 0, "Can not release stake: user has liabilities");
+        require(liabilities[user].length == 0, "E1L");
         Stake storage stake = stakingData[_msgSender()];
         if(current.phase == StakePhase.READYTORELEASE) {
-          assetBalances[user][address(_orionToken)] += stake.amount;
-          stake.amount = 0;
-          stake.phase = StakePhase.NOTSTAKED;
+            assetBalances[user][address(_orionToken)] += stake.amount;
+            stake.amount = 0;
+            stake.phase = StakePhase.NOTSTAKED;
         } else if (current.phase == StakePhase.LOCKED) {
-          stake.phase = StakePhase.RELEASING;
-          stake.lastActionTimestamp = uint64(block.timestamp);
+            stake.phase = StakePhase.RELEASING;
+            stake.lastActionTimestamp = uint64(block.timestamp);
         } else {
-          revert("Can not release funds from this phase");
+            revert("E14");
         }
     }
 
@@ -116,7 +117,7 @@ abstract contract OrionVault is ExchangeStorage, OwnableUpgradeSafe {
         stake.amount += amount;
 
         if(stake.phase != StakePhase.FROZEN) {
-          stake.phase = StakePhase.LOCKED; //what is frozen should stay frozen
+            stake.phase = StakePhase.LOCKED; //what is frozen should stay frozen
         }
         stake.lastActionTimestamp = uint64(block.timestamp);
     }

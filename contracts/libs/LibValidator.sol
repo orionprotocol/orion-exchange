@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
@@ -10,8 +11,7 @@ library LibValidator {
     string public constant DOMAIN_NAME = "Orion Exchange";
     string public constant DOMAIN_VERSION = "1";
     uint256 public constant CHAIN_ID = 1;
-    bytes32
-        public constant DOMAIN_SALT = 0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557;
+    bytes32 public constant DOMAIN_SALT = 0xf2d857f4a3edcb9b78b4d503bfe733db1e3f6cdc2b7971ee739626c97e86a557;
 
     bytes32 public constant EIP712_DOMAIN_TYPEHASH = keccak256(
         abi.encodePacked(
@@ -54,12 +54,10 @@ library LibValidator {
      * @dev validate order signature
      */
     function validateV3(Order memory order) public pure returns (bool) {
-        bytes32 domainSeparator = DOMAIN_SEPARATOR;
-
         bytes32 digest = keccak256(
             abi.encodePacked(
                 "\x19\x01",
-                domainSeparator,
+                DOMAIN_SEPARATOR,
                 getTypeValueHash(order)
             )
         );
@@ -75,12 +73,10 @@ library LibValidator {
         pure
         returns (bytes32)
     {
-        bytes32 orderTypeHash = ORDER_TYPEHASH;
-
         return
             keccak256(
                 abi.encode(
-                    orderTypeHash,
+                    ORDER_TYPEHASH,
                     _order.senderAddress,
                     _order.matcherAddress,
                     _order.baseAsset,

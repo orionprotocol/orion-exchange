@@ -4,7 +4,6 @@ require("chai")
   .should();
 
 const sigUtil = require("eth-sig-util");
-const privKeyHelper = require("./helpers/PrivateKeys.js");
 const orders = require("./helpers/Orders.js");
 
 const Exchange = artifacts.require("ExchangeWithOrionPool");
@@ -15,7 +14,7 @@ const LibValidator = artifacts.require("LibValidator");
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"; // WAN or ETH "asset" address in balanaces
 
-let exchange, weth, wbtc, lib, msgParams1, msgParams2, buyOrder, sellOrder, buyOrder2, outdatedOrder, outsizedOrder;
+let exchange, weth, wbtc, lib, buyOrder, sellOrder, buyOrder2, outdatedOrder, outsizedOrder;
 
 async function getLastTradeEvent(buyer, seller) {
   let events = await exchange.getPastEvents("NewTrade", {
@@ -29,8 +28,6 @@ async function getLastTradeEvent(buyer, seller) {
 // Used for fillOrders function
 const FILL_AMOUNT = 150000000; // WETH
 const FILL_PRICE = 2100000; // 0.021 WBTC/WETH
-
-const NOW = Date.now();
 
 contract("Exchange", ([matcher, user1, user2]) => {
   describe("Exchange::instance", async () => {
@@ -57,9 +54,6 @@ contract("Exchange", ([matcher, user1, user2]) => {
 
     it("user1 deposits 1 ETH to exchange", async () => {
       await exchange.deposit({ from: user1, value: 1e18 });
-      // let balance = await web3.eth.getBalance(user1);
-      // console.log(web3.utils.fromWei(balance));
-
       let balanceAsset = await exchange.getBalance(ZERO_ADDRESS, user1);
       balanceAsset.toString().should.be.equal(String(1e8));
     });
@@ -231,15 +225,28 @@ contract("Exchange", ([matcher, user1, user2]) => {
       ).should.be.rejected;
     });
 
-    it("matcher can fill orders", async () => {
+    it("uint112 Overflow protection should work", async () => {
+      const BN = web3.utils.BN;
+      const numerator = (new BN(2)).pow(new BN(112)).mul((new BN(10)).pow(new BN(8)));
+      const denominator = new BN(FILL_PRICE);
       await exchange.fillOrders(
+          buyOrder.order,
+          sellOrder.order,
+          FILL_PRICE, //fill Price 0.021
+          numerator.div(denominator), //Forcing uint112 overflow 2 ** 112 * 10 ** 8 / price
+          { from: matcher }
+      ).should.be.rejected;
+    });
+
+    it("matcher can fill orders", async () => {
+      tx_receipt = await exchange.fillOrders(
         buyOrder.order,
         sellOrder.order,
         FILL_PRICE, //fill Price 0.021
         FILL_AMOUNT, // fill Amount 1.5 WETH
         { from: matcher }
       ).should.be.fulfilled;
-
+      console.log("gas spent for swap ↓↓↓↓: ", tx_receipt.receipt.gasUsed.toString());
       const event = await getLastTradeEvent(
         buyOrder.order.senderAddress,
         sellOrder.order.senderAddress

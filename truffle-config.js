@@ -9,7 +9,8 @@ const providerFactory = (network) =>
 
 module.exports = {
   plugins: [
-    'truffle-plugin-verify'
+    'truffle-plugin-verify',
+    'truffle-contract-size'
   ],
   api_keys: {
     bscscan: process.env.BSCSCANAPIKEY,
@@ -32,7 +33,8 @@ module.exports = {
       host: "127.0.0.1",
       port: 8545,
       network_id: "*",
-      gas: 6721975
+      gas: 6721975,
+      //from: '0x9eCC44f7d2f49D9Ff730b91a7Df0C87D93cbDC72'
     },
     ropsten: {
       provider: () => providerFactory("ropsten"),
@@ -43,20 +45,8 @@ module.exports = {
     mainnet: {
       provider: () => providerFactory("mainnet"),
       network_id: "1",
-      gasPrice: 15e9,
+      gasPrice: 60e9,
       gas: 6721975,
-      timeoutBlocks: 200,
-      skipDryRun: true,
-      production: true,
-    },
-    mainnet_kucoin: {
-      provider: () => providerFactory("mainnet"),
-      network_id: "1",
-      gasPrice: 35e9,
-      gas: 6721975,
-      timeoutBlocks: 2000,
-      skipDryRun: true,
-      production: true,
     },
     bsc_testnet: {
       provider: () => new HDWalletProvider(
@@ -66,6 +56,7 @@ module.exports = {
       network_id: 97,
       //  timeoutBlocks: 200,
       skipDryRun: true,
+      gasPrice: 10e9,
       production: true
     },
     bsc: {
@@ -76,14 +67,14 @@ module.exports = {
       network_id: 56,
       timeoutBlocks: 200,
       skipDryRun: true,
-      gasPrice: 5e9,
+      gasPrice: 20e9,
       gas: 6721975
     },
     bsc2: {
       provider: () => new HDWalletProvider(
-          process.env.MNEMONIC,
+          process.env.MNEMONIC2,
           `https://bsc-dataseed3.binance.org/`,
-          Number(process.env.MNEMONIC_ADDRESS_INDEX)),
+          Number(process.env.MNEMONIC_ADDRESS_INDEX2)),
       network_id: 56,
       timeoutBlocks: 200,
       skipDryRun: true,
@@ -91,6 +82,7 @@ module.exports = {
       gas: 6721975
     },
   },
+
   mocha: {
     enableTimeouts: false,
     useColors: true,

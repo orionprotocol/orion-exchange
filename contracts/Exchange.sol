@@ -1,14 +1,16 @@
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
 import "./utils/ReentrancyGuard.sol";
 import "./libs/LibUnitConverter.sol";
 import "./libs/LibValidator.sol";
 import "./libs/MarginalFunctionality.sol";
+import "./libs/SafeTransferHelper.sol";
 import "./OrionVault.sol";
+
 /**
  * @title Exchange
  * @dev Exchange contract for the Orion Protocol
@@ -35,14 +37,13 @@ import "./OrionVault.sol";
   without overflow checks: number of malicion operations to overflow ~1e13.
 */
 contract Exchange is OrionVault, ReentrancyGuard {
-
     using LibValidator for LibValidator.Order;
     using SafeERC20 for IERC20;
 
     //  Flags for updateOrders
     //      All flags are explicit
     uint8 constant kSell = 0;
-    uint8 constant kBuy = 1;    //  if 0 - then sell
+    uint8 constant kBuy = 1; //  if 0 - then sell
     uint8 constant kCorrectMatcherFeeByOrderAmount = 2;
 
     // EVENTS
@@ -74,20 +75,6 @@ contract Exchange is OrionVault, ReentrancyGuard {
     }
 
     /**
-     * @dev set basic Exchange params
-     * @param orionToken - base token address
-     * @param priceOracleAddress - adress of PriceOracle contract
-     * @param allowedMatcher - address which has authorization to match orders
-     */
-    function setBasicParams(address orionToken, address priceOracleAddress, address allowedMatcher) public onlyOwner {
-      require((orionToken != address(0)) && (priceOracleAddress != address(0)), "E15");
-      _orionToken = IERC20(orionToken);
-      _oracleAddress = priceOracleAddress;
-      _allowedMatcher = allowedMatcher;
-    }
-
-
-    /**
      * @dev set marginal settings
      * @param _collateralAssets - list of addresses of assets which may be used as collateral
      * @param _stakeRisk - risk coefficient for staken orion as uint8 (0=0, 255=1)
@@ -96,16 +83,18 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param _positionOverdue - time after that liabilities became overdue and may be liquidated
      */
 
-    function updateMarginalSettings(address[] calldata _collateralAssets,
-                                    uint8 _stakeRisk,
-                                    uint8 _liquidationPremium,
-                                    uint64 _priceOverdue,
-                                    uint64 _positionOverdue) public onlyOwner {
-      collateralAssets = _collateralAssets;
-      stakeRisk = _stakeRisk;
-      liquidationPremium = _liquidationPremium;
-      priceOverdue = _priceOverdue;
-      positionOverdue = _positionOverdue;
+    function updateMarginalSettings(
+        address[] calldata _collateralAssets,
+        uint8 _stakeRisk,
+        uint8 _liquidationPremium,
+        uint64 _priceOverdue,
+        uint64 _positionOverdue
+    ) public onlyOwner {
+        collateralAssets = _collateralAssets;
+        stakeRisk = _stakeRisk;
+        liquidationPremium = _liquidationPremium;
+        priceOverdue = _priceOverdue;
+        positionOverdue = _positionOverdue;
     }
 
     /**
@@ -113,9 +102,10 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param assets - list of assets
      * @param risks - list of risks as uint8 (0=0, 255=1)
      */
-    function updateAssetRisks(address[] calldata assets, uint8[] calldata risks) public onlyOwner {
-        for(uint256 i; i< assets.length; i++)
-         assetRisks[assets[i]] = risks[i];
+    function updateAssetRisks(address[] calldata assets, uint8[] calldata risks)
+        public onlyOwner {
+        for (uint256 i; i < assets.length; i++)
+            assetRisks[assets[i]] = risks[i];
     }
 
     /**
@@ -124,9 +114,12 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param amount asset amount to deposit in its base unit
      */
     function depositAsset(address assetAddress, uint112 amount) external {
-        //require(asset.transferFrom(msg.sender, address(this), uint256(amount)), "E6");
-        IERC20(assetAddress).safeTransferFrom(msg.sender, address(this), uint256(amount));
-        generalDeposit(assetAddress,amount);
+        IERC20(assetAddress).safeTransferFrom(
+            msg.sender,
+            address(this),
+            uint256(amount)
+        );
+        generalDeposit(assetAddress, amount);
     }
 
     /**
@@ -143,51 +136,62 @@ contract Exchange is OrionVault, ReentrancyGuard {
      */
     function generalDeposit(address assetAddress, uint112 amount) internal {
         address user = msg.sender;
-        bool wasLiability = assetBalances[user][assetAddress]<0;
+        bool wasLiability = assetBalances[user][assetAddress] < 0;
         int112 safeAmountDecimal = LibUnitConverter.baseUnitToDecimal(
             assetAddress,
             amount
         );
         assetBalances[user][assetAddress] += safeAmountDecimal;
-        if(amount>0)
-          emit NewAssetTransaction(user, assetAddress, true, uint112(safeAmountDecimal), uint64(block.timestamp));
-        if(wasLiability)
-          MarginalFunctionality.updateLiability(user, assetAddress, liabilities, uint112(safeAmountDecimal), assetBalances[user][assetAddress]);
-
+        if (amount > 0)
+            emit NewAssetTransaction(
+                user,
+                assetAddress,
+                true,
+                uint112(safeAmountDecimal),
+                uint64(block.timestamp)
+            );
+        if (wasLiability)
+            MarginalFunctionality.updateLiability(
+                user,
+                assetAddress,
+                liabilities,
+                uint112(safeAmountDecimal),
+                assetBalances[user][assetAddress]
+            );
     }
+
     /**
      * @dev Withdrawal of remaining funds from the contract back to the address
      * @param assetAddress address of the asset to withdraw
      * @param amount asset amount to withdraw in its base unit
      */
     function withdraw(address assetAddress, uint112 amount)
-        external
-        nonReentrant
-    {
+        external nonReentrant {
         int112 safeAmountDecimal = LibUnitConverter.baseUnitToDecimal(
             assetAddress,
             amount
         );
-
         address user = msg.sender;
 
         assetBalances[user][assetAddress] -= safeAmountDecimal;
-
-        require(assetBalances[user][assetAddress]>=0, "E1w1"); //TODO
+        require(assetBalances[user][assetAddress] >= 0, "E1w1"); //TODO
         require(checkPosition(user), "E1w2"); //TODO
 
-        uint256 _amount = uint256(amount);
-        if(assetAddress == address(0)) {
-          (bool success, ) = user.call{value:_amount}("");
-          require(success, "E6w");
+        if (assetAddress == address(0)) {
+            (bool success, ) = user.call{value: amount}("");
+            require(success, "E6w");
         } else {
-          IERC20(assetAddress).safeTransfer(user, _amount);
+            IERC20(assetAddress).safeTransfer(user, amount);
         }
 
-
-        emit NewAssetTransaction(user, assetAddress, false, uint112(safeAmountDecimal), uint64(block.timestamp));
+        emit NewAssetTransaction(
+            user,
+            assetAddress,
+            false,
+            uint112(safeAmountDecimal),
+            uint64(block.timestamp)
+        );
     }
-
 
     /**
      * @dev Get asset balance for a specific address
@@ -195,13 +199,9 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param user user address to query
      */
     function getBalance(address assetAddress, address user)
-        public
-        view
-        returns (int192)
-    {
+        public view returns (int192) {
         return assetBalances[user][assetAddress];
     }
-
 
     /**
      * @dev Batch query of asset balances for a user
@@ -209,10 +209,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param user user address to query
      */
     function getBalances(address[] memory assetsAddresses, address user)
-        public
-        view
-        returns (int192[] memory balances)
-    {
+        public view returns (int192[] memory balances) {
         balances = new int192[](assetsAddresses.length);
         for (uint256 i; i < assetsAddresses.length; i++) {
             balances[i] = assetBalances[user][assetsAddresses[i]];
@@ -224,10 +221,7 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param user user address to query
      */
     function getLiabilities(address user)
-        public
-        view
-        returns (MarginalFunctionality.Liability[] memory liabilitiesArray)
-    {
+        public view returns (MarginalFunctionality.Liability[] memory liabilitiesArray) {
         return liabilities[user];
     }
 
@@ -242,23 +236,24 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @dev get hash for an order
      * @dev we use order hash as order id to prevent double matching of the same order
      */
-    function getOrderHash(LibValidator.Order memory order) public pure returns (bytes32){
-      return order.getTypeValueHash();
+    function getOrderHash(LibValidator.Order memory order)
+        public pure returns (bytes32) {
+        return order.getTypeValueHash();
     }
-
 
     /**
      * @dev get filled amounts for a specific order
      */
-    function getFilledAmounts(bytes32 orderHash, LibValidator.Order memory order)
-        public
-        view
-        returns (int192 totalFilled, int192 totalFeesPaid)
-    {
-        totalFilled = int192(filledAmounts[orderHash]); //It is safe to convert here: filledAmounts is result of ui112 additions
-        totalFeesPaid = int192(uint256(order.matcherFee)*uint112(totalFilled)/order.amount); //matcherFee is u64; safe multiplication here
-    }
 
+    function getFilledAmounts(
+        bytes32 orderHash,
+        LibValidator.Order memory order
+    ) public view returns (int192 totalFilled, int192 totalFeesPaid) {
+        totalFilled = int192(filledAmounts[orderHash]); //It is safe to convert here: filledAmounts is result of ui112 additions
+        totalFeesPaid = int192(
+            (uint256(order.matcherFee) * uint112(totalFilled)) / order.amount
+        ); //matcherFee is u64; safe multiplication here
+    }
 
     /**
      * @notice Settle a trade with two orders, filled price and amount
@@ -270,6 +265,13 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param filledPrice price at which the order was settled
      * @param filledAmount amount settled between orders
      */
+    struct UpdateOrderBalanceData {
+        uint buyType;
+        uint sellType;
+        int buyIn;
+        int sellIn;
+    }
+
     function fillOrders(
         LibValidator.Order memory buyOrder,
         LibValidator.Order memory sellOrder,
@@ -278,8 +280,8 @@ contract Exchange is OrionVault, ReentrancyGuard {
     ) public nonReentrant {
         // --- VARIABLES --- //
         // Amount of quote asset
-        uint256 _amountQuote = uint256(filledAmount)*filledPrice/(10**8);
-        require(_amountQuote<2**112-1, "E12G");
+        uint256 _amountQuote = (uint256(filledAmount) * filledPrice) / (10**8);
+        require(_amountQuote < type(uint112).max, "E12G");
         uint112 amountQuote = uint112(_amountQuote);
 
         // Order Hashes
@@ -302,7 +304,6 @@ contract Exchange is OrionVault, ReentrancyGuard {
             "E3G"
         );
 
-
         // --- UPDATES --- //
 
         //updateFilledAmount
@@ -313,11 +314,25 @@ contract Exchange is OrionVault, ReentrancyGuard {
 
 
         // Update User's balances
-        updateOrderBalance(buyOrder, filledAmount, amountQuote, kBuy | kCorrectMatcherFeeByOrderAmount);
-        updateOrderBalance(sellOrder, filledAmount, amountQuote, kSell | kCorrectMatcherFeeByOrderAmount);
-        require(checkPosition(buyOrder.senderAddress), "Incorrect margin position for buyer");
-        require(checkPosition(sellOrder.senderAddress), "Incorrect margin position for seller");
+        UpdateOrderBalanceData memory data;
+        (data.buyType, data.buyIn) = updateOrderBalanceDebit(
+            buyOrder,
+            filledAmount,
+            amountQuote,
+            kBuy | kCorrectMatcherFeeByOrderAmount
+        );
+        (data.sellType, data.sellIn) = updateOrderBalanceDebit(
+            sellOrder,
+            filledAmount,
+            amountQuote,
+            kSell | kCorrectMatcherFeeByOrderAmount
+        );
 
+        creditUserAssets(data.buyType, buyOrder.senderAddress, data.buyIn, buyOrder.baseAsset);
+        creditUserAssets(data.sellType, sellOrder.senderAddress, data.sellIn, sellOrder.quoteAsset);
+
+        require(checkPosition(buyOrder.senderAddress), "E1PB");
+        require(checkPosition(sellOrder.senderAddress), "E1PS");
 
         emit NewTrade(
             buyOrder.senderAddress,
@@ -334,149 +349,150 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @dev wrapper for LibValidator methods, may be deleted.
      */
     function validateOrder(LibValidator.Order memory order)
-        public
-        pure
-        returns (bool isValid)
-    {
-        isValid = order.isPersonalSign ? LibValidator.validatePersonal(order) : LibValidator.validateV3(order);
+        public pure returns (bool isValid) {
+        isValid = order.isPersonalSign
+        ? LibValidator.validatePersonal(order)
+        : LibValidator.validateV3(order);
+    }
+
+
+    function _tryDeposit(
+        address asset,
+        uint amount,
+        address user
+    ) internal returns(uint) {
+        uint256 amountInBase = uint256(LibUnitConverter.decimalToBaseUnit(asset, amount));
+
+        // Query allowance before trying to transferFrom
+        if (IERC20(asset).balanceOf(user) >= amountInBase && IERC20(asset).allowance(user, address(this)) >= amountInBase) {
+            SafeERC20.safeTransferFrom(IERC20(asset), user, address(this), amountInBase);
+            return amount;
+        } else {
+            return 0;
+        }
     }
 
     /**
      *  @notice update user balances and send matcher fee
      *  @param flags uint8, see constants for possible flags of order
      */
-    function updateOrderBalance(
+    function updateOrderBalanceDebit(
         LibValidator.Order memory order,
-        uint112 filledAmount,
+        uint112 amountBase,
         uint112 amountQuote,
         uint8 flags
-    ) internal {
+    ) internal returns (uint tradeType, int actualIn) {
         address user = order.senderAddress;
-        bool isBuyer = ((flags & kBuy) != 0);
-
-        int192 temp; // this variable will be used for temporary variable storage (optimization purpose)
+        bool isSeller = (flags & kBuy) == 0;
 
         {
-
-           //  Stack too deep
+            //  Stack too deep
             bool isCorrectFee = ((flags & kCorrectMatcherFeeByOrderAmount) != 0);
 
-            if(isCorrectFee)
-            {
+            if (isCorrectFee) {
                 // matcherFee: u64, filledAmount u128 => matcherFee*filledAmount fit u256
                 // result matcherFee fit u64
-                order.matcherFee = uint64(uint256(order.matcherFee)*filledAmount/order.amount); //rewrite in memory only
+                order.matcherFee = uint64(
+                    (uint256(order.matcherFee) * amountBase) / order.amount
+                ); //rewrite in memory only
             }
         }
 
-        if(filledAmount > 0)
-        {
+        if (amountBase > 0) {
+            (int amountOut, int amountIn) = isSeller
+            ? (-1*int(amountBase), int(amountQuote))
+            : (-1*int(amountQuote), int(amountBase));
 
-            if(!isBuyer)
-              (filledAmount, amountQuote) = (amountQuote, filledAmount);
+            (address assetOut, address assetIn) = isSeller
+            ? (order.baseAsset, order.quoteAsset)
+            : (order.quoteAsset, order.baseAsset);
 
-            (address firstAsset, address secondAsset) = isBuyer?
-                                                         (order.quoteAsset, order.baseAsset):
-                                                         (order.baseAsset, order.quoteAsset);
-            int192 firstBalance = assetBalances[user][firstAsset];
-            int192 secondBalance = assetBalances[user][secondAsset];
-            //  'Stack too deep' correction
-            //  WAS:
-            //  bool firstInLiabilities = firstBalance<0;
-            //  bool secondInLiabilities  = secondBalance<0;
-            //  NOW:
-
-            //  ENDFIX
-
-            temp = assetBalances[user][firstAsset] - amountQuote;
-            assetBalances[user][firstAsset] = temp;
-            assetBalances[user][secondAsset] += filledAmount;
-            //  'Stack too deep' correction
-            //  WAS:
-            //  if(!firstInLiabilities && (temp<0)){
-            //  NOW:
-            if(!(firstBalance<0) && (temp<0)){
-            //  ENDFIX
-              setLiability(user, firstAsset, temp);
+            uint feeTradeType = 1;
+            if (order.matcherFeeAsset == assetOut) {
+                amountOut -= order.matcherFee;
+            } else if (order.matcherFeeAsset == assetIn) {
+                amountIn -= order.matcherFee;
+            } else {
+                feeTradeType = _updateBalance(user, order.matcherFeeAsset, -1*int256(order.matcherFee));
             }
-            //  'Stack too deep' correction
-            //  WAS:
-            //  if(secondInLiabilities) {
-            //  NOW:
-            if(secondBalance<0) {
-            //  ENDFIX
-              MarginalFunctionality.updateLiability(user, secondAsset, liabilities, filledAmount, assetBalances[user][secondAsset]);
-            }
+
+            tradeType = feeTradeType & _updateBalance(user, assetOut, amountOut);
+            actualIn = amountIn;
+            _updateBalance(order.matcherAddress, order.matcherFeeAsset, order.matcherFee);
         }
 
-        // User pay for fees
-        bool feeAssetInLiabilities  = assetBalances[user][order.matcherFeeAsset]<0;
-        temp = assetBalances[user][order.matcherFeeAsset] - order.matcherFee;
-        assetBalances[user][order.matcherFeeAsset] = temp;
-        if(!feeAssetInLiabilities && (temp<0)) {
-            setLiability(user, order.matcherFeeAsset, temp);
-        }
-        assetBalances[order.matcherAddress][order.matcherFeeAsset] += order.matcherFee;
     }
 
-    /**
-     * @notice users can cancel an order
-     * @dev write an orderHash in the contract so that such an order cannot be filled (executed)
-     */
-    /* Unused for now
-    function cancelOrder(LibValidator.Order memory order) public {
-        require(order.validateV3(), "E2");
-        require(msg.sender == order.senderAddress, "Not owner");
-
-        bytes32 orderHash = order.getTypeValueHash();
-
-        require(!isOrderCancelled(orderHash), "E4");
-
-        (
-            int192 totalFilled, //uint totalFeesPaid
-
-        ) = getFilledAmounts(orderHash);
-
-        if (totalFilled > 0)
-            orderStatus[orderHash] = Status.PARTIALLY_CANCELLED;
-        else orderStatus[orderHash] = Status.CANCELLED;
-
-        emit OrderUpdate(orderHash, msg.sender, orderStatus[orderHash]);
-
-        assert(
-            orderStatus[orderHash] == Status.PARTIALLY_CANCELLED ||
-                orderStatus[orderHash] == Status.CANCELLED
-        );
+    function creditUserAssets(uint tradeType, address user, int amount, address asset) internal {
+        int beforeBalance = int(assetBalances[user][asset]);
+        int remainingAmount = amount + beforeBalance;
+        int sentAmount = 0;
+        if (tradeType == 1 && remainingAmount > 0 && beforeBalance <= 0) {
+            uint amountInBase = uint(LibUnitConverter.decimalToBaseUnit(asset, uint(remainingAmount)));
+            uint contractBalance = asset == address(0) ? address(this).balance : IERC20(asset).balanceOf(address(this));
+            if (contractBalance >= amountInBase) {
+                SafeTransferHelper.safeTransferTokenOrETH(asset, user, amountInBase);
+                sentAmount = remainingAmount;
+            }
+        }
+        int toUpdate = amount - sentAmount;
+        if (toUpdate != 0) {
+            _updateBalance(user, asset, toUpdate);
+        }
     }
-    */
+
+    function _updateBalance(address user, address asset, int amount)
+        internal returns (uint tradeType) { // 0 - in contract, 1 - from wallet
+        int beforeBalance = int(assetBalances[user][asset]);
+        int afterBalance = beforeBalance + amount;
+
+        if (amount > 0 && beforeBalance < 0) {
+            MarginalFunctionality.updateLiability(user, asset, liabilities, uint112(amount), int192(afterBalance));
+        } else if (beforeBalance >= 0 && afterBalance < 0){
+            if (asset != address(0)) {
+                afterBalance += int(_tryDeposit(asset, uint(-1*afterBalance), user));
+            }
+
+            // If we failed to deposit balance is still negative then we move user into liability
+            if (afterBalance < 0) {
+                setLiability(user, asset, int192(afterBalance));
+            } else {
+                tradeType = beforeBalance > 0 ? 0 : 1;
+            }
+        }
+
+        if (beforeBalance != afterBalance) {
+            assetBalances[user][asset] = int192(afterBalance);
+        }
+    }
 
     /**
      * @dev check user marginal position (compare assets and liabilities)
      * @return isPositive - boolean whether liabilities are covered by collateral or not
      */
     function checkPosition(address user) public view returns (bool) {
-        if(liabilities[user].length == 0)
-          return true;
+        if (liabilities[user].length == 0) return true;
         return calcPosition(user).state == MarginalFunctionality.PositionState.POSITIVE;
     }
 
     /**
-     * @dev internal methods which collect all variables used my MarginalFunctionality to one structure
+     * @dev internal methods which collect all variables used by MarginalFunctionality to one structure
      * @param user user address to query
      * @return UsedConstants - MarginalFunctionality.UsedConstants structure
      */
     function getConstants(address user)
-             internal
-             view
-             returns (MarginalFunctionality.UsedConstants memory) {
-       return MarginalFunctionality.UsedConstants(user,
-                                                  _oracleAddress,
-                                                  address(this),
-                                                  address(_orionToken),
-                                                  positionOverdue,
-                                                  priceOverdue,
-                                                  stakeRisk,
-                                                  liquidationPremium);
+        internal view returns (MarginalFunctionality.UsedConstants memory) {
+        return
+        MarginalFunctionality.UsedConstants(
+            user,
+            _oracleAddress,
+            address(this),
+            address(_orionToken),
+            positionOverdue,
+            priceOverdue,
+            stakeRisk,
+            liquidationPremium
+        );
     }
 
     /**
@@ -484,15 +500,19 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param user user address to query
      * @return position - MarginalFunctionality.Position structure
      */
-    function calcPosition(address user) public view returns (MarginalFunctionality.Position memory) {
-        MarginalFunctionality.UsedConstants memory constants =
-          getConstants(user);
-        return MarginalFunctionality.calcPosition(collateralAssets,
-                                           liabilities,
-                                           assetBalances,
-                                           assetRisks,
-                                           constants);
+    function calcPosition(address user)
+        public view returns (MarginalFunctionality.Position memory) {
+        MarginalFunctionality.UsedConstants memory constants = getConstants(
+            user
+        );
 
+        return MarginalFunctionality.calcPosition(
+            collateralAssets,
+            liabilities,
+            assetBalances,
+            assetRisks,
+            constants
+        );
     }
 
     /**
@@ -502,16 +522,24 @@ contract Exchange is OrionVault, ReentrancyGuard {
      * @param redeemedAsset - asset, liability of which will be covered
      * @param amount - amount of covered asset
      */
-    function partiallyLiquidate(address broker, address redeemedAsset, uint112 amount) public {
-        MarginalFunctionality.UsedConstants memory constants =
-          getConstants(broker);
-        MarginalFunctionality.partiallyLiquidate(collateralAssets,
-                                           liabilities,
-                                           assetBalances,
-                                           assetRisks,
-                                           constants,
-                                           redeemedAsset,
-                                           amount);
+
+    function partiallyLiquidate(
+        address broker,
+        address redeemedAsset,
+        uint112 amount
+    ) public {
+        MarginalFunctionality.UsedConstants memory constants = getConstants(
+            broker
+        );
+        MarginalFunctionality.partiallyLiquidate(
+            collateralAssets,
+            liabilities,
+            assetBalances,
+            assetRisks,
+            constants,
+            redeemedAsset,
+            amount
+        );
     }
 
     /**
@@ -522,22 +550,13 @@ contract Exchange is OrionVault, ReentrancyGuard {
      */
     function setLiability(address user, address asset, int192 balance) internal {
         liabilities[user].push(
-          MarginalFunctionality.Liability({
-                                             asset: asset,
-                                             timestamp: uint64(block.timestamp),
-                                             outstandingAmount: uint192(-balance)})
+            MarginalFunctionality.Liability({
+                asset: asset,
+                timestamp: uint64(block.timestamp),
+                outstandingAmount: uint192(-balance)
+            })
         );
     }
-
-    /**
-     * @dev method to update liability forcing removing any liabilities if balance > 0
-     * @param assetAddress - liability asset
-     */
-    function forceUpdateLiability(address assetAddress) public {
-        address user = msg.sender;
-        MarginalFunctionality.updateLiability(user, assetAddress, liabilities, 0, assetBalances[user][assetAddress]);
-    }
-
 
     /**
      *  @dev  revert on fallback function
@@ -547,10 +566,9 @@ contract Exchange is OrionVault, ReentrancyGuard {
     }
 
     /* Error Codes
-
-        E1: Insufficient Balance, flavor S - stake
+        E1: Insufficient Balance, flavor S - stake, L - liabilities, P - Position, B,S - buyer, seller
         E2: Invalid Signature, flavor B,S - buyer, seller
-        E3: Invalid Order Info, flavor G - general, M - wrong matcher, M2 unauthorized matcher, As - asset mismatch, AmB/AmS - amount mismatch (buyer,seller), PrB/PrS - price mismatch(buyer,seller), D - direction mismatch,
+        E3: Invalid Order Info, flavor G - general, M - wrong matcher, M2 unauthorized matcher, As - asset mismatch, AmB/AmS - amount mismatch (buyer,seller), PrB/PrS - price mismatch(buyer,seller), D - direction mismatch, U - Unit Converter Error
         E4: Order expired, flavor B,S - buyer,seller
         E5: Contract not active,
         E6: Transfer error
@@ -562,6 +580,6 @@ contract Exchange is OrionVault, ReentrancyGuard {
         E12: Incorrect filled amount, flavor G,B,S: general(overflow), buyer order overflow, seller order overflow
         E14: Authorization error, sfs - seizeFromStake
         E15: Wrong passed params
+        E16: Underlying protection mechanism error, flavor: R, I, O: Reentrancy, Initialization, Ownable
     */
-
 }

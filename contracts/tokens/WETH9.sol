@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: GNU
-//pragma solidity 0.7.6;
-pragma solidity >0.7.0;
+pragma solidity 0.7.4;
 
 import '../interfaces/IWETH9.sol';
 

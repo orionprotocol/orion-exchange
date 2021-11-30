@@ -22,7 +22,9 @@ library OrionPoolV2Library {
                 hex'ff',
                 factory,
                 keccak256(abi.encodePacked(token0, token1)),
-                hex'0c591b9bd08f1704b700bd0b662cd000c1bf71b54704b340e7442d09778ed7c7' // init code hash
+                hex'0c591b9bd08f1704b700bd0b662cd000c1bf71b54704b340e7442d09778ed7c7' // Mainnet
+                //hex'b567c6606c06fe897b0cb814a47b72899319d36eadfca360575753c84d678ff0' // Local
+                //hex'014e691048701dc6e0290533ebabdcfd6ec0c131d8098a02c5407fc5fe1ef11f' //Ropsten and BSC Testnet
             ))));
     }
 

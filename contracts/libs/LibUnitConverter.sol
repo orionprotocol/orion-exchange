@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.7.4;
 
 import '@openzeppelin/contracts/token/ERC20/ERC20.sol';
@@ -18,13 +19,13 @@ library LibUnitConverter {
             result =  amount.mul(1 ether).div(10**8); // 18 decimals
         } else {
 
-          ERC20 asset = ERC20(assetAddress);
-          uint decimals = asset.decimals();
+            ERC20 asset = ERC20(assetAddress);
+            uint decimals = asset.decimals();
 
-          result = amount.mul(10**decimals).div(10**8);
+            result = amount.mul(10**decimals).div(10**8);
         }
 
-        require(result < uint256(type(int112).max), "LibUnitConverter: Too big value");
+        require(result < uint256(type(int112).max), "E3U");
         baseValue = int112(result);
     }
 
@@ -43,7 +44,7 @@ library LibUnitConverter {
 
             result = amount.mul(10**8).div(10**decimals);
         }
-        require(result < uint256(type(int112).max), "LibUnitConverter: Too big value");
+        require(result < uint256(type(int112).max), "E3U");
         decimalValue = int112(result);
     }
 }

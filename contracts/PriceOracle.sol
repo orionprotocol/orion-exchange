@@ -1,7 +1,7 @@
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
-import "./libs/EIP712Interface.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@chainlink/contracts/src/v0.6/interfaces/AggregatorV3Interface.sol";
 import "./PriceOracleDataTypes.sol";
@@ -17,7 +17,7 @@ import "./PriceOracleDataTypes.sol";
         Currently, first option is commented out.
  * @author @EmelyanenkoK
  */
-contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable, PriceOracleDataTypes {
+contract PriceOracle is Ownable, PriceOracleDataTypes {
 
     // Prices as they got to the contract
     struct Prices {
@@ -116,15 +116,15 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable, Pr
      * @param priceFeed - set of prices
      */
     function provideDataAddressAuthorization(Prices memory priceFeed) public {
-       require(priceProviderAuthorization[msg.sender], "Unauthorized dataprovider");
-       require(priceFeed.timestamp<block.timestamp+60, "Price data timestamp too far in the future");
-       for(uint256 i=0; i<priceFeed.assetAddresses.length; i++) {
-         PriceDataOut storage assetData = assetPrices[priceFeed.assetAddresses[i]];
-         if(assetData.timestamp<priceFeed.timestamp) {
-           assetData.price = priceFeed.prices[i];
-           assetData.timestamp = priceFeed.timestamp;
-         }
-       }
+        require(priceProviderAuthorization[msg.sender], "Unauthorized dataprovider");
+        require(priceFeed.timestamp<block.timestamp+60, "Price data timestamp too far in the future");
+        for(uint256 i=0; i<priceFeed.assetAddresses.length; i++) {
+            PriceDataOut storage assetData = assetPrices[priceFeed.assetAddresses[i]];
+            if(assetData.timestamp<priceFeed.timestamp) {
+                assetData.price = priceFeed.prices[i];
+                assetData.timestamp = priceFeed.timestamp;
+            }
+        }
     }
 
     /**
@@ -133,10 +133,10 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable, Pr
      * @return result PriceDataOut[] - set of prices
      */
     function givePrices(address[] calldata assetAddresses) external view returns (PriceDataOut[] memory result) {
-      result = new PriceDataOut[](assetAddresses.length);
-      for(uint256 i=0; i<assetAddresses.length; i++) {
-        result[i] = assetPrices[assetAddresses[i]];
-      }
+        result = new PriceDataOut[](assetAddresses.length);
+        for(uint256 i=0; i<assetAddresses.length; i++) {
+            result[i] = assetPrices[assetAddresses[i]];
+        }
     }
 
     /* SignedPriceApproach
@@ -165,69 +165,69 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable, Pr
      * @param assets - set of assets
      */
     function getChainLinkPriceData(address[] memory assets) public {
-      // First request ORN/ETH, save it and then request all other assets to ETH
-      // and calculate prices to ETH. Since ChainLink doesn't update prices
-      // if they change less than threshold, regardless of provided Chainlink
-      // timestamp we treat price as fresh (timestamp=now), but only during first
-      // 24h. In any case, Chainlink should update price once in a day, even
-      // if it didn't change; that way if provided price is older than 24h -
-      // Chainlink aggregator doesn't work and in this case we will not set
-      // outdated price as fresh.
-      address baseAggregator = chainLinkETHAggregator[baseAsset];
-      if(baseAggregator == address(0))
-        return;
-      (
-          uint80 roundID,
-          int _basePrice,
-          uint startedAt,
-          uint timestamp,
-          uint80 answeredInRound
-      ) = AggregatorV3Interface(baseAggregator).latestRoundData();
-      uint now = block.timestamp;
-      if(now - timestamp < 24 hours) {
-        timestamp = now;
-      }
-      require(_basePrice>=0, "Negative base price is not allowed");
-      uint basePrice = uint(_basePrice);
-
-      //ETH/ORN
-      PriceDataOut storage baseAssetData = assetPrices[address(0)];
-      if(baseAssetData.timestamp<timestamp) {
-          uint price = ( (10**AggregatorV3Interface(baseAggregator).decimals()) *1e8)/basePrice;
-          require(price<2**64-1, "Too big price");
-          baseAssetData.price = uint64(price);
-          baseAssetData.timestamp = uint64(timestamp);
-      }
-
-      // Retrieve */ETH price data for all assets
-      for(uint256 i=0; i<assets.length; i++) {
-        address currentAsset = assets[i];
-        address currentAggregator = chainLinkETHAggregator[currentAsset];
-        if( currentAggregator == address(0))
-          continue;
+        // First request ORN/ETH, save it and then request all other assets to ETH
+        // and calculate prices to ETH. Since ChainLink doesn't update prices
+        // if they change less than threshold, regardless of provided Chainlink
+        // timestamp we treat price as fresh (timestamp=now), but only during first
+        // 24h. In any case, Chainlink should update price once in a day, even
+        // if it didn't change; that way if provided price is older than 24h -
+        // Chainlink aggregator doesn't work and in this case we will not set
+        // outdated price as fresh.
+        address baseAggregator = chainLinkETHAggregator[baseAsset];
+        if(baseAggregator == address(0))
+            return;
         (
+        uint80 roundID,
+        int _basePrice,
+        uint startedAt,
+        uint timestamp,
+        uint80 answeredInRound
+        ) = AggregatorV3Interface(baseAggregator).latestRoundData();
+        uint now = block.timestamp;
+        if(now - timestamp < 24 hours) {
+            timestamp = now;
+        }
+        require(_basePrice>=0, "Negative base price is not allowed");
+        uint basePrice = uint(_basePrice);
+
+        //ETH/ORN
+        PriceDataOut storage baseAssetData = assetPrices[address(0)];
+        if(baseAssetData.timestamp<timestamp) {
+            uint price = ( (10**AggregatorV3Interface(baseAggregator).decimals()) *1e8)/basePrice;
+            require(price<2**64-1, "Too big price");
+            baseAssetData.price = uint64(price);
+            baseAssetData.timestamp = uint64(timestamp);
+        }
+
+        // Retrieve */ETH price data for all assets
+        for(uint256 i=0; i<assets.length; i++) {
+            address currentAsset = assets[i];
+            address currentAggregator = chainLinkETHAggregator[currentAsset];
+            if( currentAggregator == address(0))
+                continue;
+            (
             uint80 aRoundID,
             int _aPrice,
             uint aStartedAt,
             uint aTimestamp,
             uint80 aAnsweredInRound
-        ) = AggregatorV3Interface(currentAggregator).latestRoundData();
-        require(_aPrice>=0, "Negative price is not allowed");
-        if(now - timestamp < 24 hours) {
-          aTimestamp = now;
-        }
-        uint aPrice = uint(_aPrice);
-        uint newTimestamp = timestamp > aTimestamp? aTimestamp : timestamp;
+            ) = AggregatorV3Interface(currentAggregator).latestRoundData();
+            require(_aPrice>=0, "Negative price is not allowed");
+            if(now - timestamp < 24 hours) {
+                aTimestamp = now;
+            }
+            uint aPrice = uint(_aPrice);
+            uint newTimestamp = timestamp > aTimestamp? aTimestamp : timestamp;
 
-        PriceDataOut storage assetData = assetPrices[currentAsset];
-        if(assetData.timestamp<newTimestamp) {
-          uint price = (aPrice *1e8)/basePrice;
-          require(price<2**64-1, "Too big price");
-          assetData.price = uint64(price);
-          assetData.timestamp = uint64(newTimestamp);
-        }
+            PriceDataOut storage assetData = assetPrices[currentAsset];
+            if(assetData.timestamp<newTimestamp) {
+                uint price = (aPrice *1e8)/basePrice;
+                require(price<2**64-1, "Too big price");
+                assetData.price = uint64(price);
+                assetData.timestamp = uint64(newTimestamp);
+            }
 
-      }
+        }
     }
 
     /**
@@ -237,9 +237,9 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable, Pr
      * List of available aggregators: https://docs.chain.link/docs/ethereum-addresses
      */
     function setChainLinkAggregators(address[] memory assets, address[] memory aggregatorAddresses) public onlyOwner {
-      for(uint256 i=0; i<assets.length; i++) {
-        chainLinkETHAggregator[assets[i]] = aggregatorAddresses[i];
-      }
+        for(uint256 i=0; i<assets.length; i++) {
+            chainLinkETHAggregator[assets[i]] = aggregatorAddresses[i];
+        }
     }
 
     /**
@@ -248,11 +248,11 @@ contract PriceOracle is /* (SignedPriceApproach) EIP712Interface, */ Ownable, Pr
      * @param removed - set of addresses for which we forbid authorization
      */
     function changePriceProviderAuthorization(address[] memory added, address[] memory removed) public onlyOwner {
-      for(uint256 i=0; i<added.length; i++) {
-        priceProviderAuthorization[added[i]] = true;
-      }
-      for(uint256 i=0; i<removed.length; i++) {
-        priceProviderAuthorization[removed[i]] = false;
-      }
+        for(uint256 i=0; i<added.length; i++) {
+            priceProviderAuthorization[added[i]] = true;
+        }
+        for(uint256 i=0; i<removed.length; i++) {
+            priceProviderAuthorization[removed[i]] = false;
+        }
     }
 }

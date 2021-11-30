@@ -1,34 +1,29 @@
+// SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.7.4;
 pragma experimental ABIEncoderV2;
 
 import "./Exchange.sol";
+import "./interfaces/IPoolSwapCallback.sol";
+import "./interfaces/IPoolFunctionality.sol";
 import "./utils/orionpool/periphery/interfaces/IOrionPoolV2Router02Ext.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/SafeERC20.sol";
 
-
-contract ExchangeWithOrionPool is Exchange {
+contract ExchangeWithOrionPool is Exchange, IPoolSwapCallback {
 
     using SafeERC20 for IERC20;
 
     address public _orionpoolRouter;
     mapping (address => bool) orionpoolAllowances;
 
-    modifier initialized {
-        require(_orionpoolRouter!=address(0), "_orionpoolRouter is not set");
-        require(address(_orionToken)!=address(0), "_orionToken is not set");
-        require(_oracleAddress!=address(0), "_oracleAddress is not set");
-        require(_allowedMatcher!=address(0), "_allowedMatcher is not set");
-        _;
-    }
+    address public WETH;
 
-    function _safeIncreaseAllowance(address token) internal
-    {
-        if(token != address(0) && !orionpoolAllowances[token])
-        {
-            IERC20(token).safeIncreaseAllowance(_orionpoolRouter, 2**256-1);
-            orionpoolAllowances[token] = true;
-        }
+    modifier initialized {
+        require(address(_orionToken)!=address(0), "E16I");
+        require(_oracleAddress!=address(0), "E16I");
+        require(_allowedMatcher!=address(0), "E16I");
+        require(_orionpoolRouter!=address(0), "E16I");
+        _;
     }
 
     /**
@@ -36,27 +31,26 @@ contract ExchangeWithOrionPool is Exchange {
      * @param orionToken - base token address
      * @param priceOracleAddress - adress of PriceOracle contract
      * @param allowedMatcher - address which has authorization to match orders
-     * @param orionpoolRouter - OrionPool Router address for changes through orionpool
+     * @param orionpoolRouter - OrionPool Functionality contract address for changes through orionpool
      */
-    function setBasicParams(address orionToken,
-                            address priceOracleAddress,
-                            address allowedMatcher,
-                            address orionpoolRouter)
-             public onlyOwner
-             {
-      _orionToken = IERC20(orionToken);
-      _oracleAddress = priceOracleAddress;
-      _allowedMatcher = allowedMatcher;
-      _orionpoolRouter = orionpoolRouter;
+    function setBasicParams(
+        address orionToken,
+        address priceOracleAddress,
+        address allowedMatcher,
+        address orionpoolRouter
+    ) public onlyOwner {
+        _orionToken = IERC20(orionToken);
+        _oracleAddress = priceOracleAddress;
+        _allowedMatcher = allowedMatcher;
+        _orionpoolRouter = orionpoolRouter;
+        WETH = IPoolFunctionality(_orionpoolRouter).getWETH();
     }
 
-    //  Important catch-all afunction that should only accept ethereum and don't allow do something with it
-    //      We accept ETH there only from out router.
-    //      If router sends some ETH to us - it's just swap completed, and we don't need to do smth
-    //      with ETH received - amount of ETH will be handled by ........... blah blah
-    receive() external payable
-    {
-        require(msg.sender == _orionpoolRouter, "NPF");
+    //Important catch-all a function that should only accept ethereum and don't allow do something with it
+    //We accept ETH there only from out router or wrapped ethereum contract.
+    //If router sends some ETH to us - it's just swap completed, and we don't need to do something
+    receive() external payable {
+        require(msg.sender == _orionpoolRouter || msg.sender == WETH, "NPF");
     }
 
     /**
@@ -70,242 +64,151 @@ contract ExchangeWithOrionPool is Exchange {
      * @param filledAmount amount of purchaseable token
      * @param path array of assets addresses (each consequent asset pair is change pair)
      */
-
     //  Just to avoid stack too deep error;
     struct OrderExecutionData
     {
-        uint64      filledPrice;
-        uint112     amountQuote;
-        uint        tx_value;
+        uint filledBase;
+        uint filledQuote;
+        uint filledPrice;
+        uint amount_spend;
+        uint amount_receive;
+        uint amountQuote;
+        bool isInContractTrade;
+        bool isRetainFee;
     }
 
     function fillThroughOrionPool(
-            LibValidator.Order memory order,
-            uint112 filledAmount,
-            uint64 blockchainFee,
-            address[] calldata path
-        ) public nonReentrant initialized {
-        // Amount of quote asset
-        uint256 _amountQuote = uint256(filledAmount)* order.price/(10**8);
-        OrderExecutionData memory exec_data;
+        LibValidator.Order memory order,
+        uint112 filledAmount,
+        uint64 blockchainFee,
+        address[] calldata path
+    ) public nonReentrant initialized {
 
-        if(order.buySide==1){ /* NOTE BUY ORDER ************************************************************/
-            (int112 amountQuoteBaseUnits, int112 filledAmountBaseUnits) =
-            (
-                LibUnitConverter.decimalToBaseUnit(path[0], _amountQuote),
-                LibUnitConverter.decimalToBaseUnit(path[path.length-1], filledAmount)
-            );
+        LibValidator.checkOrderSingleMatch(order, msg.sender, _allowedMatcher, filledAmount,
+            block.timestamp, path, order.buySide);
 
-            //  TODO: check
-            //  require(IERC20(order.quoteAsset).balanceOf(address(this)) >= uint(amountQuoteBaseUnits), "NEGT");
+        OrderExecutionData memory tmp;
+        bool isSeller = order.buySide == 0;
 
-            LibValidator.checkOrderSingleMatch(order, msg.sender, _allowedMatcher, filledAmount, block.timestamp, path, 1);
+        tmp.amountQuote = uint(filledAmount) * order.price / (10**8);
+        (tmp.amount_spend, tmp.amount_receive) = isSeller ? (uint(filledAmount), tmp.amountQuote)
+        : (tmp.amountQuote, uint(filledAmount));
+
+        tmp.isInContractTrade = path[0] == address(0) || getBalance(path[0], order.senderAddress) > 0;
+        tmp.isRetainFee = !tmp.isInContractTrade && order.matcherFeeAsset == path[path.length-1];
+
+        try IPoolFunctionality(_orionpoolRouter).doSwapThroughOrionPool(
+            tmp.isInContractTrade ? address(this) : order.senderAddress,
+            uint112(tmp.amount_spend),
+            uint112(tmp.amount_receive),
+            path,
+            isSeller ? true : false,
+            (tmp.isInContractTrade || tmp.isRetainFee) ? address(this) : order.senderAddress
+        ) returns(uint amountOut, uint amountIn) {
+            (tmp.filledBase, tmp.filledQuote) = isSeller ? (amountOut, amountIn) : (amountIn, amountOut);
+            tmp.filledPrice = tmp.filledQuote * (10**8) / tmp.filledBase;
+
+            if (isSeller) {
+                require(tmp.filledPrice >= order.price, "EX");
+            } else {
+                require(tmp.filledPrice<= order.price, "EX");
+            }
 
             //  Change fee only after order validation
-            if(blockchainFee < order.matcherFee)
+            if (blockchainFee < order.matcherFee)
                 order.matcherFee = blockchainFee;
 
-            _safeIncreaseAllowance(order.quoteAsset);
-            if(order.quoteAsset == address(0))
-                exec_data.tx_value = uint(amountQuoteBaseUnits);
+            if (tmp.isInContractTrade) {
+                (uint tradeType, int actualIn) = updateOrderBalanceDebit(order, uint112(tmp.filledBase),
+                    uint112(tmp.filledQuote), isSeller ? kSell : kBuy);
+                creditUserAssets(tradeType, order.senderAddress, actualIn, path[path.length-1]);
 
-            try IOrionPoolV2Router02Ext(_orionpoolRouter).swapTokensForExactTokensAutoRoute{value: exec_data.tx_value}(
-                                                        uint(filledAmountBaseUnits),
-                                                        uint(amountQuoteBaseUnits),
-                                                        path,
-                                                        address(this)) //  order.expiration/1000
-            returns(uint[] memory amounts)
-            {
-                exec_data.amountQuote = uint112(LibUnitConverter.baseUnitToDecimal(
-                        path[0],
-                        amounts[0]
-                    ));
-
-                //require(_amountQuote<2**112-1, "E12G"); //TODO
-                uint256 _filledPrice = exec_data.amountQuote*(10**8)/filledAmount;
-                require(_filledPrice<= order.price, "EX"); //TODO
-                exec_data.filledPrice = uint64(_filledPrice); // since _filledPrice<buyOrder.price it fits uint64
-                //uint112 amountQuote = uint112(_amountQuote);
+            } else {
+                _payMatcherFee(order.senderAddress, order.matcherFeeAsset, order.matcherAddress, uint(order.matcherFee));
+                if (tmp.isRetainFee) {
+                    creditUserAssets(1, order.senderAddress, int(amountIn), path[path.length-1]);
+                }
             }
-            catch(bytes memory)
-            {
-                filledAmount = 0;
-                exec_data.filledPrice = order.price;
-            }
-
-            // Update User's balances
-            updateOrderBalance(order, filledAmount, exec_data.amountQuote, kBuy);
-            require(checkPosition(order.senderAddress), "Incorrect margin position for buyer");
-
-
-        }else{ /* NOTE: SELL ORDER **************************************************************************/
-            LibValidator.checkOrderSingleMatch(order, msg.sender, _allowedMatcher, filledAmount, block.timestamp, path, 0);
-
-            //  Change fee only after order validation
-            if(blockchainFee < order.matcherFee)
-                order.matcherFee = blockchainFee;
-
-            (int112 amountQuoteBaseUnits, int112 filledAmountBaseUnits) =
-            (
-                LibUnitConverter.decimalToBaseUnit(path[0], filledAmount),
-                LibUnitConverter.decimalToBaseUnit(path[path.length-1], _amountQuote)
-            );
-
-            _safeIncreaseAllowance(order.baseAsset);
-            if(order.baseAsset == address(0))
-                exec_data.tx_value = uint(amountQuoteBaseUnits);
-
-            try IOrionPoolV2Router02Ext(_orionpoolRouter).swapExactTokensForTokensAutoRoute{value: exec_data.tx_value}(
-                uint(amountQuoteBaseUnits),
-                uint(filledAmountBaseUnits),
-                path,
-                address(this))  //    order.expiration/1000)
-            returns (uint[] memory amounts)
-            {
-                exec_data.amountQuote = uint112(LibUnitConverter.baseUnitToDecimal(
-                        path[path.length-1],
-                        amounts[path.length-1]
-                    ));
-                //require(_amountQuote<2**112-1, "E12G"); //TODO
-                uint256 _filledPrice = exec_data.amountQuote*(10**8)/filledAmount;
-                require(_filledPrice>= order.price, "EX"); //TODO
-                exec_data.filledPrice = uint64(_filledPrice); // since _filledPrice<buyOrder.price it fits uint64
-                //uint112 amountQuote = uint112(_amountQuote);
-            }
-            catch(bytes memory)
-            {
-                filledAmount = 0;
-                exec_data.filledPrice = order.price;
-            }
-
-            // Update User's balances
-            updateOrderBalance(order, filledAmount, exec_data.amountQuote, kSell);
-            require(checkPosition(order.senderAddress), "Incorrect margin position for seller");
+        } catch(bytes memory) {
+            tmp.filledBase = 0;
+            tmp.filledPrice = order.price;
+            _payMatcherFee(order.senderAddress, order.matcherFeeAsset, order.matcherAddress, uint(order.matcherFee));
         }
 
         {   //  STack too deep workaround
+            require(checkPosition(order.senderAddress), tmp.isInContractTrade ? (isSeller ? "E1PS" : "E1PB") : "E1PF");
             bytes32 orderHash = LibValidator.getTypeValueHash(order);
             uint192 total_amount = filledAmounts[orderHash];
-            //  require(filledAmounts[orderHash]==0, "filledAmount already has some value"); //  Old way
-            total_amount += filledAmount; //it is safe to add ui112 to each other to get i192
-            require(total_amount >= filledAmount, "E12B_0");
+            total_amount += uint112(tmp.filledBase); //it is safe to add ui112 to each other to get i192
+            require(total_amount >= tmp.filledBase, "E12B_0");
             require(total_amount <= order.amount, "E12B");
             filledAmounts[orderHash] = total_amount;
         }
 
         emit NewTrade(
             order.senderAddress,
-            address(1), //TODO //sellOrder.senderAddress,
+            address(1),
             order.baseAsset,
             order.quoteAsset,
-            exec_data.filledPrice,
-            filledAmount,
-            exec_data.amountQuote
+            uint64(tmp.filledPrice),
+            uint192(tmp.filledBase),
+            uint192(tmp.filledQuote)
         );
 
     }
 
-    /*
-        BUY LIMIT ORN/USDT
-         path[0] = USDT
-         path[1] = ORN
-         is_exact_spend = false;
-
-        SELL LIMIT ORN/USDT
-         path[0] = ORN
-         path[1] = USDT
-         is_exact_spend = true;
-    */
-
-    event NewSwapOrionPool
-    (
+    function _payMatcherFee(
         address user,
-        address asset_spend,
-        address asset_receive,
-        int112 amount_spent,
-        int112 amount_received
-    );
+        address feeAsset,
+        address matcher,
+        uint feeAmount
+    ) internal {
+        _updateBalance(user, feeAsset, -1*int(feeAmount));
+        _updateBalance(matcher, feeAsset, int(feeAmount));
+    }
+
+    function safeAutoTransferFrom(address token, address from, address to, uint value) override external {
+        require(msg.sender == _orionpoolRouter, "Only _orionpoolRouter allowed");
+        SafeTransferHelper.safeAutoTransferFrom(WETH, token, from, to, value);
+    }
 
     function swapThroughOrionPool(
         uint112     amount_spend,
         uint112     amount_receive,
         address[] calldata   path,
         bool        is_exact_spend
-    ) public nonReentrant initialized
-    {
-        (int112 amount_spend_base_units, int112 amount_receive_base_units) =
-        (
-            LibUnitConverter.decimalToBaseUnit(path[0], amount_spend),
-            LibUnitConverter.decimalToBaseUnit(path[path.length-1], amount_receive)
-        );
+    ) public payable nonReentrant initialized {
+        bool isInContractTrade = getBalance(path[0], msg.sender) > 0;
+        bool isSentETHEnough;
+        if (msg.value > 0) {
+            uint112 eth_sent = uint112(LibUnitConverter.baseUnitToDecimal(address(0), msg.value));
+            if (path[0] == address(0) && eth_sent >= amount_spend) {
+                isSentETHEnough = true;
+                isInContractTrade = false;
+            } else {
+                _updateBalance(msg.sender, address(0), eth_sent);
+            }
+        }
 
-        //  Checks
-        require(getBalance(path[0], msg.sender) >= amount_spend, "NEGS1");
-
-        _safeIncreaseAllowance(path[0]);
-
-        uint256 tx_value = path[0] == address(0) ? uint(amount_spend_base_units) : 0;
-
-        uint[] memory amounts = is_exact_spend ?
-        IOrionPoolV2Router02Ext(_orionpoolRouter).swapExactTokensForTokensAutoRoute
-        {value: tx_value}
-        (
-            uint(amount_spend_base_units),
-            uint(amount_receive_base_units),
+        (uint amountOut, uint amountIn) = IPoolFunctionality(_orionpoolRouter).doSwapThroughOrionPool(
+            isInContractTrade || isSentETHEnough ? address(this) : msg.sender,
+            amount_spend,
+            amount_receive,
             path,
-            address(this)
-        )
-        :
-        IOrionPoolV2Router02Ext(_orionpoolRouter).swapTokensForExactTokensAutoRoute
-        {value: tx_value}
-        (
-            uint(amount_receive_base_units),
-            uint(amount_spend_base_units),
-            path,
-            address(this)
+            is_exact_spend,
+            isInContractTrade ? address(this) : msg.sender
         );
 
-        //  Anyway user gave amounts[0] and received amounts[len-1]
-        int112 amount_actually_spent = LibUnitConverter.baseUnitToDecimal(path[0], amounts[0]);
-        int112 amount_actually_received = LibUnitConverter.baseUnitToDecimal(path[path.length-1], amounts[path.length-1]);
-
-        int192 balance_in_spent = assetBalances[msg.sender][path[0]];
-        require(amount_actually_spent >= 0 && balance_in_spent >= amount_actually_spent, "NEGS2_1");
-        balance_in_spent -= amount_actually_spent;
-        assetBalances[msg.sender][path[0]] = balance_in_spent;
-        require(checkPosition(msg.sender), "NEGS2_2");
-
-        address receiving_token = path[path.length - 1];
-        int192 balance_in_received = assetBalances[msg.sender][receiving_token];
-        bool is_need_update_liability = (balance_in_received < 0);
-        balance_in_received += amount_actually_received;
-        require(amount_actually_received >= 0 /* && balance_in_received >= amount_actually_received*/ , "NEGS2_3");
-        assetBalances[msg.sender][receiving_token] = balance_in_received;
-
-        if(is_need_update_liability)
-            MarginalFunctionality.updateLiability(
-                msg.sender,
-                receiving_token,
-                liabilities,
-                uint112(amount_actually_received),
-                assetBalances[msg.sender][receiving_token]
-            );
-
-        //  TODO: remove
-        emit NewSwapOrionPool
-        (
-            msg.sender,
-            path[0],
-            receiving_token,
-            amount_actually_spent,
-            amount_actually_received
-        );
-    }
-
-    function increaseAllowance(address token) public
-    {
-        IERC20(token).safeIncreaseAllowance(_orionpoolRouter, 2**256-1);
-        orionpoolAllowances[token] = true;
+        if (isSentETHEnough) {
+            uint actualOutBaseUnit = uint(LibUnitConverter.decimalToBaseUnit(address(0), amountOut));
+            if (msg.value > actualOutBaseUnit) {
+                SafeTransferHelper.safeTransferTokenOrETH(address(0), msg.sender, msg.value - actualOutBaseUnit);
+            }
+        } else if (isInContractTrade) {
+            _updateBalance(msg.sender, path[0], -1*int256(amountOut));
+            _updateBalance(msg.sender, path[path.length-1], int(amountIn));
+            require(checkPosition(msg.sender), "E1PS");
+        }
     }
 }
 
