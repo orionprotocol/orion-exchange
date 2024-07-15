@@ -65,7 +65,7 @@
     "hardhat-gas-reporter": "1.0.4",
     "long": "4.0.0",
     "mocha": "8.4.0",
-    "node-fetch": "2.1.2",
+    "node-fetch": "2.6.7",
     "truffle": "5.4.16",
     "truffle-contract-size": "2.0.1",
     "truffle-flattener": "1.5.0",
